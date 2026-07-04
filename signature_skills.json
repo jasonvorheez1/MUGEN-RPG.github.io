@@ -1,0 +1,3467 @@
+[
+ {
+  "id": "sig_vee",
+  "owner": "Vee",
+  "name": "Diagnostic Scan",
+  "desc": "SCAN SUPPORT: scans every foe, exposing weak points (-35% DEF) and feeding the squad targeting data (+20% Crit). Never misses.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.4,
+  "cooldown": 110,
+  "scalingStat": "magic_atk",
+  "flavor": "Mic check, one-two!",
+  "damageType": "magical",
+  "meta": {
+   "ignore_evasion": true,
+   "mark": {
+    "def_down": 0.35,
+    "duration": 4,
+    "label": "SCANNED"
+   },
+   "team_effects": [
+    {
+     "type": "buff_crit",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.2,
+     "label": "INTEL"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_raven_team_leader",
+  "owner": "Raven Team Leader",
+  "name": "Sentinel Override",
+  "desc": "Command protocol: cleanses the squad, grants a heavy shield + DEF, floods 25 Burst to all allies, and lands a baton strike. Every third strike, her Override silently maxes out and the baton comes down as a full command-grade smite.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2,
+  "cooldown": 150,
+  "scalingStat": "def",
+  "flavor": "Authorization granted.",
+  "damageType": "physical",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.35,
+     "label": "SENTINEL"
+    },
+    {
+     "type": "buff_def",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.45,
+     "label": "DEF+"
+    }
+   ],
+   "cleanse_team": true,
+   "gain_burst": 25,
+   "builds_hidden_power": 1,
+   "hidden_power_threshold": 3,
+   "hidden_power_mult": 4.5
+  }
+ },
+ {
+  "id": "sig_princess_peach",
+  "owner": "Princess Peach",
+  "name": "Heart Radiance",
+  "desc": "Royal love: a team heal that also cleanses all debuffs and empowers every ally's ATK.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "all_allies",
+  "power": 2.6,
+  "cooldown": 135,
+  "scalingStat": "hp",
+  "flavor": "Sweet!",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.35,
+     "label": "COURAGE"
+    },
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.07,
+     "label": "GRACE"
+    }
+   ],
+   "cleanse_team": true
+  }
+ },
+ {
+  "id": "sig_meloetta",
+  "owner": "Meloetta",
+  "name": "Relic Song",
+  "desc": "A legendary melody that buffs the squad's ATK and DEF and surges 30 Burst to everyone.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 130,
+  "scalingStat": "magic_atk",
+  "flavor": "Lalala!",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.4,
+     "label": "ARIA"
+    },
+    {
+     "type": "buff_def",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "PIROUETTE"
+    }
+   ],
+   "gain_burst": 30
+  }
+ },
+ {
+  "id": "sig_minnie_mouse",
+  "owner": "Minnie Mouse",
+  "name": "Polka-Dot Dazzle",
+  "desc": "A dazzling cheer that buffs ATK, shields, and regenerates the whole team.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Oh, how delightful!",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.35,
+     "label": "BOW+"
+    },
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.22,
+     "label": "SPARKLE"
+    },
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.06,
+     "label": "CHEER"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_marle",
+  "owner": "Marle",
+  "name": "Frost Aegis",
+  "desc": "Ice-magic protection that cleanses, shields, and heals the entire party over time.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 130,
+  "scalingStat": "magic_def",
+  "flavor": "Let's go save the future!",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.35,
+     "label": "AEGIS"
+    },
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.06,
+     "label": "CURE"
+    }
+   ],
+   "cleanse_team": true
+  }
+ },
+ {
+  "id": "sig_zelda",
+  "owner": "Zelda",
+  "name": "Triforce of Wisdom",
+  "desc": "Sacred wisdom: cleanses allies and wards them, while stripping every enemy of their buffs.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 140,
+  "scalingStat": "magic_def",
+  "flavor": "Courage, wisdom, power.",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.4,
+     "label": "NAYRU"
+    },
+    {
+     "type": "buff_def",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.4,
+     "label": "WISDOM"
+    }
+   ],
+   "cleanse_team": true,
+   "dispel_enemies": true
+  }
+ },
+ {
+  "id": "sig_charlie_morningstar",
+  "owner": "Charlie Morningstar",
+  "name": "Hazbin Redemption",
+  "desc": "Radiant hope: heals and cleanses the squad, then inspires lasting ATK and Regen.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "all_allies",
+  "power": 2.5,
+  "cooldown": 140,
+  "scalingStat": "magic_atk",
+  "flavor": "Hell is forever, but so is hope!",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.35,
+     "label": "INSPIRE"
+    },
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.07,
+     "label": "HOPE"
+    }
+   ],
+   "cleanse_team": true
+  }
+ },
+ {
+  "id": "sig_anna",
+  "owner": "Anna",
+  "name": "Act of True Love",
+  "desc": "A selfless act that heals, cleanses, shields, and steadies the whole squad.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "all_allies",
+  "power": 2.4,
+  "cooldown": 130,
+  "scalingStat": "hp",
+  "flavor": "Some people are worth melting for.",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "DEVOTION"
+    },
+    {
+     "type": "buff_def",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.3,
+     "label": "RESOLVE"
+    }
+   ],
+   "cleanse_team": true
+  }
+ },
+ {
+  "id": "sig_ralsei",
+  "owner": "Ralsei",
+  "name": "Pacify Aura",
+  "desc": "A warm aura that heals, cleanses, shields, and gently builds the team's Burst.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "all_allies",
+  "power": 2.2,
+  "cooldown": 140,
+  "scalingStat": "magic_atk",
+  "flavor": "I hope we can be friends!",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.06,
+     "label": "WARM HUG"
+    },
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "FLUFFY"
+    }
+   ],
+   "cleanse_team": true,
+   "gain_burst": 15
+  }
+ },
+ {
+  "id": "sig_summer_mia",
+  "owner": "Summer Mia",
+  "name": "Tidal Refrain",
+  "desc": "A refreshing splash that heals, cleanses, and quickens the whole squad (+SPD).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "all_allies",
+  "power": 2.2,
+  "cooldown": 125,
+  "scalingStat": "magic_atk",
+  "flavor": "Beach day, everyone!",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "buff_spd",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.25,
+     "label": "REFRESH"
+    },
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.06,
+     "label": "TIDE"
+    }
+   ],
+   "cleanse_team": true
+  }
+ },
+ {
+  "id": "sig_mia",
+  "owner": "Mia",
+  "name": "Gale Larceny",
+  "desc": "WIND THIEF: a blink-quick strike that steals a buff from the foe and quickens Mia (+SPD). Cannot be dodged.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.4,
+  "cooldown": 95,
+  "scalingStat": "speed",
+  "flavor": "Catch me if you can!",
+  "damageType": "physical",
+  "meta": {
+   "steal_buff": true,
+   "ignore_evasion": true,
+   "self_effects": [
+    {
+     "type": "buff_spd",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "TAILWIND"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_rogue_the_bat",
+  "owner": "Rogue the Bat",
+  "name": "Jewel Heist",
+  "desc": "TREASURE HUNTER: a sure critical that snatches a buff off the target and drains 20% of the damage as health.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.7,
+  "cooldown": 100,
+  "scalingStat": "luck",
+  "flavor": "This jewel's mine now, hon.",
+  "damageType": "physical",
+  "meta": {
+   "steal_buff": true,
+   "guaranteed_crit": true,
+   "heal_on_hit": 0.2
+  }
+ },
+ {
+  "id": "sig_kitty_softpaws",
+  "owner": "Kitty Softpaws",
+  "name": "Soft Paws, Sharp Claws",
+  "desc": "A flawless cat-burglar strike: steals a buff, always crits, and slips past 30% of armor.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 95,
+  "scalingStat": "luck",
+  "flavor": "Did you really think you could catch me?",
+  "damageType": "physical",
+  "meta": {
+   "steal_buff": true,
+   "guaranteed_crit": true,
+   "ignore_def": 0.3
+  }
+ },
+ {
+  "id": "sig_ada_wong",
+  "owner": "Ada Wong",
+  "name": "Hookshot Ambush",
+  "desc": "A grappling ambush that steals a buff, then repositions Ada with +SPD and a shield. Always connects.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.5,
+  "cooldown": 100,
+  "scalingStat": "speed",
+  "flavor": "I'll be in touch.",
+  "damageType": "physical",
+  "meta": {
+   "steal_buff": true,
+   "self_effects": [
+    {
+     "type": "buff_spd",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.2,
+     "label": "REPOSITION"
+    },
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.2,
+     "label": "COVER"
+    }
+   ],
+   "ignore_evasion": true
+  }
+ },
+ {
+  "id": "sig_lucca",
+  "owner": "Lucca",
+  "name": "Flare Detonation",
+  "desc": "Ignites all foes, then instantly DETONATES every burn/poison/static on them for 140% of its remaining damage.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.4,
+  "cooldown": 135,
+  "scalingStat": "magic_atk",
+  "flavor": "Science rules!",
+  "damageType": "magical",
+  "meta": {
+   "detonate": 1.4
+  },
+  "statusEffects": [
+   {
+    "type": "burn",
+    "chance": 1,
+    "duration": 4,
+    "val": 0.1,
+    "label": "FLARE"
+   }
+  ]
+ },
+ {
+  "id": "sig_walter_white",
+  "owner": "Walter White",
+  "name": "Blue Sky Catalyst",
+  "desc": "A volatile reaction that poisons all foes and detonates their damage-over-time stacks for a chemical blast.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.2,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "I am the one who knocks.",
+  "damageType": "magical",
+  "meta": {
+   "detonate": 1.2,
+   "ignore_def": 0.3
+  },
+  "statusEffects": [
+   {
+    "type": "poison",
+    "chance": 1,
+    "duration": 4,
+    "val": 0.09,
+    "label": "TOXIN"
+   }
+  ]
+ },
+ {
+  "id": "sig_alastor",
+  "owner": "Alastor",
+  "name": "Radio Demon's Symphony",
+  "desc": "Static fire engulfs all foes; consumes every DoT on them as a burst, healing Alastor for 30% of all damage.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.6,
+  "cooldown": 140,
+  "scalingStat": "magic_atk",
+  "flavor": "Stay tuned, folks!",
+  "damageType": "magical",
+  "meta": {
+   "detonate": 1.3,
+   "lifesteal": 0.3
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.08,
+    "label": "STATIC"
+   }
+  ]
+ },
+ {
+  "id": "sig_chun_li",
+  "owner": "Chun Li",
+  "name": "Hyakuretsukyaku",
+  "desc": "Lightning Legs slow the foe, then strike a guaranteed crit that deals +60% to slowed enemies.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 90,
+  "scalingStat": "speed",
+  "flavor": "Yatta!",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "bonus_vs_status": {
+    "status": "debuff_spd",
+    "mult": 1.6
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_spd",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.25,
+    "label": "SLOW"
+   }
+  ]
+ },
+ {
+  "id": "sig_yukiko",
+  "owner": "Yukiko",
+  "name": "Agidyne Bloom",
+  "desc": "Sets every foe ablaze, then deals +50% damage to anything burning. Self-igniting inferno.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.5,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Burn to a crisp!",
+  "damageType": "magical",
+  "meta": {
+   "bonus_vs_status": {
+    "status": "burn",
+    "mult": 1.5
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "burn",
+    "chance": 1,
+    "duration": 4,
+    "val": 0.09,
+    "label": "BURN"
+   }
+  ]
+ },
+ {
+  "id": "sig_yu_narukami",
+  "owner": "Yu Narukami",
+  "name": "Myriad Truths",
+  "desc": "Zio cascades shock all foes; deals +50% to anything shorted out and shatters shields.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.7,
+  "cooldown": 140,
+  "scalingStat": "magic_atk",
+  "flavor": "Per-so-na!",
+  "damageType": "magical",
+  "meta": {
+   "bonus_vs_status": {
+    "status": "static",
+    "mult": 1.5
+   },
+   "break_shield": true
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.1,
+    "label": "ZIO"
+   }
+  ]
+ },
+ {
+  "id": "sig_ellen",
+  "owner": "Ellen",
+  "name": "Flash Freeze",
+  "desc": "An icy cyclone that freezes, then shatters: +60% damage to frozen foes, healing Ellen.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.5,
+  "cooldown": 115,
+  "scalingStat": "speed",
+  "flavor": "...fine.",
+  "damageType": "physical",
+  "meta": {
+   "bonus_vs_status": {
+    "status": "freeze",
+    "mult": 1.6
+   },
+   "lifesteal": 0.2
+  },
+  "statusEffects": [
+   {
+    "type": "freeze",
+    "chance": 0.7,
+    "duration": 2,
+    "val": 0,
+    "label": "FROZEN"
+   }
+  ]
+ },
+ {
+  "id": "sig_elsa",
+  "owner": "Elsa",
+  "name": "Absolute Zero",
+  "desc": "Eternal winter freezes and slows everything, then strikes frozen foes for +50%.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.7,
+  "cooldown": 130,
+  "scalingStat": "magic_atk",
+  "flavor": "The cold never bothered me anyway.",
+  "damageType": "magical",
+  "meta": {
+   "bonus_vs_status": {
+    "status": "freeze",
+    "mult": 1.5
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "freeze",
+    "chance": 0.8,
+    "duration": 2,
+    "val": 0,
+    "label": "FROZEN"
+   },
+   {
+    "type": "debuff_spd",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.25,
+    "label": "CHILL"
+   }
+  ]
+ },
+ {
+  "id": "sig_braixen",
+  "owner": "Braixen",
+  "name": "Mystic Fire Wand",
+  "desc": "Mystic flame burns all foes and intensifies (+45%) against anything already burning.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.4,
+  "cooldown": 115,
+  "scalingStat": "magic_atk",
+  "flavor": "Brai! Braixen!",
+  "damageType": "magical",
+  "meta": {
+   "bonus_vs_status": {
+    "status": "burn",
+    "mult": 1.45
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "burn",
+    "chance": 1,
+    "duration": 4,
+    "val": 0.09,
+    "label": "MYSTIC FIRE"
+   }
+  ]
+ },
+ {
+  "id": "sig_phoebe",
+  "owner": "Phoebe",
+  "name": "Redacted Anomaly",
+  "desc": "Reality un-renders foes (ignore 40% DEF), corrupts them with Static, and deals +50% to the corrupted.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.5,
+  "cooldown": 125,
+  "scalingStat": "magic_atk",
+  "flavor": "[DATA EXPUNGED]",
+  "damageType": "magical",
+  "meta": {
+   "ignore_def": 0.4,
+   "bonus_vs_status": {
+    "status": "static",
+    "mult": 1.5
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.1,
+    "label": "REDACTED"
+   }
+  ]
+ },
+ {
+  "id": "sig_sans",
+  "owner": "Sans",
+  "name": "Bad Time",
+  "desc": "Karmic Retribution pierces 60% DEF and applies stacking decay; deals DOUBLE damage to foes below 40% HP.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.6,
+  "cooldown": 110,
+  "scalingStat": "speed",
+  "flavor": "you're gonna have a bad time.",
+  "damageType": "magical",
+  "meta": {
+   "ignore_def": 0.6,
+   "execute_below": 0.4,
+   "execute_mult": 2.0
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 0.9,
+    "duration": 3,
+    "val": 0.1,
+    "label": "KARMA"
+   },
+   {
+    "type": "poison",
+    "chance": 0.7,
+    "duration": 4,
+    "val": 0.06,
+    "label": "KARMIC RETRIBUTION"
+   }
+  ]
+ },
+ {
+  "id": "sig_jotaro_kujo",
+  "owner": "Jotaro Kujo",
+  "name": "Star Platinum: ORA Barrage",
+  "desc": "A time-stopped flurry of guaranteed crits; finishes foes below 45% HP for nearly double, with heavy stagger.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 5.2,
+  "cooldown": 110,
+  "scalingStat": "atk",
+  "flavor": "Yare yare daze.",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "execute_below": 0.45,
+   "execute_mult": 1.9,
+   "stagger_bonus": 3
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.5,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_zhao",
+  "owner": "Zhao",
+  "name": "Voidhunter's Verdict",
+  "desc": "A Hollow-hunting strike: always crits, pierces 40% armor, and executes wounded prey below 40% HP.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.8,
+  "cooldown": 105,
+  "scalingStat": "atk",
+  "flavor": "Hunt complete.",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "ignore_def": 0.4,
+   "execute_below": 0.4,
+   "execute_mult": 1.8
+  }
+ },
+ {
+  "id": "sig_kris",
+  "owner": "Kris",
+  "name": "Red Soul Slash",
+  "desc": "A determined blade, guided by the soul, that lands a sure crit and finishes foes below 35% HP.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "...",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "execute_below": 0.35,
+   "execute_mult": 1.9
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_spd",
+    "chance": 0.5,
+    "duration": 2,
+    "val": 0.2,
+    "label": "SLOW"
+   }
+  ]
+ },
+ {
+  "id": "sig_leon_scott_kennedy",
+  "owner": "Leon Scott Kennedy",
+  "name": "Precision Headshot",
+  "desc": "A trained headshot: ignores 50% DEF, always crits, and executes anything below 40% HP outright.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.7,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "Hasta luego.",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "ignore_def": 0.5,
+   "execute_below": 0.4,
+   "execute_mult": 2.0
+  }
+ },
+ {
+  "id": "sig_cait_sith",
+  "owner": "Cait Sith",
+  "name": "Slots: Game Over",
+  "desc": "A jackpot pull that crits all foes and DELETES anything below 50% HP (x2.5). Slots scale with Luck.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.6,
+  "cooldown": 150,
+  "scalingStat": "luck",
+  "flavor": "Lucky! That's a Mog House!",
+  "damageType": "magical",
+  "meta": {
+   "guaranteed_crit": true,
+   "execute_below": 0.5,
+   "execute_mult": 2.5
+  }
+ },
+ {
+  "id": "sig_sukuna",
+  "owner": "Sukuna",
+  "name": "Malevolent Shrine",
+  "desc": "A domain of endless slashes: ignores 50% DEF, applies Dismantle, and cleaves the wounded (below 40% HP).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 5.4,
+  "cooldown": 150,
+  "scalingStat": "atk",
+  "flavor": "Know your place.",
+  "damageType": "physical",
+  "meta": {
+   "ignore_def": 0.5,
+   "execute_below": 0.4,
+   "execute_mult": 1.8
+  },
+  "statusEffects": [
+   {
+    "type": "poison",
+    "chance": 0.85,
+    "duration": 4,
+    "val": 0.08,
+    "label": "DISMANTLE"
+   }
+  ]
+ },
+ {
+  "id": "sig_mark_grayson",
+  "owner": "Mark Grayson",
+  "name": "Viltrumite Onslaught",
+  "desc": "An unstoppable haymaker that ignores half of DEF and grows up to +120% stronger the more wounded Mark is.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.2,
+  "cooldown": 115,
+  "scalingStat": "atk",
+  "flavor": "Think, Mark. THINK!",
+  "damageType": "physical",
+  "meta": {
+   "scales_missing_hp": 1.2,
+   "ignore_def": 0.5
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.4,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_susie",
+  "owner": "Susie",
+  "name": "Rude Buster",
+  "desc": "A reckless axe shockwave that smashes all shields and hits harder the lower Susie's HP (up to +100%).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.0,
+  "cooldown": 120,
+  "scalingStat": "atk",
+  "flavor": "Let's pummel 'em into the dirt!",
+  "damageType": "physical",
+  "meta": {
+   "scales_missing_hp": 1.0,
+   "break_shield": true
+  },
+  "statusEffects": [
+   {
+    "type": "burn",
+    "chance": 0.5,
+    "duration": 3,
+    "val": 0.07,
+    "label": "BURN"
+   }
+  ]
+ },
+ {
+  "id": "sig_nicole_watterson",
+  "owner": "Nicole Watterson",
+  "name": "Mom's Fury",
+  "desc": "Maternal rage: the more hurt Nicole is, the more it devastates (up to +110%), shattering guards.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.0,
+  "cooldown": 120,
+  "scalingStat": "atk",
+  "flavor": "I have HAD it.",
+  "damageType": "physical",
+  "meta": {
+   "scales_missing_hp": 1.1,
+   "break_shield": true
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.35,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_ren",
+  "owner": "Ren",
+  "name": "Loyal Frenzy",
+  "desc": "A manic, devoted assault: always crits, drains 25%, and rages stronger as Ren's HP drops.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.0,
+  "cooldown": 85,
+  "scalingStat": "speed",
+  "flavor": "Stiiiimpy, you eediot!",
+  "damageType": "physical",
+  "meta": {
+   "scales_missing_hp": 1.0,
+   "guaranteed_crit": true,
+   "lifesteal": 0.25
+  }
+ },
+ {
+  "id": "sig_jake",
+  "owner": "Jake",
+  "name": "Stretchy Bulwark",
+  "desc": "Jake stretches into a colossal grapple that hits harder the healthier he is, then shields himself.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.0,
+  "cooldown": 110,
+  "scalingStat": "hp",
+  "flavor": "Dude, I am a shape-shifter.",
+  "damageType": "physical",
+  "meta": {
+   "scales_current_hp": 0.8,
+   "self_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "RUBBER"
+    }
+   ],
+   "stagger_bonus": 2.5
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.4,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_homer_simpson",
+  "owner": "Homer Simpson",
+  "name": "Donut Black Hole",
+  "desc": "A dense donut that pulls in all foes, hitting harder the fuller (healthier) Homer is. Heals on hit.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.9,
+  "cooldown": 135,
+  "scalingStat": "hp",
+  "flavor": "Mmm... forbidden donut.",
+  "damageType": "physical",
+  "meta": {
+   "scales_current_hp": 0.7,
+   "lifesteal": 0.25
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_spd",
+    "chance": 0.6,
+    "duration": 3,
+    "val": 0.25,
+    "label": "SLOW"
+   }
+  ]
+ },
+ {
+  "id": "sig_gertie",
+  "owner": "Gertie",
+  "name": "Primal Stomp",
+  "desc": "A prehistoric quake that scales with Gertie's current HP and builds heavy stagger on all foes.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.9,
+  "cooldown": 125,
+  "scalingStat": "hp",
+  "flavor": "RAWR!",
+  "damageType": "physical",
+  "meta": {
+   "scales_current_hp": 0.6,
+   "stagger_bonus": 2.5
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.4,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_ryu",
+  "owner": "Ryu",
+  "name": "Shinku Hadoken",
+  "desc": "A focused ki blast that pierces guard, stuns, and burns brighter (up to +90%) as Ryu's spirit is pushed.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 120,
+  "scalingStat": "atk",
+  "flavor": "Hadoken!",
+  "damageType": "magical",
+  "meta": {
+   "scales_missing_hp": 0.9,
+   "break_shield": true
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.4,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_crono",
+  "owner": "Crono",
+  "name": "Luminaire",
+  "desc": "The ultimate lightning tech: shocks and shatters guards, dealing +25% per debuff already on each foe.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.4,
+  "cooldown": 140,
+  "scalingStat": "magic_atk",
+  "flavor": "...!",
+  "damageType": "magical",
+  "meta": {
+   "bonus_per_debuff": 0.25,
+   "break_shield": true
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.1,
+    "label": "LUMINAIRE"
+   }
+  ]
+ },
+ {
+  "id": "sig_thor",
+  "owner": "Thor",
+  "name": "God of Thunder",
+  "desc": "Mjolnir's storm shatters shields and grows +25% stronger for every affliction already on a foe.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.4,
+  "cooldown": 135,
+  "scalingStat": "magic_atk",
+  "flavor": "I say thee NAY!",
+  "damageType": "magical",
+  "meta": {
+   "bonus_per_debuff": 0.25,
+   "break_shield": true
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 0.9,
+    "duration": 3,
+    "val": 0.12,
+    "label": "MJOLNIR"
+   }
+  ]
+ },
+ {
+  "id": "sig_bart_simpson",
+  "owner": "Bart Simpson",
+  "name": "Slingshot Mayhem",
+  "desc": "Chaotic pellets pelt random foes, mark them (-DEF), and hit +25% harder per debuff they carry.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "random_enemies",
+  "power": 3.7,
+  "cooldown": 100,
+  "scalingStat": "luck",
+  "flavor": "Ay caramba!",
+  "damageType": "physical",
+  "meta": {
+   "bonus_per_debuff": 0.25,
+   "mark": {
+    "def_down": 0.25,
+    "duration": 3,
+    "label": "PRANKED"
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_spd",
+    "chance": 0.6,
+    "duration": 2,
+    "val": 0.2,
+    "label": "SLOW"
+   }
+  ]
+ },
+ {
+  "id": "sig_gumball",
+  "owner": "Gumball",
+  "name": "Reality Glitch",
+  "desc": "The animation breaks: glitches and lags all foes, then punishes the afflicted (+25% per debuff).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.7,
+  "cooldown": 110,
+  "scalingStat": "luck",
+  "flavor": "This is gonna be awesome!",
+  "damageType": "magical",
+  "meta": {
+   "bonus_per_debuff": 0.25
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 0.9,
+    "duration": 3,
+    "val": 0.1,
+    "label": "GLITCH"
+   },
+   {
+    "type": "debuff_spd",
+    "chance": 0.6,
+    "duration": 2,
+    "val": 0.2,
+    "label": "LAG"
+   }
+  ]
+ },
+ {
+  "id": "sig_squidward_tentacles",
+  "owner": "Squidward Tentacles",
+  "name": "Clarinet of Doom",
+  "desc": "A note so awful it slows AND weakens every foe, then deals bonus damage to the already-suffering.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.4,
+  "cooldown": 105,
+  "scalingStat": "magic_atk",
+  "flavor": "I'm an artist!",
+  "damageType": "magical",
+  "meta": {
+   "bonus_per_debuff": 0.2
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_spd",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.3,
+    "label": "DISSONANCE"
+   },
+   {
+    "type": "debuff_atk",
+    "chance": 0.8,
+    "duration": 3,
+    "val": 0.25,
+    "label": "EARSORE"
+   }
+  ]
+ },
+ {
+  "id": "sig_stimpy",
+  "owner": "Stimpy",
+  "name": "Hairball Hazard",
+  "desc": "A repulsive hairball that sickens and slows everyone, scaling with their accumulated misery.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.5,
+  "cooldown": 100,
+  "scalingStat": "luck",
+  "flavor": "Happy happy, joy joy!",
+  "damageType": "magical",
+  "meta": {
+   "bonus_per_debuff": 0.2
+  },
+  "statusEffects": [
+   {
+    "type": "poison",
+    "chance": 0.85,
+    "duration": 4,
+    "val": 0.07,
+    "label": "GROSS"
+   },
+   {
+    "type": "debuff_spd",
+    "chance": 0.6,
+    "duration": 2,
+    "val": 0.2,
+    "label": "SLIP"
+   }
+  ]
+ },
+ {
+  "id": "sig_lex_luthor",
+  "owner": "Lex Luthor",
+  "name": "Warsuit Annihilation",
+  "desc": "Kryptonite warsuit beams that strip ALL enemy buffs, then obliterate the target through 50% DEF.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 5.4,
+  "cooldown": 125,
+  "scalingStat": "magic_atk",
+  "flavor": "I am the future of humanity.",
+  "damageType": "magical",
+  "meta": {
+   "ignore_def": 0.5,
+   "break_shield": true,
+   "dispel_enemies": true
+  }
+ },
+ {
+  "id": "sig_monika",
+  "owner": "Monika",
+  "name": "Just Monika",
+  "desc": "She edits the enemy roster: deletes every foe's buffs and bypasses 70% of the target's DEF.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 5.0,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Just... Monika.",
+  "damageType": "magical",
+  "meta": {
+   "ignore_def": 0.7,
+   "dispel_enemies": true
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 0.8,
+    "duration": 3,
+    "val": 0.1,
+    "label": "GLITCH"
+   }
+  ]
+ },
+ {
+  "id": "sig_miles_edgeworth",
+  "owner": "Miles Edgeworth",
+  "name": "Cross-Examination",
+  "desc": "Exposes a contradiction in every foe (-40% DEF for 4t) and rallies the squad's ATK. Cannot miss.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.6,
+  "cooldown": 115,
+  "scalingStat": "magic_atk",
+  "flavor": "The verdict is clear.",
+  "damageType": "magical",
+  "meta": {
+   "mark": {
+    "def_down": 0.4,
+    "duration": 4,
+    "label": "CONTRADICTION"
+   },
+   "ignore_evasion": true,
+   "team_effects": [
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "LOGIC"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_phoenix_wright",
+  "owner": "Phoenix Wright",
+  "name": "Turnabout Objection",
+  "desc": "OBJECTION! Turns the tables: strips every enemy buff, marks them (-DEF), and rallies 20 Burst to allies.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.4,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Objection! Take that!",
+  "damageType": "magical",
+  "meta": {
+   "dispel_enemies": true,
+   "mark": {
+    "def_down": 0.3,
+    "duration": 3,
+    "label": "OBJECTION"
+   },
+   "gain_burst": 20
+  }
+ },
+ {
+  "id": "sig_wendy_testaburger",
+  "owner": "Wendy Testaburger",
+  "name": "Debate Club Knockout",
+  "desc": "A sharp argument-turned-punch that breaks guard, stuns, and leaves the foe refuted (-35% DEF).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.5,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "I have a few things to say.",
+  "damageType": "physical",
+  "meta": {
+   "break_shield": true,
+   "mark": {
+    "def_down": 0.35,
+    "duration": 3,
+    "label": "REFUTED"
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.4,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_gojo_satoru",
+  "owner": "Gojo Satoru",
+  "name": "Hollow Purple",
+  "desc": "Infinity collides into an imaginary-mass blast: erases 80% of DEF, shatters shields, and cannot be dodged.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 6.2,
+  "cooldown": 150,
+  "scalingStat": "magic_atk",
+  "flavor": "Nah, I'd win.",
+  "damageType": "magical",
+  "meta": {
+   "ignore_def": 0.8,
+   "break_shield": true,
+   "ignore_evasion": true
+  }
+ },
+ {
+  "id": "sig_riolu",
+  "owner": "Riolu",
+  "name": "Aura Sphere Overload",
+  "desc": "A perfectly-read aura sphere that never misses and always crits, no matter the foe's evasion.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.5,
+  "cooldown": 100,
+  "scalingStat": "magic_atk",
+  "flavor": "Lu! Riolu!",
+  "damageType": "magical",
+  "meta": {
+   "guaranteed_crit": true,
+   "ignore_evasion": true
+  }
+ },
+ {
+  "id": "sig_kitty_katswell",
+  "owner": "Kitty Katswell",
+  "name": "Spy Strike Protocol",
+  "desc": "An elite T.U.F.F. takedown: always crits, pierces 30% armor, and tags the target (-DEF).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.7,
+  "cooldown": 95,
+  "scalingStat": "speed",
+  "flavor": "Freeze, you're under arrest!",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "ignore_def": 0.3,
+   "mark": {
+    "def_down": 0.3,
+    "duration": 3,
+    "label": "TAGGED"
+   }
+  }
+ },
+ {
+  "id": "sig_mario",
+  "owner": "Mario",
+  "name": "Star Power Finale",
+  "desc": "Invincible star energy crashes into every foe with an unavoidable, guaranteed critical hit.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.4,
+  "cooldown": 120,
+  "scalingStat": "hp",
+  "flavor": "It's-a me, Mario!",
+  "damageType": "physical",
+  "meta": {
+   "ignore_evasion": true,
+   "guaranteed_crit": true
+  },
+  "statusEffects": [
+   {
+    "type": "burn",
+    "chance": 0.5,
+    "duration": 3,
+    "val": 0.07,
+    "label": "FIRE FLOWER"
+   }
+  ]
+ },
+ {
+  "id": "sig_tom",
+  "owner": "Tom",
+  "name": "Relentless Chase",
+  "desc": "Corners the foe (slow), then lands a sure crit that deals +50% to anything slowed. Short cooldown.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.2,
+  "cooldown": 80,
+  "scalingStat": "speed",
+  "flavor": "...",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "bonus_vs_status": {
+    "status": "debuff_spd",
+    "mult": 1.5
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_spd",
+    "chance": 1,
+    "duration": 2,
+    "val": 0.2,
+    "label": "CORNERED"
+   }
+  ]
+ },
+ {
+  "id": "sig_spider_man",
+  "owner": "Spider-Man",
+  "name": "Web-Slinger's Gambit",
+  "desc": "Webs ensnare and slow all foes, then yank them for +40% damage against anything webbed.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.8,
+  "cooldown": 100,
+  "scalingStat": "speed",
+  "flavor": "With great power...",
+  "damageType": "physical",
+  "meta": {
+   "bonus_vs_status": {
+    "status": "debuff_spd",
+    "mult": 1.4
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_spd",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.3,
+    "label": "WEBBED"
+   },
+   {
+    "type": "stun",
+    "chance": 0.3,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_krystal",
+  "owner": "Krystal",
+  "name": "Telepathic Foresight",
+  "desc": "Reads every foe's move: marks them (-DEF), freezes some, and strikes frozen targets for +40%.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.9,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "I sense your every move.",
+  "damageType": "magical",
+  "meta": {
+   "mark": {
+    "def_down": 0.3,
+    "duration": 3,
+    "label": "FORESEEN"
+   },
+   "bonus_vs_status": {
+    "status": "freeze",
+    "mult": 1.4
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "freeze",
+    "chance": 0.45,
+    "duration": 2,
+    "val": 0,
+    "label": "FROZEN"
+   }
+  ]
+ },
+ {
+  "id": "sig_tails_the_fox",
+  "owner": "Tails the Fox",
+  "name": "Spin Dash Barrage",
+  "desc": "Spin-dashes scattered foes, charging their circuits; deals +60% to any already shorted out.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "random_enemies",
+  "power": 4.0,
+  "cooldown": 110,
+  "scalingStat": "speed",
+  "flavor": "Two tails are better than one!",
+  "damageType": "physical",
+  "meta": {
+   "bonus_vs_status": {
+    "status": "static",
+    "mult": 1.6
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 0.7,
+    "duration": 3,
+    "val": 0.07,
+    "label": "STATIC"
+   }
+  ]
+ },
+ {
+  "id": "sig_joseph_joestar",
+  "owner": "Joseph Joestar",
+  "name": "Hamon Overdrive",
+  "desc": "A clackers-blast Hamon surge that shatters guard and deals +60% to DARK-element foes (the undead).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.4,
+  "cooldown": 105,
+  "scalingStat": "speed",
+  "flavor": "Your next line is...",
+  "damageType": "physical",
+  "meta": {
+   "break_shield": true,
+   "bonus_vs_element": {
+    "element": "DARK",
+    "mult": 1.6
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 0.7,
+    "duration": 3,
+    "val": 0.08,
+    "label": "HAMON"
+   },
+   {
+    "type": "stun",
+    "chance": 0.35,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_koichi",
+  "owner": "Koichi",
+  "name": "Echoes Act 3: Freeze",
+  "desc": "Echoes stamps crushing weight on the foe (heavy slow), then hits +60% against the slowed.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.2,
+  "cooldown": 110,
+  "scalingStat": "speed",
+  "flavor": "S-H-I-T!",
+  "damageType": "physical",
+  "meta": {
+   "bonus_vs_status": {
+    "status": "debuff_spd",
+    "mult": 1.6
+   },
+   "stagger_bonus": 2.5
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_spd",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.4,
+    "label": "3 FREEZE"
+   }
+  ]
+ },
+ {
+  "id": "sig_wendy",
+  "owner": "Wendy",
+  "name": "Sky Dragon's Roar",
+  "desc": "A Sky Dragon's roar that buffets all foes and slows them, while cleansing and healing the caster.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.4,
+  "cooldown": 125,
+  "scalingStat": "magic_atk",
+  "flavor": "Sky Dragon's ROAR!",
+  "damageType": "magical",
+  "meta": {
+   "heal_on_hit": 0.15,
+   "cleanse_team": true
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_spd",
+    "chance": 0.7,
+    "duration": 3,
+    "val": 0.25,
+    "label": "GALE"
+   }
+  ]
+ },
+ {
+  "id": "sig_finn",
+  "owner": "Finn",
+  "name": "Grass Sword Flurry",
+  "desc": "Algebraic! A grass-blade whirl that poisons all foes and heals Finn for 20% of the damage dealt.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.8,
+  "cooldown": 120,
+  "scalingStat": "atk",
+  "flavor": "Mathematical!",
+  "damageType": "physical",
+  "meta": {
+   "heal_on_hit": 0.2
+  },
+  "statusEffects": [
+   {
+    "type": "poison",
+    "chance": 0.6,
+    "duration": 4,
+    "val": 0.06,
+    "label": "GRASS"
+   }
+  ]
+ },
+ {
+  "id": "sig_amy_rose",
+  "owner": "Amy Rose",
+  "name": "Piko Piko Hammer Smash",
+  "desc": "A loving hammer-blow that shatters shields, staggers, stuns, and enrages Amy (+ATK) for the fight.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.7,
+  "cooldown": 110,
+  "scalingStat": "atk",
+  "flavor": "You're gonna get it now!",
+  "damageType": "physical",
+  "meta": {
+   "break_shield": true,
+   "stagger_bonus": 2.5,
+   "self_effects": [
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.3,
+     "label": "FURY"
+    }
+   ]
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.5,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_agent_jones",
+  "owner": "Agent Jones",
+  "name": "Zero Point Rift",
+  "desc": "Tears a rift through the field: ignores 30% DEF, slows, and leaves all foes Displaced (-DEF).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.6,
+  "cooldown": 130,
+  "scalingStat": "atk",
+  "flavor": "The Loop just got interesting.",
+  "damageType": "physical",
+  "meta": {
+   "ignore_def": 0.3,
+   "mark": {
+    "def_down": 0.3,
+    "duration": 3,
+    "label": "DISPLACED"
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_spd",
+    "chance": 0.7,
+    "duration": 3,
+    "val": 0.25,
+    "label": "SLOW"
+   }
+  ]
+ },
+ {
+  "id": "sig_lola_bunny",
+  "owner": "Lola Bunny",
+  "name": "Slam Dunk Spike",
+  "desc": "An athletic spike that stuns and crits for +50% against stunned foes. All net.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.3,
+  "cooldown": 95,
+  "scalingStat": "speed",
+  "flavor": "Don't ever call me 'doll'.",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "bonus_vs_status": {
+    "status": "stun",
+    "mult": 1.5
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.5,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_bugs_bunny",
+  "owner": "Bugs Bunny",
+  "name": "Anvil Drop Gag",
+  "desc": "A cartoon anvil flattens the foe - massive stagger, a stun, and +25% per affliction they carry.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.4,
+  "cooldown": 100,
+  "scalingStat": "luck",
+  "flavor": "Eh, what's up, doc?",
+  "damageType": "physical",
+  "meta": {
+   "stagger_bonus": 3,
+   "bonus_per_debuff": 0.25
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.55,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
+  ]
+ },
+ {
+  "id": "sig_hermione_granger",
+  "owner": "Hermione Granger",
+  "name": "Counterspell Mastery",
+  "desc": "CONTROL: silences every foe (no skills for 2 turns), strips all their buffs, and exposes their defenses. The brightest witch of her age.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.0,
+  "cooldown": 135,
+  "scalingStat": "magic_atk",
+  "flavor": "It's leviOsa, not levioSA.",
+  "damageType": "magical",
+  "meta": {
+   "dispel_enemies": true,
+   "mark": {
+    "def_down": 0.3,
+    "duration": 3,
+    "label": "EXPOSED"
+   }
+  },
+  "statusEffects": [
+   {
+    "type": "silence",
+    "chance": 0.7,
+    "duration": 2,
+    "val": 0,
+    "label": "SILENCED"
+   }
+  ]
+ },
+ {
+  "id": "sig_hermione_year_1",
+  "owner": "Hermione (year 1)",
+  "name": "Wingardium Leviosa",
+  "desc": "A first-year levitates the foe helplessly (stun + -DEF) and shares her notes with the squad (+DEF). Short cooldown.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.7,
+  "cooldown": 80,
+  "scalingStat": "magic_atk",
+  "flavor": "Now don't forget the swish and flick!",
+  "damageType": "magical",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "buff_def",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.2,
+     "label": "STUDY GROUP"
+    }
+   ]
+  },
+  "statusEffects": [
+   {
+    "type": "stun",
+    "chance": 0.65,
+    "duration": 1,
+    "val": 0,
+    "label": "LEVITATED"
+   },
+   {
+    "type": "debuff_def",
+    "chance": 1,
+    "duration": 2,
+    "val": 0.3,
+    "label": "FLOATING"
+   }
+  ]
+ },
+ {
+  "id": "sig_newt_scamander",
+  "owner": "Newt Scamander",
+  "name": "Niffler's Greed",
+  "desc": "SUPPORT-THIEF: his niffler pilfers a buff from EVERY foe, his creatures heal the squad over time, and he drains a little life on contact.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.5,
+  "cooldown": 130,
+  "scalingStat": "magic_atk",
+  "flavor": "My creatures aren't dangerous... mostly.",
+  "damageType": "magical",
+  "meta": {
+   "steal_buff": true,
+   "heal_on_hit": 0.15,
+   "team_effects": [
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.06,
+     "label": "MENAGERIE"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_voldemort",
+  "owner": "Voldemort",
+  "name": "Avada Kedavra",
+  "desc": "THE KILLING CURSE: bypasses defense, evasion, AND shields, and instantly executes any foe below 50% HP (x3). Sows dread in survivors.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 5.5,
+  "cooldown": 140,
+  "scalingStat": "magic_atk",
+  "flavor": "There is no good and evil, only power.",
+  "damageType": "magical",
+  "meta": {
+   "ignore_def": 0.7,
+   "ignore_evasion": true,
+   "break_shield": true,
+   "execute_below": 0.5,
+   "execute_mult": 3.0
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_atk",
+    "chance": 0.8,
+    "duration": 3,
+    "val": 0.3,
+    "label": "DREAD"
+   }
+  ]
+ },
+ {
+  "id": "sig_brusha",
+  "owner": "Brusha",
+  "name": "Abstract Splatter",
+  "desc": "CHAOS PAINT: splatters every foe with a RANDOM curse, then hits +30% harder for each affliction already on the canvas.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.2,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Every battle is my masterpiece.",
+  "damageType": "magical",
+  "meta": {
+   "random_status": true,
+   "bonus_per_debuff": 0.3
+  }
+ },
+ {
+  "id": "sig_kirby",
+  "owner": "Kirby",
+  "name": "Inhale & Copy",
+  "desc": "COPY ABILITY: inhales the foe to COPY their buffs onto himself (they keep theirs), heals 30% of damage, and spits out a random elemental star.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.0,
+  "cooldown": 110,
+  "scalingStat": "atk",
+  "flavor": "Poyo!",
+  "damageType": "physical",
+  "meta": {
+   "copy_buff": true,
+   "heal_on_hit": 0.3,
+   "random_status": true
+  }
+ },
+ {
+  "id": "sig_meta_knight",
+  "owner": "Meta Knight",
+  "name": "Mach Tornado",
+  "desc": "MULTI-HIT: a blinding sword cyclone strikes 4 times, each hit able to crit independently, and cannot be dodged.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.9,
+  "cooldown": 115,
+  "scalingStat": "speed",
+  "flavor": "Know my blade, Galaxia.",
+  "damageType": "physical",
+  "meta": {
+   "extra_hits": 3,
+   "ignore_evasion": true
+  }
+ },
+ {
+  "id": "sig_daroach",
+  "owner": "Daroach",
+  "name": "Triple-Star Heist",
+  "desc": "MASTER THIEF: snatches a buff from every foe, voids their remaining boons, plants a shock-trap, and vanishes faster (+SPD).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.0,
+  "cooldown": 125,
+  "scalingStat": "luck",
+  "flavor": "The Squeak Squad always gets the treasure.",
+  "damageType": "physical",
+  "meta": {
+   "steal_buff": true,
+   "dispel_enemies": true,
+   "self_effects": [
+    {
+     "type": "buff_spd",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "VANISH"
+    }
+   ]
+  },
+  "statusEffects": [
+   {
+    "type": "static",
+    "chance": 0.6,
+    "duration": 3,
+    "val": 0.06,
+    "label": "TRAP"
+   }
+  ]
+ },
+ {
+  "id": "sig_wolf_o_donnell",
+  "owner": "Wolf",
+  "name": "Can't Let You Do That",
+  "desc": "AMBUSH PREDATOR: a guaranteed critical that hits +70% harder against foes still near full HP. Strikes before they're ready.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.6,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "Can't let you do that, Star Fox!",
+  "damageType": "physical",
+  "meta": {
+   "bonus_vs_full_hp": {
+    "above": 0.75,
+    "mult": 1.7
+   },
+   "guaranteed_crit": true
+  }
+ },
+ {
+  "id": "sig_omniman",
+  "owner": "Omniman",
+  "name": "Viltrumite Judgment",
+  "desc": "Pierces 50% of all armor, terrifies every foe (-ATK), and cleaves the wounded (below 40% HP). Overwhelming force.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.0,
+  "cooldown": 130,
+  "scalingStat": "atk",
+  "flavor": "Look what they make you give, son.",
+  "damageType": "physical",
+  "meta": {
+   "ignore_def": 0.5,
+   "execute_below": 0.4,
+   "execute_mult": 1.8
+  },
+  "statusEffects": [
+   {
+    "type": "debuff_atk",
+    "chance": 0.7,
+    "duration": 3,
+    "val": 0.3,
+    "label": "TERROR"
+   }
+  ]
+ },
+ {
+  "id": "sig_atom_eve",
+  "owner": "Atom Eve",
+  "name": "Matter Reconstruction",
+  "desc": "REALITY CONTROL: cleanses and shields the squad with conjured matter, mends them over time, and UNMAKES every enemy's buffs.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 135,
+  "scalingStat": "magic_def",
+  "flavor": "I can make anything I want.",
+  "meta": {
+   "team_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.35,
+     "label": "MATTER WARD"
+    },
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.06,
+     "label": "REWEAVE"
+    }
+   ],
+   "cleanse_team": true,
+   "dispel_enemies": true
+  }
+ },
+ {
+  "id": "sig_lisa_simpson",
+  "owner": "Lisa Simpson",
+  "name": "Harmonic Resonance",
+  "desc": "ELEM +30%: a saxophone solo that harmonizes the squad's elemental damage (+30%), inverts each foe's buffs into debuffs, and rallies the team's Crit.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.8,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "If anyone wants me, I'll be in my room.",
+  "damageType": "magical",
+  "meta": {
+   "invert_buffs": true,
+   "team_effects": [
+    {
+     "type": "buff_elemdmg",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "RESONANCE"
+    },
+    {
+     "type": "buff_crit",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.15,
+     "label": "IN TUNE"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_adeleine",
+  "owner": "Adeleine",
+  "name": "Living Canvas",
+  "desc": "PAINTER: brings living hazards to life on every foe (a random curse each) while conjuring protective art and healing for the squad.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.6,
+  "cooldown": 125,
+  "scalingStat": "magic_atk",
+  "flavor": "Let me paint you a picture.",
+  "damageType": "magical",
+  "meta": {
+   "random_status": true,
+   "team_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "PAINTED GUARD"
+    },
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.05,
+     "label": "FRESH COAT"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_ragna",
+  "owner": "Ragna the Bloodedge",
+  "name": "Carnage Scissors",
+  "desc": "The Azure Grimoire devours the foe's vitality, tearing through armor and feeding on the kill.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 110,
+  "scalingStat": "atk",
+  "flavor": "Hell's Fang!",
+  "damageType": "physical",
+  "meta": {
+   "ignore_def": 0.35,
+   "lifesteal": 0.35,
+   "execute_below": 0.25,
+   "execute_mult": 1.7
+  }
+ },
+ {
+  "id": "sig_makoto",
+  "owner": "Makoto Nanaya",
+  "name": "Rabbit Beat",
+  "desc": "A blur of Mitsumune-fueled jabs -- too fast to dodge, each landed hit chips deeper into a worn-down guard.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.3,
+  "cooldown": 90,
+  "scalingStat": "speed",
+  "flavor": "Don't blink!",
+  "damageType": "physical",
+  "meta": {
+   "ignore_evasion": true,
+   "extra_hits": 2,
+   "bonus_per_debuff": 0.18
+  }
+ },
+ {
+  "id": "sig_taokaka",
+  "owner": "Taokaka",
+  "name": "???",
+  "desc": "Just wants a snack! ...mostly harmless. Every third swipe, though, something ancient and starving wakes up behind her eyes.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3,
+  "cooldown": 70,
+  "scalingStat": "atk",
+  "flavor": "Nyaha~! ...wait, what's happening to my claws?!",
+  "damageType": "physical",
+  "meta": {
+   "builds_hidden_power": 1,
+   "hidden_power_threshold": 3,
+   "hidden_power_mult": 5
+  }
+ },
+ {
+  "id": "sig_sora",
+  "owner": "Sora",
+  "name": "Ragnarok",
+  "desc": "A keyblade flurry that ends in a beam of light -- punishes creatures of darkness and charges the whole party's resolve.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "Got it memorized? Light wins.",
+  "damageType": "physical",
+  "meta": {
+   "extra_hits": 3,
+   "bonus_vs_element": {
+    "element": "DARK",
+    "mult": 1.6
+   },
+   "gain_burst": 15
+  }
+ },
+ {
+  "id": "sig_riku",
+  "owner": "Riku",
+  "name": "Way to the Dawn",
+  "desc": "Channels the darkness without losing himself to it -- marks the foe's defenses and finishes the weak without mercy.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.3,
+  "cooldown": 105,
+  "scalingStat": "magic_atk",
+  "flavor": "The closer you are to the darkness, the brighter you shine.",
+  "damageType": "magical",
+  "meta": {
+   "lifesteal": 0.15,
+   "execute_below": 0.3,
+   "execute_mult": 1.8,
+   "mark": {
+    "def_down": 0.3,
+    "duration": 3,
+    "label": "DARK MARK"
+   }
+  }
+ },
+ {
+  "id": "sig_scraps",
+  "owner": "Scraps",
+  "name": "Tangled Web",
+  "desc": "Her paper cup tail lashes out and snags the foe, lashing it to its own side -- for the next few turns, any damage dealt to its allies also yanks the tether, splashing onto the snared target too. Always finds its mark, always hits twice, and charges the whole squad's Burst.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.8,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "Gotcha~!",
+  "damageType": "physical",
+  "meta": {
+   "ignore_evasion": true,
+   "extra_hits": 1,
+   "applies_tether": true,
+   "tether_duration": 4,
+   "tether_splash": 0.35,
+   "bonus_per_debuff": 0.1,
+   "gain_burst": 15
+  }
+ },
+ {
+  "id": "sig_rachel_alucard",
+  "owner": "Rachel Alucard",
+  "name": "Tyrant's Decree",
+  "desc": "The Imperator's gohei fan parts the wind -- armor is brushed aside as if it were nothing, and the wound left behind makes everything that follows hurt more.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.4,
+  "cooldown": 100,
+  "scalingStat": "magic_atk",
+  "flavor": "How dreadfully dull.",
+  "damageType": "magical",
+  "meta": {
+   "ignore_def": 0.25,
+   "mark": {
+    "def_down": 0.35,
+    "duration": 3,
+    "label": "DECREED"
+   },
+   "bonus_vs_status": {
+    "status": "debuff_spd",
+    "mult": 1.5
+   }
+  }
+ },
+ {
+  "id": "sig_naoto_kurogane",
+  "owner": "Naoto Kurogane",
+  "name": "Bolverk's Judgment",
+  "desc": "A lightning-charged blade strike that never misses its mark and always lands true -- the second swing follows before the foe can even guard.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.5,
+  "cooldown": 95,
+  "scalingStat": "atk",
+  "flavor": "I'll carve my own path!",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "ignore_def": 0.2,
+   "extra_hits": 1
+  }
+ },
+ {
+  "id": "sig_rock_volnutt",
+  "owner": "Rock Volnutt",
+  "name": "Shooting Star",
+  "desc": "The buster arm unloads a rapid volley -- extra rounds chamber automatically, and shadows make for easy targeting.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.2,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "Time to dig up some treasure!",
+  "damageType": "physical",
+  "meta": {
+   "extra_hits": 2,
+   "bonus_vs_element": {
+    "element": "DARK",
+    "mult": 1.4
+   }
+  }
+ },
+ {
+  "id": "sig_rocko",
+  "owner": "Rocko",
+  "name": "Chaos Delivery",
+  "desc": "Rocko panics, flails, and somehow it works out -- the foe is afflicted with something unpredictable, and the sheer relief heals him a little.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.6,
+  "cooldown": 90,
+  "scalingStat": "atk",
+  "flavor": "Oh, this is bad, this is bad, this is bad--!",
+  "damageType": "physical",
+  "meta": {
+   "random_status": true,
+   "heal_on_hit": 0.1
+  }
+ },
+ {
+  "id": "sig_heffer",
+  "owner": "Heffer",
+  "name": "Heffer's Feast",
+  "desc": "He eats absolutely everything in sight -- the hungrier he is, the harder this hits, and whatever he bites down on heals him right back up.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.0,
+  "cooldown": 95,
+  "scalingStat": "atk",
+  "flavor": "Is that... edible? Doesn't matter!",
+  "damageType": "physical",
+  "meta": {
+   "lifesteal": 0.25,
+   "scales_missing_hp": 0.5
+  }
+ },
+ {
+  "id": "sig_flik",
+  "owner": "Flik",
+  "name": "Inventor's Gambit",
+  "desc": "A contraption of scavenged parts fires off, dispelling every buff the enemy side is hiding behind, while the whole squad gets fired up on Flik's latest invention and a surge of Burst.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "It's not finished yet, but it'll work! Probably!",
+  "damageType": "physical",
+  "meta": {
+   "extra_hits": 1,
+   "dispel_enemies": true,
+   "gain_burst": 20,
+   "team_effects": [
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.25,
+     "label": "INVENTION"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_katara",
+  "owner": "Katara",
+  "name": "Tides of War",
+  "desc": "Water answers her call -- a crashing wave that burns fire-touched foes worse than most, while the whole squad is wrapped in healing currents.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.1,
+  "cooldown": 100,
+  "scalingStat": "magic_atk",
+  "flavor": "Water is the source of life, but I can make it the source of your defeat.",
+  "damageType": "magical",
+  "meta": {
+   "bonus_vs_element": {
+    "element": "FIRE",
+    "mult": 1.5
+   },
+   "team_effects": [
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.06,
+     "label": "HEALING WATERS"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_batman",
+  "owner": "Batman",
+  "name": "No Man's Land Protocol",
+  "desc": "Months of contingency planning collapse onto one target -- defenses are marked and stripped, whatever buff they're hiding gets stolen, the strike cannot be dodged, and anything already on its last legs gets finished outright.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.7,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "I've got a plan for you. I always do.",
+  "damageType": "physical",
+  "meta": {
+   "ignore_evasion": true,
+   "steal_buff": true,
+   "mark": {
+    "def_down": 0.4,
+    "duration": 4,
+    "label": "TARGETED"
+   },
+   "execute_below": 0.3,
+   "execute_mult": 2.0
+  }
+ },
+ {
+  "id": "sig_bobette",
+  "owner": "Bobette",
+  "name": "Yuletide Miracle",
+  "desc": "A flurry of wrapped presents bursts open into pure holiday cheer -- the squad is cleansed of every debuff, wrapped in a gift-shaped shield, fired up with festive strength, and the whole team's Burst meter overflows.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 105,
+  "scalingStat": "magic_atk",
+  "flavor": "Naughty or nice, everyone gets a gift from me!",
+  "damageType": "magical",
+  "meta": {
+   "cleanse_team": true,
+   "gain_burst": 20,
+   "team_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "GIFT WRAPPED"
+    },
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.2,
+     "label": "HOLIDAY CHEER"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_vicky",
+  "owner": "Vicky",
+  "name": "Babysitter's Wrath",
+  "desc": "Whatever's standing between her and a paycheck gets cracked open -- the stronger the barrier, the worse the payback -- and the follow-up swing can't be dodged.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.5,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "Twerp privileges revoked.",
+  "damageType": "physical",
+  "meta": {
+   "shield_detonate": true,
+   "extra_hits": 1,
+   "ignore_evasion": true
+  }
+ },
+ {
+  "id": "sig_ayla",
+  "owner": "Ayla",
+  "name": "Primal Smash",
+  "desc": "Raw prehistoric strength -- barriers don't slow this down, the hit always lands true, and anything left reeling gets finished outright.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 95,
+  "scalingStat": "atk",
+  "flavor": "Ayla strong! Ayla smash!",
+  "damageType": "physical",
+  "meta": {
+   "break_shield": true,
+   "guaranteed_crit": true,
+   "execute_below": 0.3,
+   "execute_mult": 1.8
+  }
+ },
+ {
+  "id": "sig_jenny_wakeman",
+  "owner": "Jenny Wakeman",
+  "name": "XJ-9 Override",
+  "desc": "Combat protocols kick in -- the squad is patched up, wrapped in nanotech armor plating, and surges with Burst.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.0,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "Teenage robot, reporting for duty!",
+  "damageType": "physical",
+  "meta": {
+   "cleanse_team": true,
+   "gain_burst": 15,
+   "team_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "NANO ARMOR"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_rue",
+  "owner": "Rue",
+  "name": "Silent Alliance",
+  "desc": "She slips through the underbrush and signals her allies -- the whole squad finds cover behind a shield and starts mending wounds, no questions asked.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2.8,
+  "cooldown": 100,
+  "scalingStat": "speed",
+  "flavor": "We can help each other. That's how we survive.",
+  "damageType": "physical",
+  "meta": {
+   "ignore_evasion": true,
+   "team_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "HIDDEN COVER"
+    },
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.05,
+     "label": "FOREST'S GIFT"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_gum",
+  "owner": "Gum",
+  "name": "Tag and Roll",
+  "desc": "A fresh coat of spray paint scrambles the enemy's buffs while the squad skates off with a shield and a burst of speed.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.0,
+  "cooldown": 95,
+  "scalingStat": "speed",
+  "flavor": "Tag's up, let's roll!",
+  "damageType": "physical",
+  "meta": {
+   "dispel_enemies": true,
+   "team_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.2,
+     "label": "SPRAY SHIELD"
+    },
+    {
+     "type": "buff_spd",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.15,
+     "label": "ROLLERBLADE RUSH"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_freya_dragoons_descent",
+  "owner": "Freya",
+  "name": "Dragoon's Descent",
+  "desc": "Leaps skyward and crashes back down with a piercing lance strike, briefly emboldened by the fall.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.7,
+  "cooldown": 110,
+  "scalingStat": "atk",
+  "flavor": "For Burmecia!",
+  "damageType": "physical",
+  "meta": {
+   "self_effects": [
+    { "type": "buff_atk", "duration": 2, "val": 0.2, "label": "LANCE READY" }
+   ]
+  }
+ },
+ {
+  "id": "sig_tao_blade_heart_finale",
+  "owner": "Tao",
+  "name": "Blade Heart: Finale",
+  "desc": "Tao dumps her stacked Blade Heart into one shot, hitting harder against debuffed targets -- and if it kills, she's already gone before the body drops, untouchable for a moment.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.9,
+  "cooldown": 120,
+  "scalingStat": "atk",
+  "flavor": "Every bullet, every blade -- make it count.",
+  "damageType": "physical",
+  "meta": {
+   "bonus_per_debuff": 0.2,
+   "grants_untargetable_on_kill": true,
+   "untargetable_duration": 2
+  }
+ },
+ {
+  "id": "sig_li_spirit_eruption",
+  "owner": "Li",
+  "name": "Crimson Nova: Spirit's Eruption",
+  "desc": "Detonates a roaring pillar of flame on the target, searing them badly. Deals massive bonus damage to anything already burning.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2.9,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Let it burn.",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "burn", "chance": 0.95, "duration": 3, "val": 0.1, "label": "SCORCHED" }
+  ],
+  "meta": {
+   "bonus_vs_status": { "status": "burn", "mult": 2 }
+  }
+ },
+ {
+  "id": "sig_sarah_connor_no_fate",
+  "owner": "Sarah Connor",
+  "name": "No Fate",
+  "desc": "Sarah barks a tactical order and lays down cover fire. Decent intel, mediocre payload -- she was never the muscle of this operation.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 0.6,
+  "cooldown": 90,
+  "scalingStat": "magic_atk",
+  "flavor": "The future's not set. There's no fate but what we make for ourselves.",
+  "damageType": "magical",
+  "meta": {
+   "team_effects": [
+    { "type": "buff_def", "duration": 3, "val": 0.15, "label": "DUG IN" }
+   ]
+  }
+ },
+ {
+  "id": "sig_gaz_game_over_screen",
+  "owner": "Gaz",
+  "name": "Game Over Screen",
+  "desc": "Gaz paints a target lock on the enemy -- for the next few turns, the whole squad's attacks home in on them first.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "debuff",
+  "target": "single_enemy",
+  "power": 0.5,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "Game. Over.",
+  "damageType": "physical",
+  "statusEffects": [
+   { "type": "expose", "chance": 1, "duration": 3, "val": 0, "label": "TARGETED" }
+  ]
+ },
+ {
+  "id": "sig_king_glyphic_mandate",
+  "owner": "King",
+  "name": "Glyphic Mandate",
+  "desc": "King invokes a forgotten titan's decree, sharpening the squad's instincts -- attacks against an elementally weak foe hit much harder for a few turns.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "I am the king of all monsters... mostly.",
+  "statusEffects": [
+   { "type": "elemental_insight", "chance": 1, "duration": 4, "val": 0.4, "label": "TITAN'S INSIGHT" }
+  ]
+ },
+ {
+  "id": "sig_ice_king_glacial_barrier",
+  "owner": "Ice King",
+  "name": "Glacial Barrier",
+  "desc": "Encases the whole squad in protective ice for a moment -- nothing can touch them while it holds.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 150,
+  "scalingStat": "hp",
+  "flavor": "Gunter, fetch my crown!",
+  "statusEffects": [
+   { "type": "untargetable", "chance": 1, "duration": 1, "val": 0, "label": "ENCASED" }
+  ]
+ },
+ {
+  "id": "sig_benson_youre_fired",
+  "owner": "Benson",
+  "name": "YOU'RE FIRED!!!",
+  "desc": "Benson finally loses it. Deals devastating bonus damage to any target the squad has already painted with a lock-on.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2,
+  "cooldown": 130,
+  "scalingStat": "atk",
+  "flavor": "I'M SO ANGRY RIGHT NOW!",
+  "damageType": "physical",
+  "meta": {
+   "bonus_vs_status": { "status": "expose", "mult": 2.2 }
+  }
+ },
+ {
+  "id": "sig_blaze_solar_branding",
+  "owner": "Blaze",
+  "name": "Solar Branding",
+  "desc": "Blaze sears a brand into the enemy's hide -- for a few turns, the whole squad's attacks are drawn to the burning mark.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "debuff",
+  "target": "single_enemy",
+  "power": 0.6,
+  "cooldown": 100,
+  "scalingStat": "magic_atk",
+  "flavor": "You're not getting away.",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "expose", "chance": 1, "duration": 3, "val": 0, "label": "BRANDED" }
+  ]
+ },
+ {
+  "id": "sig_frog_leap_of_faith",
+  "owner": "Frog",
+  "name": "Leap of Faith",
+  "desc": "Frog vaults clean out of harm's way and comes down blade-first. While airborne, nothing can touch him.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.8,
+  "cooldown": 115,
+  "scalingStat": "atk",
+  "flavor": "Hi-ya!",
+  "damageType": "physical",
+  "meta": {
+   "self_effects": [
+    { "type": "untargetable", "duration": 2, "val": 0, "label": "AIRBORNE" }
+   ]
+  }
+ },
+ {
+  "id": "sig_megumi_shikigami_tactics",
+  "owner": "Megumi Fushiguro",
+  "name": "Shikigami Tactics",
+  "desc": "Megumi deploys his shikigami to scout the enemy's elemental weakness, sharpening the squad's strikes against it.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Divine Dogs, go.",
+  "statusEffects": [
+   { "type": "elemental_insight", "chance": 1, "duration": 4, "val": 0.35, "label": "SHIKIGAMI INSIGHT" }
+  ]
+ },
+ {
+  "id": "sig_puppycorn_rainbow_power_playtime",
+  "owner": "Puppycorn",
+  "name": "Rainbow Power Playtime!",
+  "desc": "An explosion of sparkly chaos -- somehow it hits way harder when the squad already has a target painted.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.6,
+  "cooldown": 110,
+  "scalingStat": "magic_atk",
+  "flavor": "PLAYTIME!!!",
+  "damageType": "magical",
+  "meta": {
+   "bonus_vs_status": { "status": "expose", "mult": 1.8 }
+  }
+ },
+ {
+  "id": "sig_ju_fu_fu_tiger_seven_forms_finale",
+  "owner": "Ju Fu Fu",
+  "name": "Tiger Seven Forms: Finale",
+  "desc": "The seventh and final form lands with crushing force -- devastating against a foe the squad has already marked.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.7,
+  "cooldown": 110,
+  "scalingStat": "atk",
+  "flavor": "Seven forms, one strike.",
+  "damageType": "physical",
+  "meta": {
+   "bonus_vs_status": { "status": "expose", "mult": 2 }
+  }
+ },
+ {
+  "id": "sig_miyu_airstrike_beacon",
+  "owner": "Miyu",
+  "name": "Airstrike Beacon",
+  "desc": "Calls in a precision airstrike that lands far harder on a target the squad has already lit up.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.9,
+  "cooldown": 115,
+  "scalingStat": "atk",
+  "flavor": "Locked on. Fire when ready.",
+  "damageType": "physical",
+  "meta": {
+   "bonus_vs_status": { "status": "expose", "mult": 2.1 }
+  }
+ },
+ {
+  "id": "sig_him_omnipresence_finale",
+  "owner": "HIM",
+  "name": "Omnipresence: Whispers from the Void",
+  "desc": "Reality bends as HIM closes in from every angle at once -- a target already marked has nowhere left to hide.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.6,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Ooooh, this is going to be FUN.",
+  "damageType": "magical",
+  "meta": {
+   "bonus_vs_status": { "status": "expose", "mult": 2.3 }
+  }
+ },
+ {
+  "id": "sig_tenna_its_tv_time",
+  "owner": "Tenna",
+  "name": "It's TV Time!",
+  "desc": "Tenna puts the enemy live ON AIR -- the whole squad's attacks lock onto whoever's in the spotlight.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "debuff",
+  "target": "single_enemy",
+  "power": 0.5,
+  "cooldown": 100,
+  "scalingStat": "magic_atk",
+  "flavor": "You're on in 3, 2, 1...",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "expose", "chance": 1, "duration": 3, "val": 0, "label": "ON AIR" }
+  ]
+ },
+ {
+  "id": "sig_naruto_uzumaki_clone_rasengan",
+  "owner": "Naruto Uzumaki",
+  "name": "Shadow Clone Rasengan Barrage",
+  "desc": "Naruto summons a wave of shadow clones to flank the target, then drives a spinning Rasengan home -- the clones poof away afterward, but not before drawing the heat off him.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.6,
+  "cooldown": 120,
+  "scalingStat": "atk",
+  "flavor": "Believe it!",
+  "damageType": "physical",
+  "meta": {
+   "extra_hits": 2,
+   "self_effects": [
+    { "type": "untargetable", "duration": 1, "val": 0, "label": "CLONE SUBSTITUTION" }
+   ]
+  }
+ },
+ {
+  "id": "sig_spongebob_imagination_rainbow",
+  "owner": "Spongebob SquarePants",
+  "name": "Imagination Rainbow!",
+  "desc": "SpongeBob unleashes pure, unfiltered imagination -- the whole squad is cleansed, shielded, and feeling like a million bucks (well, Krabby Patties).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 130,
+  "scalingStat": "magic_atk",
+  "flavor": "I'm ready!",
+  "meta": {
+   "cleanse_team": true,
+   "team_effects": [
+    { "type": "shield", "duration": 3, "val": 0.25, "label": "F.U.N." },
+    { "type": "buff_atk", "duration": 3, "val": 0.2, "label": "IMAGINATION" }
+   ]
+  }
+ },
+ {
+  "id": "sig_kazeto_nekoshima",
+  "owner": "Kazeto Nekoshima",
+  "name": "Ballistic Chain Frenzy",
+  "desc": "ELEM +50% (highest): Kazeto whirls her ball-and-chain into a foe, CRUSHING them — each hit adds a stack that shreds their DEF and makes her next blow hit even harder. Floods the squad with a massive +50% elemental damage and hypes herself into a frenzy (+ATK, +SPD).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.9,
+  "cooldown": 105,
+  "scalingStat": "speed",
+  "flavor": "I'LL CRUSH YOU, NYAHAHAHA!",
+  "damageType": "physical",
+  "meta": {
+   "crush": { "per_stack": 0.35, "def_down": 0.14, "max_stacks": 5, "duration": 4 },
+   "team_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.5, "label": "CAT'S RAMPAGE" }
+   ],
+   "self_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.3, "label": "FRENZY" },
+    { "type": "buff_spd", "chance": 1, "duration": 3, "val": 0.25, "label": "PROWL" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 0.4, "duration": 1, "val": 0, "label": "STAGGERED" }
+  ]
+ },
+ {
+  "id": "sig_rise",
+  "owner": "Rise",
+  "name": "Kanzeon: Full Analysis",
+  "desc": "ELEM +40%: Himiko scans the whole battlefield, exposing every foe's weakness (-DEF) and feeding the squad targeting data — +40% elemental damage and +20% Crit. Cannot miss.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.6,
+  "cooldown": 115,
+  "scalingStat": "magic_atk",
+  "flavor": "I've got your read!",
+  "damageType": "magical",
+  "meta": {
+   "ignore_evasion": true,
+   "mark": { "def_down": 0.35, "duration": 4, "label": "ANALYZED" },
+   "team_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.4, "label": "RISE'S HYPE" },
+    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.2, "label": "PINPOINT" }
+   ]
+  }
+ },
+ {
+  "id": "sig_goku",
+  "owner": "Goku",
+  "name": "Turtle-School Kamehameha",
+  "desc": "ELEM +30%: a channeled Kamehameha that blows through the target's shield and rocks them, while charging the squad's elemental damage (+30%) and Goku's own power (+ATK).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 120,
+  "scalingStat": "atk",
+  "flavor": "Ka... me... ha... me... HA!",
+  "damageType": "magical",
+  "meta": {
+   "break_shield": true,
+   "team_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.3, "label": "KI SURGE" }
+   ],
+   "self_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.3, "label": "POWERING UP" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "STUN" }
+  ]
+ },
+ {
+  "id": "sig_albert_wesker",
+  "owner": "Albert Wesker",
+  "name": "Uroboros Infestation",
+  "desc": "ELEM +30% (complex): Wesker injects the Uroboros virus into all foes — stripping their buffs, ignoring 45% DEF, and draining 30% of the carnage as life. The mutation empowers the squad's elemental damage (+30%) and his own strength.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.2,
+  "cooldown": 130,
+  "scalingStat": "atk",
+  "flavor": "I will become a god.",
+  "damageType": "physical",
+  "meta": {
+   "ignore_def": 0.45,
+   "lifesteal": 0.3,
+   "dispel_enemies": true,
+   "team_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.3, "label": "VIRAL SURGE" },
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.2, "label": "SUPERHUMAN" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "poison", "chance": 0.9, "duration": 4, "val": 0.08, "label": "T-VIRUS" }
+  ]
+ },
+ {
+  "id": "sig_bulma",
+  "owner": "Bulma",
+  "name": "Capsule Corp Arsenal",
+  "desc": "ELEM +35% (complex): Bulma deploys a barrage of gadgets — a Dragon Radar scan that marks every foe (-DEF) and dispels their buffs, while capsule tech shields the squad, floods 20 Burst, and overclocks their elemental damage (+35%). Never misses.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.5,
+  "cooldown": 130,
+  "scalingStat": "magic_atk",
+  "flavor": "I'm a genius, remember?",
+  "damageType": "magical",
+  "meta": {
+   "ignore_evasion": true,
+   "dispel_enemies": true,
+   "gain_burst": 20,
+   "mark": { "def_down": 0.3, "duration": 3, "label": "RADAR-LOCKED" },
+   "team_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.35, "label": "OVERCLOCK" },
+    { "type": "shield", "chance": 1, "duration": 3, "val": 0.25, "label": "CAPSULE FIELD" }
+   ]
+  }
+ },
+ {
+  "id": "sig_nekomata_okayu",
+  "owner": "Nekomata Okayu",
+  "name": "Onigiri Comfort Zone",
+  "desc": "ELEM +30%: a lazy but loving cat-swipe that saps 25% of the damage as health, cleanses the squad, and wraps them in a cozy +30% elemental buff with lasting Regen. Slows the foes down to her pace.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.8,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Nya~ let's take it easy.",
+  "damageType": "magical",
+  "meta": {
+   "lifesteal": 0.25,
+   "cleanse_team": true,
+   "team_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.3, "label": "COMFY" },
+    { "type": "regen", "chance": 1, "duration": 3, "val": 0.05, "label": "SNACK BREAK" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_spd", "chance": 0.8, "duration": 3, "val": 0.25, "label": "LAZY DAZE" }
+  ]
+ },
+ {
+  "id": "sig_robin",
+  "owner": "Robin",
+  "name": "Explosive Birdarang Volley",
+  "desc": "ELEM +30%: a barrage of trick birdarangs that shatters the target's guard and stuns them, while the Boy Wonder's leadership sharpens the squad's elemental damage (+30%) and Crit.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.4,
+  "cooldown": 100,
+  "scalingStat": "speed",
+  "flavor": "Titans, GO!",
+  "damageType": "physical",
+  "meta": {
+   "break_shield": true,
+   "team_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.3, "label": "LEADERSHIP" },
+    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.15, "label": "PRECISION" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 0.4, "duration": 1, "val": 0, "label": "STUN" }
+  ]
+ },
+ {
+  "id": "sig_kyubey",
+  "owner": "Kyubey",
+  "name": "Make a Contract",
+  "desc": "ELEM +30% (eerie): Kyubey offers a wish that warps fate — a random curse strikes every foe, their protections are stripped away, and the squad is flooded with 30 Burst and a +30% elemental pact. There is always a price.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2,
+  "cooldown": 135,
+  "scalingStat": "magic_atk",
+  "flavor": "Make a contract with me, and become a magical girl!",
+  "damageType": "magical",
+  "meta": {
+   "random_status": true,
+   "dispel_enemies": true,
+   "gain_burst": 30,
+   "team_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.3, "label": "ENTROPY PACT" },
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.25, "label": "WISH GRANTED" }
+   ]
+  }
+ },
+ {
+  "id": "sig_goku_super_saiyan",
+  "owner": "Goku (Super sayian)",
+  "name": "Super Saiyan Overdrive",
+  "desc": "ELEM +15% (lowest): a golden-aura haymaker built for one thing — annihilating a single target. Always crits, tears through shields, and executes foes below 40% HP for double. So focused on his own power that the squad only catches a small +15% elemental spark.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 5,
+  "cooldown": 125,
+  "scalingStat": "atk",
+  "flavor": "This is the power of a Super Saiyan!",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "break_shield": true,
+   "execute_below": 0.4,
+   "execute_mult": 1.9,
+   "team_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.15, "label": "GOLDEN SPARK" }
+   ],
+   "self_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.4, "label": "SSJ AURA" }
+   ]
+  }
+ },
+ {
+  "id": "sig_timmy_turner",
+  "owner": "Timmy Turner",
+  "name": "I Wish For... EVERYTHING!",
+  "desc": "REALITY-BENDING (cycles): Cosmo and Wanda grant a DIFFERENT wish every single cast, rotating through three modes. WISH 1 — Cosmo's Chaos: a random curse strikes every foe and the blast hits +70%. WISH 2 — Wanda's Wisdom: strips all enemy buffs, exposes them (-40% DEF) and sharpens the squad's Crit. WISH 3 — Fairy Teamwork: empowers the whole squad's elemental damage (+40%), shields, heals and floods 20 Burst. It's never the same wish twice.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 3.6,
+  "cooldown": 130,
+  "scalingStat": "magic_atk",
+  "flavor": "I wish my fairies could grant ANY wish!",
+  "damageType": "magical",
+  "meta": {
+   "wish_cycle": true,
+   "gain_burst": 10
+  },
+  "statusEffects": [
+   { "type": "static", "chance": 0.6, "duration": 2, "val": 0.06, "label": "MAGIC BACKFIRE" }
+  ]
+ }
+]

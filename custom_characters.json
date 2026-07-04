@@ -1,0 +1,121 @@
+[
+ {
+  "export_id": 9001,
+  "name": "Ragna the Bloodedge",
+  "franchise": "BlazBlue",
+  "imageUrl": "portraits/Ragna_the_Bloodedge_(Centralfiction,_Character_Select_Artwork).webp",
+  "tier": "S+",
+  "element": "DARK",
+  "stats": {
+   "hp": 760,
+   "atk": 96,
+   "def": 46,
+   "speed": 55,
+   "luck": 22,
+   "magic atk": 20,
+   "magic def": 35
+  }
+ },
+ {
+  "export_id": 9002,
+  "name": "Taokaka",
+  "franchise": "BlazBlue",
+  "imageUrl": "portraits/Taokaka_(Centralfiction,_Character_Select_Artwork).webp",
+  "tier": "A+",
+  "element": "EARTH",
+  "stats": {
+   "hp": 600,
+   "atk": 50,
+   "def": 30,
+   "speed": 65,
+   "luck": 30,
+   "magic atk": 10,
+   "magic def": 20
+  }
+ },
+ {
+  "export_id": 9003,
+  "name": "Noelle Vermillion",
+  "franchise": "BlazBlue",
+  "imageUrl": "portraits/Noel_Vermillion_(Centralfiction,_Character_Select_Artwork).webp",
+  "tier": "S+",
+  "element": "WATER",
+  "stats": {
+   "hp": 700,
+   "atk": 40,
+   "def": 40,
+   "speed": 60,
+   "luck": 28,
+   "magic atk": 90,
+   "magic def": 50
+  }
+ },
+ {
+  "export_id": 9004,
+  "name": "Makoto Nanaya",
+  "franchise": "BlazBlue",
+  "imageUrl": "portraits/Makoto_Nanaya_(Centralfiction,_Character_Select_Artwork).webp",
+  "tier": "S",
+  "element": "WIND",
+  "stats": {
+   "hp": 680,
+   "atk": 70,
+   "def": 35,
+   "speed": 80,
+   "luck": 35,
+   "magic atk": 15,
+   "magic def": 30
+  }
+ },
+ {
+  "export_id": 9005,
+  "name": "Scraps",
+  "franchise": "Dandy's World",
+  "imageUrl": "portraits/Scraps_Artwork.webp",
+  "tier": "SS",
+  "element": "DARK",
+  "stats": {
+   "hp": 820,
+   "atk": 92,
+   "def": 55,
+   "speed": 72,
+   "luck": 30,
+   "magic atk": 20,
+   "magic def": 32
+  }
+ },
+ {
+  "export_id": 9006,
+  "name": "Rachel Alucard",
+  "franchise": "BlazBlue",
+  "imageUrl": "portraits/Rachel_Alucard_(Centralfiction,_Character_Select_Artwork).webp",
+  "tier": "S+",
+  "element": "WIND",
+  "stats": {
+   "hp": 650,
+   "atk": 35,
+   "def": 35,
+   "speed": 50,
+   "luck": 40,
+   "magic atk": 100,
+   "magic def": 60
+  }
+ },
+ {
+  "export_id": 9007,
+  "name": "Naoto Kurogane",
+  "franchise": "BlazBlue",
+  "imageUrl": "portraits/Naoto_Kurogane_(Centralfiction,_Character_Select_Artwork).webp",
+  "tier": "S",
+  "element": "FIRE",
+  "stats": {
+   "hp": 750,
+   "atk": 85,
+   "def": 50,
+   "speed": 60,
+   "luck": 20,
+   "magic atk": 25,
+   "magic def": 35
+  }
+ }
+]
