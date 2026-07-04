@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { ELEMENTS, LEADER_SKILLS, COSMETICS, TIER_ORDER } from "../constants.js";
 import { calculateStat, getBondRankName, getBondPath, playSound, calculateSubStat, formatPower } from "../utils.js";
-import { AbilitiesView } from "./AbilitiesView.jsx";
+import { AbilitiesView } from "./AbilitiesView.js";
 
 const CharacterDetailView = ({
   char,

@@ -9,10 +9,10 @@ import {
   Map as MapIcon,
   Plus
 } from "lucide-react";
-import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.jsx";
+import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.js";
 import { CAMPAIGN_CONTENT, ELEMENTS, LEADER_SKILLS, COSMETICS } from "../constants.js";
 import { calculateStat, playSound, calculateSubStat, getTierEfficiency, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation } from "../utils.js";
-import { isMobile, CampaignIntro } from "./ViewShared.jsx";
+import { isMobile, CampaignIntro } from "./ViewShared.js";
 
 const CampaignView = ({
   characters,

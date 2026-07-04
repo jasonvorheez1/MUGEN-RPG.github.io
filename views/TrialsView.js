@@ -7,10 +7,10 @@ import {
   Info,
   Plus
 } from "lucide-react";
-import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.jsx";
+import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.js";
 import { ELEMENTS, TIER_STATS } from "../constants.js";
 import { calculateStat, playSound, calculateSubStat, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, SIGNATURE_BONUS } from "../utils.js";
-import { CampaignIntro } from "./ViewShared.jsx";
+import { CampaignIntro } from "./ViewShared.js";
 
 // Arena league tiers — pure presentation, derived from rank. Gives the ladder the
 // Bronze→Master arc players expect from arena modes (Disney Heroes / CRK style).

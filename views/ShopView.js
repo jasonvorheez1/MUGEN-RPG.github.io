@@ -21,7 +21,7 @@ import {
   Crown
 } from "lucide-react";
 import { playSound } from "../utils.js";
-import { isMobile } from "./ViewShared.jsx";
+import { isMobile } from "./ViewShared.js";
 
 const ShopView = ({
   credits,

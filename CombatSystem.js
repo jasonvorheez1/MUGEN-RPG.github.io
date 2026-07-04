@@ -44,7 +44,7 @@ import {
   applyMitigation,
   SIGNATURE_BONUS
 } from "./utils.js";
-import { CustomSelect, TierBadge, VisualEffect } from "./components.jsx";
+import { CustomSelect, TierBadge, VisualEffect } from "./components.js";
 const getBattleStats = (unit, playerElement, activeSynergies = []) => {
   if (!unit) return { hp: 0, atk: 0, def: 0, speed: 0, magicAtk: 0, magicDef: 0, critRate: 0.05, evasion: 0.05, lifesteal: 0, luck: 0 };
   let maxHp = unit.maxHp || 0;

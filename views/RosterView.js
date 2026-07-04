@@ -6,7 +6,7 @@ import {
   ArrowDownCircle
 } from "lucide-react";
 import { ELEMENTS } from "../constants.js";
-import { TierBadge, CustomSelect } from "../components.jsx";
+import { TierBadge, CustomSelect } from "../components.js";
 import { calculateStat, playSound, calculateSubStat } from "../utils.js";
 
 const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, unlockedIds = [], shards = {}, setShards, setUnlockedIds, credits = 0, setCredits, playSound: playSound2, skills = [], auraUpgrades = {}, favorites = [], setFavorites }) => {

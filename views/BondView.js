@@ -21,8 +21,8 @@ import {
 } from "lucide-react";
 import { ITEMS, ELEMENTS } from "../constants.js";
 import { getBondPath, playSound, getBondMultiplier } from "../utils.js";
-import { SocialView } from "./SocialView.jsx";
-import { InventoryView } from "./InventoryView.jsx";
+import { SocialView } from "./SocialView.js";
+import { InventoryView } from "./InventoryView.js";
 
 const BondView = ({
   characters,

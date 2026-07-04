@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { GachaView } from "./GachaView.jsx";
-import { SlotView } from "./SlotView.jsx";
+import { GachaView } from "./GachaView.js";
+import { SlotView } from "./SlotView.js";
 import { playSound } from "../utils.js";
 
 // Merged hub: "Recruit" used to be split across two separate top-level nav

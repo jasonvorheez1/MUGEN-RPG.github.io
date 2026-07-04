@@ -9,10 +9,10 @@ import {
   Plus,
   ChevronLeft
 } from "lucide-react";
-import { BattleUnit, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.jsx";
+import { BattleUnit, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.js";
 import { ELEMENTS } from "../constants.js";
 import { calculateStat, playSound, calculateSubStat, getEnemyStatsFromCP, applyLeaderBonus, applyMitigation } from "../utils.js";
-import { CampaignIntro } from "./ViewShared.jsx";
+import { CampaignIntro } from "./ViewShared.js";
 
 const EventsView = ({
   characters = [],

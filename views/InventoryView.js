@@ -7,7 +7,7 @@ import {
   Wrench
 } from "lucide-react";
 import { ELEMENTS } from "../constants.js";
-import { CustomSelect } from "../components.jsx";
+import { CustomSelect } from "../components.js";
 import { playSound, calculateSubStat, getBondMultiplier } from "../utils.js";
 
 const InventoryView = ({
