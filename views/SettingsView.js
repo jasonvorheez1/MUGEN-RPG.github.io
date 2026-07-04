@@ -144,8 +144,16 @@ const SettingsView = ({ setAppState, setView, settings, setSettings, stats, save
           if (key.startsWith("mugen_") && !key.startsWith("mugen_backup")) current[key] = localStorage.getItem(key);
         }
         localStorage.setItem("mugen_backup_3", JSON.stringify({ savedAt: Date.now(), version: 3, data: current }));
+        // Freeze further writes before applying the import: the app's periodic
+        // stamina/aura regen timers can trigger a pending autosave in the gap
+        // between these writes and the reload actually taking effect, silently
+        // overwriting the just-imported save with stale in-memory state. Shadow
+        // localStorage.setItem with a no-op for everything except our own writes
+        // below (done via the captured original), then reload immediately.
+        const originalSetItem = localStorage.setItem.bind(localStorage);
+        localStorage.setItem = () => {};
         Object.keys(data).forEach((key) => {
-          if (key.startsWith("mugen_")) localStorage.setItem(key, data[key]);
+          if (key.startsWith("mugen_")) originalSetItem(key, data[key]);
         });
         window.location.reload();
       } catch (err) {
