@@ -203,6 +203,7 @@ const App = () => {
   const [dateMemories, setDateMemories] = useState(() => safeJSONParse("mugen_date_memories", {}));
   const [favorites, setFavorites] = useState(() => safeJSONParse("mugen_favorites", []));
   const lastCloudSaveTime = useRef(0);
+  const lastQuotaWarnTime = useRef(0);
   const [showDailyModal, setShowDailyModal] = useState(false);
   const [battleMusicActive, setBattleMusicActive] = useState(false);
   const [isVictoryMusic, setIsVictoryMusic] = useState(false);
@@ -491,6 +492,15 @@ const App = () => {
     try { return v ? JSON.parse(v).savedAt || 0 : 0; } catch (e) { return 0; }
   });
   const SAVE_VERSION = 3;
+  // Distinguishes a genuine QuotaExceededError (device/browser storage full)
+  // from any other failure. Different browsers surface this differently, so
+  // check every known shape rather than just err.name.
+  const isQuotaError = (err) => !!err && (
+    err.name === "QuotaExceededError" ||
+    err.code === 22 ||
+    err.code === 1014 ||
+    err.name === "NS_ERROR_DOM_QUOTA_REACHED"
+  );
   // Rotating local backup ring: every manual save also snapshots the full save
   // into one of 3 backup slots so a bad import / accidental wipe is recoverable
   // from Settings → Data without needing an exported file.
@@ -502,7 +512,9 @@ const App = () => {
       localStorage.setItem(`mugen_backup_${slot}`, JSON.stringify({ savedAt: Date.now(), version: SAVE_VERSION, data: saveData }));
       localStorage.setItem("mugen_backup_meta", JSON.stringify({ next: slot >= 3 ? 1 : slot + 1 }));
     } catch (e) {
-      console.warn("Backup snapshot failed (storage full?)", e);
+      if (!isQuotaError(e)) console.warn("Backup snapshot failed", e);
+      // Quota failures here are non-fatal (backups are supplementary, not the
+      // live save) -- swallow quietly rather than warn on every autosave tick.
     }
   };
   const saveGame = async (quick = false) => {
@@ -542,9 +554,32 @@ const App = () => {
         mugen_event_purchases: eventPurchases,
         mugen_date_memories: dateMemories
       };
+      // Write every key individually rather than letting one failure abort the
+      // whole batch silently -- if the device is low on storage, a mid-loop
+      // QuotaExceededError used to just bubble up to the outer catch and get
+      // swallowed by console.error, leaving the player with no signal at all
+      // that their progress had silently stopped saving.
+      let hitQuota = false;
       Object.keys(saveData).forEach((key) => {
-        localStorage.setItem(key, typeof saveData[key] === "string" ? saveData[key] : JSON.stringify(saveData[key]));
+        try {
+          localStorage.setItem(key, typeof saveData[key] === "string" ? saveData[key] : JSON.stringify(saveData[key]));
+        } catch (err) {
+          if (isQuotaError(err)) hitQuota = true;
+          else throw err;
+        }
       });
+      if (hitQuota) {
+        // Don't compound the problem with a backup snapshot attempt (certain
+        // to also fail) or a save_meta timestamp implying success. Surface
+        // this to the player, throttled so it isn't spammy -- saveGame(true)
+        // can run every few seconds via the autosave effect.
+        const now = Date.now();
+        if (now - lastQuotaWarnTime.current > 120e3) {
+          lastQuotaWarnTime.current = now;
+          createFloatingText("⚠ Storage full — progress may not be saving! Clear old backups in Settings → Data.", true);
+        }
+        return;
+      }
       localStorage.setItem("mugen_save_meta", JSON.stringify({ version: SAVE_VERSION, savedAt: Date.now() }));
       setLastSavedAt(Date.now());
       if (!quick) writeBackupSnapshot(saveData);

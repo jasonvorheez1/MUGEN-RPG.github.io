@@ -3463,5 +3463,138 @@
   "statusEffects": [
    { "type": "static", "chance": 0.6, "duration": 2, "val": 0.06, "label": "MAGIC BACKFIRE" }
   ]
+ },
+ {
+  "id": "sig_tifa_lockhart",
+  "owner": "Tifa Lockhart",
+  "name": "Final Heaven",
+  "desc": "COMBO FINISHER: a flurry of martial strikes ending in a point-blank uppercut — always crits, lands two extra hits, and drains life with every blow.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.8,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "This one's for everyone!",
+  "damageType": "physical",
+  "meta": {
+   "guaranteed_crit": true,
+   "extra_hits": 2,
+   "lifesteal": 0.2
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "STAGGERED" }
+  ]
+ },
+ {
+  "id": "sig_cloud_strife",
+  "owner": "Cloud Strife",
+  "name": "Omnislash",
+  "desc": "LIMIT BREAK: a blur of sword strikes that pierces 45% DEF, lands three extra hits, and finishes the wounded (below 35% HP) for double damage.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 5.6,
+  "cooldown": 160,
+  "scalingStat": "atk",
+  "flavor": "Let's mosey.",
+  "damageType": "physical",
+  "meta": {
+   "ignore_def": 0.45,
+   "extra_hits": 3,
+   "execute_below": 0.35,
+   "execute_mult": 2.2
+  }
+ },
+ {
+  "id": "sig_luffy",
+  "owner": "Luffy",
+  "name": "Gear Fourth: King Kong Gun",
+  "desc": "BOUNCEMAN: pumps Haki into a titanic punch — hits harder the healthier Luffy is, shatters any guard, and builds heavy stagger.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.0,
+  "cooldown": 140,
+  "scalingStat": "hp",
+  "flavor": "I'm gonna be King of the Pirates!",
+  "damageType": "physical",
+  "meta": {
+   "scales_current_hp": 0.9,
+   "break_shield": true,
+   "stagger_bonus": 3
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 0.4, "duration": 1, "val": 0, "label": "STUN" }
+  ]
+ },
+ {
+  "id": "sig_natsu_dragneel",
+  "owner": "Natsu Dragneel",
+  "name": "Fire Dragon's Roar",
+  "desc": "DRAGON SLAYER: a scorching breath that engulfs every foe in flame, deals +50% to anything already burning, and lets Natsu \"eat\" the heat back as HP.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 4.2,
+  "cooldown": 130,
+  "scalingStat": "magic_atk",
+  "flavor": "I'm all fired up now!",
+  "damageType": "magical",
+  "meta": {
+   "lifesteal": 0.2,
+   "bonus_vs_status": { "status": "burn", "mult": 1.5 }
+  },
+  "statusEffects": [
+   { "type": "burn", "chance": 1, "duration": 4, "val": 0.09, "label": "DRAGONFIRE" }
+  ]
+ },
+ {
+  "id": "sig_zuko",
+  "owner": "Zuko",
+  "name": "Redemption's Blue Flame",
+  "desc": "INNER FIRE: a blazing strike that burns brightest against darkness (+60% vs DARK-type foes) while cleansing the squad's doubts (removes all debuffs).",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.4,
+  "cooldown": 120,
+  "scalingStat": "atk",
+  "flavor": "It is time for me to look inward and begin asking the big questions: Who am I, and what do I want?",
+  "damageType": "magical",
+  "meta": {
+   "bonus_vs_element": { "element": "DARK", "mult": 1.6 },
+   "cleanse_team": true
+  },
+  "statusEffects": [
+   { "type": "burn", "chance": 0.7, "duration": 3, "val": 0.07, "label": "BLUE FLAME" }
+  ]
+ },
+ {
+  "id": "sig_itachi_uchiha",
+  "owner": "Itachi Uchiha",
+  "name": "Tsukuyomi: Amaterasu",
+  "desc": "GENJUTSU AMBUSH: traps the target in an inescapable illusion (cannot miss, always crits) then sears them with unquenchable black flame.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 135,
+  "scalingStat": "magic_atk",
+  "flavor": "Foolish little brother...",
+  "damageType": "magical",
+  "meta": {
+   "guaranteed_crit": true,
+   "ignore_evasion": true
+  },
+  "statusEffects": [
+   { "type": "burn", "chance": 0.9, "duration": 4, "val": 0.1, "label": "AMATERASU" }
+  ]
  }
 ]

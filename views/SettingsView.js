@@ -128,38 +128,85 @@ const SettingsView = ({ setAppState, setView, settings, setSettings, stats, save
     playSound("purchase", 0.4);
   };
 
+  // Distinguishes a genuine QuotaExceededError (device/browser storage full)
+  // from any other failure. Different browsers surface this differently, so
+  // check every known shape rather than just err.name.
+  const isQuotaError = (err) => !!err && (
+    err.name === "QuotaExceededError" ||
+    err.code === 22 ||
+    err.code === 1014 ||
+    err.name === "NS_ERROR_DOM_QUOTA_REACHED"
+  );
+
   const importSave = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
+      // Step 1: parse. A malformed/truncated file fails here specifically --
+      // report that instead of a generic "corrupt" catch-all.
+      let data;
       try {
-        const data = JSON.parse(event.target.result);
-        if (!data.mugen_trainer_save_v2 && !data.mugen_credits && !data.mugen_unlocked_ids) throw new Error("Invalid save file");
-        // Snapshot current state into backup slot 3 before overwriting, so a bad
-        // import is a one-click restore instead of a lost account.
-        const current = {};
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key.startsWith("mugen_") && !key.startsWith("mugen_backup")) current[key] = localStorage.getItem(key);
-        }
-        localStorage.setItem("mugen_backup_3", JSON.stringify({ savedAt: Date.now(), version: 3, data: current }));
-        // Freeze further writes before applying the import: the app's periodic
-        // stamina/aura regen timers can trigger a pending autosave in the gap
-        // between these writes and the reload actually taking effect, silently
-        // overwriting the just-imported save with stale in-memory state. Shadow
-        // localStorage.setItem with a no-op for everything except our own writes
-        // below (done via the captured original), then reload immediately.
-        const originalSetItem = localStorage.setItem.bind(localStorage);
-        localStorage.setItem = () => {};
-        Object.keys(data).forEach((key) => {
-          if (key.startsWith("mugen_")) originalSetItem(key, data[key]);
-        });
-        window.location.reload();
+        data = JSON.parse(event.target.result);
       } catch (err) {
-        alert("Import Failed: Invalid or corrupt save file.");
-        console.error(err);
+        alert("Import Failed: That file isn't valid JSON — it looks corrupted or incomplete.");
+        return;
       }
+      // Step 2: structural validation.
+      if (!data.mugen_trainer_save_v2 && !data.mugen_credits && !data.mugen_unlocked_ids) {
+        alert("Import Failed: This doesn't look like a Mugen save file (missing core save data).");
+        return;
+      }
+      // Step 3: snapshot current state before overwriting, so a bad import is
+      // a one-click restore instead of a lost account. Best-effort -- on a
+      // device already low on storage this snapshot itself may fail; that's
+      // not fatal, we just proceed without a pre-import safety net.
+      const current = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith("mugen_") && !key.startsWith("mugen_backup")) current[key] = localStorage.getItem(key);
+      }
+      let backupOk = true;
+      try {
+        localStorage.setItem("mugen_backup_3", JSON.stringify({ savedAt: Date.now(), version: 3, data: current }));
+      } catch (err) {
+        backupOk = false;
+        if (!isQuotaError(err)) console.warn("Pre-import backup failed", err);
+      }
+      // Step 4: apply the import. Freeze further writes while doing so: the
+      // app's periodic stamina/aura regen timers can trigger a pending
+      // autosave in the gap between these writes and the reload actually
+      // taking effect, silently overwriting the just-imported save with stale
+      // in-memory state. Shadow localStorage.setItem with a no-op for
+      // everything except our own writes below (via the captured original).
+      const originalSetItem = localStorage.setItem.bind(localStorage);
+      localStorage.setItem = () => {};
+      const failedKeys = [];
+      Object.keys(data).forEach((key) => {
+        if (!key.startsWith("mugen_")) return;
+        try {
+          originalSetItem(key, data[key]);
+        } catch (err) {
+          failedKeys.push(key);
+        }
+      });
+      localStorage.setItem = originalSetItem;
+      if (failedKeys.length > 0) {
+        // Ran out of storage partway through -- the save is now a broken mix
+        // of old and new data. Restore the pre-import snapshot (if we made
+        // one) rather than leaving that inconsistent state in place, instead
+        // of reloading into a half-imported save.
+        if (backupOk) {
+          Object.keys(current).forEach((key) => {
+            try { originalSetItem(key, current[key]); } catch (err) {}
+          });
+          alert("Import Failed: Your browser's storage is full, so the import couldn't finish. Your original save was restored — free up space (Settings → Data → clear old backups) and try again.");
+        } else {
+          alert("Import Failed: Your browser's storage is full. Free up space (Settings → Data → clear old backups) and try again.");
+        }
+        return;
+      }
+      window.location.reload();
     };
     reader.readAsText(file);
   };
