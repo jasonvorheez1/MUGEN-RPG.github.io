@@ -341,6 +341,59 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
       }
       attacker.lastAction = { ...attacker.lastAction, msg: wishMsg };
     }
+    // CAIT SITH — "Slots: Triple Seven" rolls 3 independent slot reels every
+    // cast with genuine Math.random() odds (this is the one signature in the
+    // game allowed to gamble). BUST (no match, ~48%) still lands the full
+    // listed hit plus a consolation shield; PAIR (~48%) hits harder and
+    // empowers the squad; JACKPOT (all 3 match, ~4%) is a massive team-wide
+    // power spike that also deletes anything already low on HP.
+    let slotDmgMult = 1;
+    let slotJackpot = false;
+    if (META.slot_roll) {
+      const reels = ["MOG", "GIL", "CHOCO", "STAR", "SKULL"];
+      const roll = () => reels[Math.floor(Math.random() * reels.length)];
+      const pull = [roll(), roll(), roll()];
+      const uniqueCount = new Set(pull).size;
+      if (uniqueCount === 1) {
+        slotDmgMult = 3.5;
+        slotJackpot = true;
+        livingAllies.forEach((a) => {
+          a.effects.push({ type: "buff_elemdmg", duration: 4, val: 0.5, label: "JACKPOT!" });
+          a.effects.push({ type: "buff_crit", duration: 4, val: 0.25, label: "HOT STREAK" });
+          a.burst = Math.min(100, (a.burst || 0) + 30);
+        });
+        attacker.lastAction = { ...attacker.lastAction, msg: "★JACKPOT★ " + pull.join(" ") };
+      } else if (uniqueCount === 2) {
+        slotDmgMult = 1.8;
+        livingAllies.forEach((a) => a.effects.push({ type: "buff_atk", duration: 3, val: 0.3, label: "LUCKY PAIR" }));
+        attacker.lastAction = { ...attacker.lastAction, msg: "PAIR! " + pull.join(" ") };
+      } else {
+        attacker.effects.push({ type: "shield", duration: 2, val: 0.15, label: "BETTER LUCK NEXT TIME" });
+        attacker.lastAction = { ...attacker.lastAction, msg: "BUST... " + pull.join(" ") };
+      }
+    }
+    // STAGE CYCLE — generic deterministic rotation (no RNG). Persists a stage
+    // counter on the caster (_stageCycle) so the signature cycles through a
+    // fixed sequence of distinct effects, one new stage per cast, looping back
+    // to the top once it reaches the end. Every character using this shares
+    // the engine; their flavor comes entirely from the stage data in
+    // signature_skills.json (self/team/enemy effects, heals, bursts, a damage
+    // multiplier for this cast, and a log message).
+    let stageDmgMult = 1;
+    if (Array.isArray(META.stage_cycle) && META.stage_cycle.length > 0) {
+      const stages = META.stage_cycle;
+      attacker._stageCycle = ((attacker._stageCycle || 0) % stages.length) + 1;
+      const stage = stages[attacker._stageCycle - 1] || {};
+      const enemiesNow = next.filter((u) => u.isEnemy !== attacker.isEnemy && !u.dead);
+      if (Array.isArray(stage.self_effects)) stage.self_effects.forEach((e) => attacker.effects.push({ ...e, val: scaleVal(e.val) }));
+      if (Array.isArray(stage.team_effects)) livingAllies.forEach((a) => stage.team_effects.forEach((e) => a.effects.push({ ...e, val: scaleVal(e.val) })));
+      if (Array.isArray(stage.enemy_effects)) enemiesNow.forEach((e) => stage.enemy_effects.forEach((eff) => e.effects.push({ ...eff, val: scaleVal(eff.val) })));
+      if (stage.cleanse_enemies) enemiesNow.forEach((e) => { e.effects = e.effects.filter((x) => !x.type.startsWith("buff") && x.type !== "shield"); });
+      if (stage.heal_pct) livingAllies.forEach((a) => { a.hp = Math.min(a.maxHp, a.hp + Math.floor(a.maxHp * stage.heal_pct)); });
+      if (stage.burst) livingAllies.forEach((a) => { a.burst = Math.min(100, (a.burst || 0) + stage.burst); });
+      if (stage.dmgMult) stageDmgMult = stage.dmgMult;
+      attacker.lastAction = { ...attacker.lastAction, msg: stage.msg || ("STAGE " + attacker._stageCycle) };
+    }
     targets.forEach((t) => {
       if (!t || t.dead) return;
       if (skill.statusEffects) {
@@ -400,6 +453,8 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
         // Signature premium: a signature must clearly beat a same-power Legendary.
         if (skill.signature) skillPower *= SIGNATURE_BONUS.DAMAGE;
         skillPower *= wishDmgMult;
+        skillPower *= slotDmgMult;
+        skillPower *= stageDmgMult;
         if (hiddenPowerReady) skillPower *= META.hidden_power_mult || 4;
         if (META.scales_missing_hp) skillPower *= 1 + (1 - attacker.hp / attacker.maxHp) * META.scales_missing_hp;
         if (META.scales_current_hp) skillPower *= 1 + (attacker.hp / attacker.maxHp) * META.scales_current_hp;
