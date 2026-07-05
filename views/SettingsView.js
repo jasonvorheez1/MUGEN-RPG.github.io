@@ -97,6 +97,11 @@ const SettingsView = ({ setAppState, setView, settings, setSettings, stats, save
 
   const restoreBackup = (b) => {
     if (!confirm(`Restore backup from ${new Date(b.savedAt).toLocaleString()}? Current progress will be replaced.`)) return;
+    // Same guard as importSave below: writing straight to localStorage then
+    // reloading fires `beforeunload`, whose autosave flush serializes the OLD
+    // React state and would silently overwrite this restore a moment before
+    // the reload actually took effect.
+    window.__mugenSkipAutosave = true;
     Object.keys(b.data).forEach((key) => {
       localStorage.setItem(key, typeof b.data[key] === "string" ? b.data[key] : JSON.stringify(b.data[key]));
     });
@@ -108,6 +113,10 @@ const SettingsView = ({ setAppState, setView, settings, setSettings, stats, save
       if (typeof createFloatingText === "function") createFloatingText('Type "DELETE" to confirm the wipe', true);
       return;
     }
+    // Without this, the beforeunload autosave flush would re-write the OLD
+    // (pre-wipe) React state right back into localStorage before the reload
+    // took effect, silently undoing the wipe.
+    window.__mugenSkipAutosave = true;
     localStorage.clear();
     window.location.reload();
   };
@@ -208,6 +217,16 @@ const SettingsView = ({ setAppState, setView, settings, setSettings, stats, save
         alert("Import Failed: This doesn't look like a Mugen save file (missing core save data).");
         return;
       }
+      // From here on we're committed to writing real data straight to
+      // localStorage and reloading. That reload fires `beforeunload`, whose
+      // autosave flush (in App.js) serializes the OLD React state -- which
+      // never learns about this import at all -- and would silently
+      // overwrite everything we're about to write a moment before the
+      // reload actually took effect. This flag tells that flush to back off.
+      // (The Local Backup shadow below only covers writes made *before* the
+      // shadow is restored; beforeunload fires *after* that, once reload()
+      // has been called, which is exactly what let this slip through before.)
+      window.__mugenSkipAutosave = true;
       // Step 3: snapshot current state before overwriting, so a bad import is
       // a one-click restore instead of a lost account. Best-effort -- on a
       // device already low on storage this snapshot itself may fail; that's

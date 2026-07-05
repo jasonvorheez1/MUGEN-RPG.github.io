@@ -1139,10 +1139,22 @@ Data: { ${promptLines} }`;
   }, [characters, unlockedIds, credits, gems, stamina, aura, auraUpgrades, inventory, shards, campaignProgress, settings, view, vaultCredits, totalAccountLevel, favorites]);
   // Always flush a save when the tab is closed/hidden, even with autosave off —
   // the localStorage writes inside saveGame are synchronous so this is safe.
+  //
+  // EXCEPT during a save import/restore: Settings → Data writes fresh data
+  // straight to localStorage (bypassing React state entirely) and then calls
+  // location.reload(). That reload fires `beforeunload`, which used to run
+  // this same flush -- and since saveGame() serializes from React state (still
+  // the OLD pre-import values, since import never touched React state), it
+  // would silently overwrite the just-imported save with stale data a moment
+  // before the reload actually happened. Settings sets window.__mugenSkipAutosave
+  // right before writing an import/restore/wipe so this flush backs off.
   const saveGameRef = useRef(saveGame);
   saveGameRef.current = saveGame;
   useEffect(() => {
-    const flush = () => { try { saveGameRef.current(true); } catch (e) {} };
+    const flush = () => {
+      if (window.__mugenSkipAutosave) return;
+      try { saveGameRef.current(true); } catch (e) {}
+    };
     window.addEventListener("beforeunload", flush);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
     return () => window.removeEventListener("beforeunload", flush);
