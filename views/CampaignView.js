@@ -79,9 +79,55 @@ const CampaignView = ({
   const [combatSpeed, setCombatSpeed] = useState(1);
   const [markedTargetId, setMarkedTargetId] = useState(null);
   const [elementalChain, setElementalChain] = useState({ element: null, count: 0 });
+  // COMBO CHAIN: a team-wide hit counter. Every ally hit extends it; any enemy
+  // that gets an action off breaks it. Damage ramps +1.5% per hit (cap +45%),
+  // so actively sequencing skills to keep the chain alive genuinely pays off.
+  const comboRef = useRef({ count: 0 });
+  const [comboDisplay, setComboDisplay] = useState(0);
+  const comboMult = () => 1 + Math.min(0.45, comboRef.current.count * 0.015);
+  const bumpCombo = (n = 1) => {
+    comboRef.current.count += n;
+    setComboDisplay(comboRef.current.count);
+  };
+  const breakCombo = () => {
+    if (comboRef.current.count > 0) {
+      comboRef.current.count = 0;
+      setComboDisplay(0);
+    }
+  };
+  // ELEMENTAL RESONANCE: consecutive skill casts by allies whose element matches
+  // the current tactical stance build a 3-pip chain. Completing it detonates a
+  // squad-wide elemental surge (+20% elem dmg, +15 burst). Off-stance casts and
+  // stance switches reset the chain -- squad composition + stance choice matter.
+  const resonanceRef = useRef({ element: null, count: 0 });
+  const applyResonance = (nextArr, caster) => {
+    const stanceEl = loopState.current.playerElement;
+    const rc = resonanceRef.current;
+    if (String(caster.element).toUpperCase() === String(stanceEl).toUpperCase()) {
+      rc.count = (rc.element === stanceEl ? rc.count : 0) + 1;
+      rc.element = stanceEl;
+      if (rc.count >= 3) {
+        rc.count = 0;
+        nextArr.filter((a) => !a.isEnemy && !a.dead).forEach((a) => {
+          a.effects.push({ type: "buff_elemdmg", duration: 3, val: 0.2, label: "RESONANCE" });
+          a.burst = Math.min(100, (a.burst || 0) + 15);
+        });
+        playSound("mugen_super", 0.5);
+        setActiveSkill({ name: "ELEMENTAL RESONANCE!", user: `${stanceEl} SQUAD SYNC` });
+        setTimeout(() => setActiveSkill(null), 1500);
+      }
+    } else {
+      rc.count = 0;
+      rc.element = stanceEl;
+    }
+    setElementalChain({ element: stanceEl, count: rc.count });
+  };
   const tacticalStanceId = useRef(null);
   const changePlayerElement = (el) => {
     setPlayerElement(el);
+    // Switching stance resets the resonance chain -- committing to an element is the tradeoff.
+    resonanceRef.current = { element: el, count: 0 };
+    setElementalChain({ element: el, count: 0 });
     try {
       if (typeof triggerVisualEffect2 === "function") triggerVisualEffect2("fx_magic_circle.png", "50%", "8%", 1.2);
     } catch (e) {
@@ -307,7 +353,10 @@ const CampaignView = ({
     const initialElement = stage.element === "FIRE" ? "WATER" : stage.element === "WATER" ? "WIND" : "FIRE";
     setPlayerElement(initialElement);
     setMarkedTargetId(null);
-    setElementalChain({ element: null, count: 0 });
+    setElementalChain({ element: initialElement, count: 0 });
+    resonanceRef.current = { element: initialElement, count: 0 };
+    comboRef.current.count = 0;
+    setComboDisplay(0);
     playSound("boss_intro");
     const activeSynergies = synergies.map((s) => ({
       element: s.label.split(" ")[0],
@@ -459,13 +508,26 @@ const CampaignView = ({
       const next = [...prev];
       const idx = next.findIndex((u2) => u2.id === unitId);
       const u = next[idx];
-      if (!u || u.dead || (u.burst || 0) < 30) return prev;
-      u.burst -= 30;
-      u.effects.push({ type: "shield", duration: 2, val: 0.3, label: "EMERGENCY GUARD" });
-      u.effects.push({ type: "buff_def", duration: 2, val: 0.5, label: "DEF UP" });
-      showDamage(u.id, "GUARD UP", "heal");
-      playSound("shield_up");
-      playSound("mugen_guard", 0.5);
+      // PERFECT GUARD: if any enemy is telegraphing (gauge >= 78, shown as a
+      // flashing "!"), guarding in that window is cheaper AND stronger -- a big
+      // shield plus a counter-stance ATK buff. Watch the field, time the tap.
+      const isPerfect = next.some((e) => e.isEnemy && !e.dead && (e.gauge || 0) >= 78);
+      const cost = isPerfect ? 10 : 20;
+      if (!u || u.dead || (u.burst || 0) < cost) return prev;
+      u.burst -= cost;
+      if (isPerfect) {
+        u.effects.push({ type: "shield", duration: 2, val: 0.5, label: "PERFECT GUARD" });
+        u.effects.push({ type: "buff_atk", duration: 2, val: 0.25, label: "COUNTER STANCE" });
+        showDamage(u.id, "PERFECT GUARD!", "heal");
+        playSound("mugen_guard", 0.7);
+        playSound("crit_hit", 0.4);
+      } else {
+        u.effects.push({ type: "shield", duration: 2, val: 0.3, label: "EMERGENCY GUARD" });
+        u.effects.push({ type: "buff_def", duration: 2, val: 0.5, label: "DEF UP" });
+        showDamage(u.id, "GUARD UP", "heal");
+        playSound("shield_up");
+        playSound("mugen_guard", 0.5);
+      }
       return next;
     });
   };
@@ -475,14 +537,18 @@ const CampaignView = ({
       const u = prev.find((unit) => unit.id === unitId);
       if (!u || u.dead) return prev;
       const isLimitBreak = (u.burst || 0) >= 100;
-      return executeCombatSkill({
+      const nextState = executeCombatSkill({
         combatants: prev,
         attackerId: unitId,
         skills,
         playerElement,
         isLimitBreak,
-        forcedTargetId: markedTargetId
+        forcedTargetId: markedTargetId,
+        extraPowerMult: comboMult()
       });
+      bumpCombo();
+      applyResonance(nextState, u);
+      return nextState;
     });
   };
   const loopState = useRef({ autoBattle, playerElement, combatSpeed, markedTargetId, elementalChain });
@@ -583,8 +649,15 @@ const CampaignView = ({
               const s1Ready = u.skillCd >= u.maxSkillCd;
               const s2Ready = u.skillId2 && u.skillCd2 >= u.maxSkillCd2;
               if ((u.isEnemy || curAuto) && (s1Ready || s2Ready || isBurstReady)) {
-                const nextState = executeCombatSkill({ combatants: next, attackerId: u.id, skills, playerElement: curEl, isLimitBreak: isBurstReady, forcedTargetId: !u.isEnemy ? curMarked : null });
+                const nextState = executeCombatSkill({ combatants: next, attackerId: u.id, skills, playerElement: curEl, isLimitBreak: isBurstReady, forcedTargetId: !u.isEnemy ? curMarked : null, extraPowerMult: u.isEnemy ? 1 : comboMult() });
                 nextState.forEach((ns, ni) => next[ni] = ns);
+                // Combo chain: ally casts extend the chain (and advance resonance);
+                // an enemy getting a skill off breaks it.
+                if (u.isEnemy) breakCombo();
+                else {
+                  bumpCombo();
+                  applyResonance(next, u);
+                }
               } else {
                 const targets = next.filter((t) => t.isEnemy !== u.isEnemy && !t.dead && !t.effects.some((e) => e.type === "untargetable"));
                 if (targets.length > 0) {
@@ -597,10 +670,16 @@ const CampaignView = ({
                     u.lastAction = { targetId: target.id, amount: "MISS", type: "miss", time: Date.now() };
                   } else {
                     let dmg = Math.floor(stats.atk * (1 + stats.speed / 2e3));
+                    // Combo chain feeds basic attacks too; BREAK amplifies everything.
+                    if (!u.isEnemy) dmg = Math.floor(dmg * comboMult());
+                    const brokenEff = target.effects.find((e) => e.type === "broken");
+                    if (brokenEff) dmg = Math.floor(dmg * (1 + (brokenEff.val || 0.5)));
                     const shield = target.effects.find((e) => e.type === "shield");
                     if (shield) dmg = Math.floor(dmg * (1 - shield.val));
                     dmg = applyMitigation(dmg, tStats.def, 1e3);
                     target.hp = Math.max(0, target.hp - dmg);
+                    if (u.isEnemy) breakCombo();
+                    else bumpCombo();
                     if (target.hp === 0) {
                       if (!target.isEnemy && target._leaderRevive) {
                         target._leaderRevive = false;
@@ -1565,7 +1644,7 @@ const CampaignView = ({
       }),
       /* @__PURE__ */ jsxDEV("div", { className: "battle-header", style: { padding: "15px", background: "rgba(0,0,0,0.8)" }, children: [
         /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
-          /* @__PURE__ */ jsxDEV("div", { children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "battle-header-info", children: [
             /* @__PURE__ */ jsxDEV("h2", { style: { margin: 0, fontSize: "1.2rem", color: "#fff" }, children: "BATTLE MODE" }, void 0, false, {
               fileName: "<stdin>",
               lineNumber: 5066,
@@ -1680,7 +1759,12 @@ const CampaignView = ({
           fileName: "<stdin>",
           lineNumber: 5100,
           columnNumber: 14
-        })
+        }),
+        /* @__PURE__ */ jsxDEV("div", { className: "resonance-pips", children: [
+          /* @__PURE__ */ jsxDEV("span", { className: "res-label", children: "RESONANCE" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          [0, 1, 2].map((i) => /* @__PURE__ */ jsxDEV("div", { className: `res-pip ${elementalChain.count > i ? "filled" : ""}`, style: { "--pip-color": ELEMENTS[playerElement].color } }, i, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })),
+          /* @__PURE__ */ jsxDEV("span", { className: "res-hint", children: elementalChain.count >= 3 ? "SURGE!" : `${playerElement} skills x${3 - elementalChain.count}` }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
       ] }, void 0, true, {
         fileName: "<stdin>",
         lineNumber: 5063,
@@ -1775,13 +1859,17 @@ const CampaignView = ({
           fileName: "<stdin>",
           lineNumber: 5135,
           columnNumber: 14
-        })
+        }),
+        comboDisplay >= 2 && /* @__PURE__ */ jsxDEV("div", { className: "combo-counter", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "combo-hits", children: [comboDisplay, " HITS"] }, comboDisplay, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("div", { className: "combo-bonus", children: ["+", Math.round(Math.min(45, comboDisplay * 1.5)), "% DMG"] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
       ] }, void 0, true, {
         fileName: "<stdin>",
         lineNumber: 5103,
         columnNumber: 11
       }),
-      /* @__PURE__ */ jsxDEV("div", { className: "skill-dock", style: { display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 10 }, children: combatants.filter((c) => !c.isEnemy).map((u, i) => {
+      /* @__PURE__ */ jsxDEV("div", { className: "skill-dock", children: combatants.filter((c) => !c.isEnemy).map((u, i) => {
         const skill1 = (skills || []).find((s) => s.id === u.skillId) || { id: "slash", name: "Slash", type: "atk", rarity: "Common", cooldown: 100 };
         const skill2 = u.skillId2 ? (skills || []).find((s) => s.id === u.skillId2) : null;
         const isLimitBreak = (u.burst || 0) >= 100;
@@ -1789,8 +1877,9 @@ const CampaignView = ({
         const s2Ready = skill2 && (u.skillCd2 >= (u.maxSkillCd2 || 100) || isLimitBreak) && !u.dead;
         const progress1 = Math.min(100, u.skillCd / u.maxSkillCd * 100);
         const progress2 = skill2 ? Math.min(100, u.skillCd2 / (u.maxSkillCd2 || 100) * 100) : 0;
-        return /* @__PURE__ */ jsxDEV("div", { style: { position: "relative", display: "flex", flexDirection: "column", gap: 4, width: "110px" }, children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 4, height: "60px" }, children: [
+        const anyTelegraph = combatants.some((e) => e.isEnemy && !e.dead && (e.gauge || 0) >= 78);
+        return /* @__PURE__ */ jsxDEV("div", { className: "skill-dock-col", style: { position: "relative", display: "flex", flexDirection: "column", gap: 4 }, children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "skill-btn-row", style: { display: "flex", gap: 4 }, children: [
             /* @__PURE__ */ jsxDEV(
               "div",
               {
@@ -1863,8 +1952,8 @@ const CampaignView = ({
           /* @__PURE__ */ jsxDEV(
             "button",
             {
-              className: "guard-mini-btn",
-              disabled: u.dead || (u.burst || 0) < 30,
+              className: `guard-mini-btn ${anyTelegraph ? "perfect-window" : ""}`,
+              disabled: u.dead || (u.burst || 0) < (anyTelegraph ? 10 : 20),
               onClick: () => triggerDefend(u.id),
               children: [
                 /* @__PURE__ */ jsxDEV(Shield, { size: 10 }, void 0, false, {
@@ -1872,7 +1961,7 @@ const CampaignView = ({
                   lineNumber: 5192,
                   columnNumber: 28
                 }),
-                " GUARD"
+                anyTelegraph ? " PERFECT!" : " GUARD"
               ]
             },
             void 0,

@@ -921,21 +921,22 @@
  {
   "id": "sig_cait_sith",
   "owner": "Cait Sith",
-  "name": "Slots: Game Over",
-  "desc": "A jackpot pull that crits all foes and DELETES anything below 50% HP (x2.5). Slots scale with Luck.",
+  "name": "Slots: Triple Seven",
+  "desc": "Three reels, three real outcomes: a BUST still crits the field and shields Cait Sith, a PAIR hits harder and pumps the squad's attack, and the rare JACKPOT (all three reels match) unleashes a massive elemental/crit surge for the whole team AND deletes anything already below half HP. Genuinely luck-of-the-draw -- scales with Luck.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
   "target": "all_enemies",
-  "power": 4.6,
+  "power": 1.7,
   "cooldown": 150,
   "scalingStat": "luck",
   "flavor": "Lucky! That's a Mog House!",
   "damageType": "magical",
   "meta": {
    "guaranteed_crit": true,
-   "execute_below": 0.5,
-   "execute_mult": 2.5
+   "slot_roll": true,
+   "jackpot_execute_below": 0.5,
+   "jackpot_execute_mult": 2.4
   }
  },
  {
@@ -2957,7 +2958,7 @@
   "id": "sig_gaz_game_over_screen",
   "owner": "Gaz",
   "name": "Game Over Screen",
-  "desc": "Gaz paints a target lock on the enemy -- for the next few turns, the whole squad's attacks home in on them first.",
+  "desc": "Gaz paints a target lock on the enemy every cast, but she never plays the same round twice: round 1 just calls the shot, round 2 breaches their whole formation's defenses while sharpening the squad's aim, and round 3 is GAME OVER -- a full squad power spike plus a defense wipe on every enemy. Cycles in a fixed order, no luck involved.",
   "rarity": "Signature",
   "signature": true,
   "type": "debuff",
@@ -2969,7 +2970,14 @@
   "damageType": "physical",
   "statusEffects": [
    { "type": "expose", "chance": 1, "duration": 3, "val": 0, "label": "TARGETED" }
-  ]
+  ],
+  "meta": {
+   "stage_cycle": [
+    { "team_effects": [{ "type": "buff_crit", "duration": 3, "val": 0.12, "label": "LOCKED ON" }], "msg": "TARGET ACQUIRED" },
+    { "enemy_effects": [{ "type": "debuff_def", "duration": 3, "val": 0.15, "label": "FIREWALL DOWN" }], "team_effects": [{ "type": "buff_atk", "duration": 3, "val": 0.15, "label": "PRESSING ADVANTAGE" }], "msg": "SYSTEM BREACH" },
+    { "enemy_effects": [{ "type": "debuff_def", "duration": 3, "val": 0.3, "label": "GAME OVER" }], "team_effects": [{ "type": "buff_atk", "duration": 4, "val": 0.3, "label": "FINAL BLOW" }, { "type": "buff_crit", "duration": 4, "val": 0.25, "label": "FINAL BLOW" }], "burst": 25, "msg": "GAME OVER" }
+   ]
+  }
  },
  {
   "id": "sig_king_glyphic_mandate",
@@ -2992,7 +3000,7 @@
   "id": "sig_ice_king_glacial_barrier",
   "owner": "Ice King",
   "name": "Glacial Barrier",
-  "desc": "Encases the whole squad in protective ice for a moment -- nothing can touch them while it holds.",
+  "desc": "Encases the whole squad in protective ice every cast -- nothing can touch them while it holds -- and the Ice King's mood escalates in a fixed pattern underneath: first he just chills the field, then he calls down a full Blizzard ward, then he reaches ABSOLUTE ZERO, mending the squad, hardening their defenses, and flash-freezing every foe solid. Same three moods, same order, every time.",
   "rarity": "Signature",
   "signature": true,
   "type": "buff",
@@ -3003,7 +3011,14 @@
   "flavor": "Gunter, fetch my crown!",
   "statusEffects": [
    { "type": "untargetable", "chance": 1, "duration": 1, "val": 0, "label": "ENCASED" }
-  ]
+  ],
+  "meta": {
+   "stage_cycle": [
+    { "enemy_effects": [{ "type": "freeze", "duration": 2, "val": 0, "label": "FROSTBITE" }], "msg": "FROSTBITE FIELD" },
+    { "team_effects": [{ "type": "shield", "duration": 3, "val": 0.25, "label": "BLIZZARD WARD" }, { "type": "buff_def", "duration": 3, "val": 0.2, "label": "ICE ARMOR" }], "msg": "BLIZZARD KING" },
+    { "team_effects": [{ "type": "buff_def", "duration": 4, "val": 0.35, "label": "ABSOLUTE ZERO" }], "enemy_effects": [{ "type": "freeze", "duration": 3, "val": 0, "label": "FLASH FROZEN" }], "heal_pct": 0.2, "burst": 20, "msg": "ABSOLUTE ZERO" }
+   ]
+  }
  },
  {
   "id": "sig_benson_youre_fired",
@@ -3065,7 +3080,7 @@
   "id": "sig_megumi_shikigami_tactics",
   "owner": "Megumi Fushiguro",
   "name": "Shikigami Tactics",
-  "desc": "Megumi deploys his shikigami to scout the enemy's elemental weakness, sharpening the squad's strikes against it.",
+  "desc": "Megumi always scouts the enemy's elemental weakness for the squad, but which shikigami answers the summons follows a fixed order: the Divine Dogs harass first, Nue swoops in next to hobble every foe's speed while sharpening the squad's aim, and on the third summon Mahoraga arrives and adapts, overwhelming the whole enemy line's defenses while charging the squad's elemental power. Same three summons, same order, every time -- no dice involved.",
   "rarity": "Signature",
   "signature": true,
   "type": "buff",
@@ -3076,7 +3091,14 @@
   "flavor": "Divine Dogs, go.",
   "statusEffects": [
    { "type": "elemental_insight", "chance": 1, "duration": 4, "val": 0.35, "label": "SHIKIGAMI INSIGHT" }
-  ]
+  ],
+  "meta": {
+   "stage_cycle": [
+    { "team_effects": [{ "type": "buff_atk", "duration": 3, "val": 0.15, "label": "DIVINE DOGS" }], "msg": "DIVINE DOGS" },
+    { "enemy_effects": [{ "type": "debuff_spd", "duration": 3, "val": 0.25, "label": "NUE'S CHASE" }], "team_effects": [{ "type": "buff_crit", "duration": 3, "val": 0.15, "label": "NUE'S CHASE" }], "msg": "NUE" },
+    { "team_effects": [{ "type": "buff_elemdmg", "duration": 4, "val": 0.35, "label": "MAHORAGA" }], "enemy_effects": [{ "type": "debuff_def", "duration": 4, "val": 0.3, "label": "ADAPTATION" }], "burst": 25, "msg": "MAHORAGA: ADAPTATION" }
+   ]
+  }
  },
  {
   "id": "sig_puppycorn_rainbow_power_playtime",

@@ -7826,3 +7826,192 @@ select.search-bar {
     color: #fff;
     box-shadow: 0 0 8px rgba(239,68,68,0.6);
 }
+
+/* ============================================================
+   BATTLE ENGAGEMENT LAYER: combo chain, BREAK, perfect guard,
+   elemental resonance + mobile-friendly battle screen.
+   ============================================================ */
+
+/* --- Unit avatar sizes moved from inline styles to classes so
+       media queries can scale the whole formation on phones. --- */
+.unit-avatar-wrapper.std-size { width: 85px; height: 85px; }
+.unit-avatar-wrapper.boss-size { width: 130px; height: 130px; }
+
+/* --- COMBO CHAIN counter --- */
+.combo-counter {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    z-index: 60;
+    text-align: right;
+    pointer-events: none;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.8));
+}
+.combo-hits {
+    font-family: "MugenTitle", "Rajdhani", sans-serif;
+    font-size: 2.2rem;
+    font-weight: 900;
+    font-style: italic;
+    letter-spacing: 1px;
+    color: #facc15;
+    -webkit-text-stroke: 1.5px #7c2d12;
+    animation: combo-pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.6);
+}
+.combo-bonus {
+    font-size: 0.75rem;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #fff;
+    background: linear-gradient(90deg, transparent, rgba(239,68,68,0.85));
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+@keyframes combo-pop {
+    0% { transform: scale(1.6) rotate(-4deg); }
+    100% { transform: scale(1) rotate(0deg); }
+}
+
+/* --- ATTACK TELEGRAPH ("!" over an enemy about to act) --- */
+.attack-telegraph {
+    position: absolute;
+    top: -26px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #ef4444, #7f1d1d);
+    border: 2px solid #fff;
+    color: #fff;
+    font-weight: 900;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: telegraph-flash 0.4s infinite alternate;
+    pointer-events: none;
+}
+@keyframes telegraph-flash {
+    from { transform: translateX(-50%) scale(1); box-shadow: 0 0 6px #ef4444; }
+    to { transform: translateX(-50%) scale(1.25); box-shadow: 0 0 18px #ef4444; }
+}
+
+/* --- BREAK state: shattered enemies glow gold and take +50% damage --- */
+.battle-unit.is-broken .unit-avatar {
+    filter: sepia(0.6) saturate(2.5) hue-rotate(-20deg) brightness(1.15);
+    animation: broken-shake 0.35s infinite;
+}
+@keyframes broken-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-2px) rotate(-1deg); }
+    75% { transform: translateX(2px) rotate(1deg); }
+}
+
+/* --- PERFECT GUARD window on the guard buttons --- */
+.guard-mini-btn.perfect-window:not(:disabled) {
+    background: linear-gradient(90deg, #b45309, #facc15);
+    color: #1c1917;
+    animation: perfect-guard-pulse 0.4s infinite alternate;
+}
+@keyframes perfect-guard-pulse {
+    from { box-shadow: 0 0 4px #facc15; }
+    to { box-shadow: 0 0 14px #facc15; }
+}
+
+/* --- ELEMENTAL RESONANCE pips (battle header) --- */
+.resonance-pips {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 6px;
+    z-index: 100;
+    position: relative;
+}
+.res-label, .res-hint {
+    font-size: 0.55rem;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #94a3b8;
+}
+.res-hint { color: #cbd5e1; letter-spacing: 1px; }
+.res-pip {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--pip-color, #fff);
+    background: transparent;
+    transition: all 0.25s;
+}
+.res-pip.filled {
+    background: var(--pip-color, #fff);
+    box-shadow: 0 0 10px var(--pip-color, #fff);
+    transform: scale(1.15);
+}
+
+/* --- Skill dock: layout owned by CSS (was inline) so mobile can
+       switch to a horizontally scrollable tray. --- */
+.skill-dock {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.skill-dock-col { width: 110px; }
+.skill-btn-row { height: 60px; }
+
+/* --- MOBILE BATTLE LAYOUT --- */
+@media (max-width: 768px) {
+    /* Compact header: keep controls tappable but reclaim vertical space.
+       The BATTLE MODE text block and duplicate stance readout are redundant
+       on a phone -- the stance switcher + resonance pips carry the info. */
+    .battle-header { padding: 8px 10px !important; flex-wrap: wrap; gap: 6px; justify-content: center !important; }
+    .battle-header-info { display: none; }
+    .unified-stance-display { display: none; }
+    .battle-header .train-btn { min-height: 40px; }
+    .element-switcher { flex-basis: 100%; margin-top: 4px; }
+    .resonance-pips { flex-basis: 100%; margin-top: 2px; }
+
+    /* Stance icons: comfortable thumb targets */
+    .element-icon { width: 44px; height: 44px; }
+    .element-switcher { gap: 8px; }
+
+    /* Formations: tighter rows, smaller sprites, no overflow */
+    .battle-formation { gap: 6px; flex-wrap: nowrap; padding: 0 4px; }
+    .battle-unit { width: 62px; }
+    .battle-unit.is-boss { width: 92px; transform: scale(1.05); }
+    .battle-unit.is-boss .unit-avatar { width: 100%; height: 100%; border-width: 3px; }
+    .unit-avatar-wrapper.std-size { width: 58px; height: 58px; }
+    .unit-avatar-wrapper.boss-size { width: 86px; height: 86px; }
+    .enemy-row { margin-bottom: 28px; }
+    .hero-row { margin-top: 10px; }
+    .unit-name { font-size: 0.55rem !important; }
+    .hp-text-overlay { font-size: 0.5rem; }
+
+    /* Skill dock: horizontal scroll tray, one column per hero */
+    .skill-dock {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        gap: 8px;
+        padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    }
+    .skill-dock::-webkit-scrollbar { display: none; }
+    .skill-dock-col { width: 96px; flex: 0 0 auto; }
+    .skill-btn-row { height: 56px; }
+    .guard-mini-btn { padding: 8px 4px; font-size: 0.62rem; }
+
+    /* Combo counter: smaller, out of the boss bar's way */
+    .combo-counter { top: 8px; right: 8px; }
+    .combo-hits { font-size: 1.5rem; }
+    .combo-bonus { font-size: 0.6rem; }
+
+    /* Boss bar + banners scale down */
+    .boss-hp-container { width: 92% !important; }
+    .skill-banner-text { font-size: 1.4rem !important; }
+    .attack-telegraph { width: 20px; height: 20px; font-size: 0.8rem; top: -20px; }
+}

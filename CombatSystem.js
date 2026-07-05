@@ -153,7 +153,7 @@ const getBattleStats = (unit, playerElement, activeSynergies = []) => {
   }
   return { hp: maxHp, atk, def, speed, magicAtk, magicDef, critRate, evasion, lifesteal, luck };
 };
-const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isLimitBreak = false, forcedTargetId = null }) => {
+const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isLimitBreak = false, forcedTargetId = null, extraPowerMult = 1 }) => {
   const next = combatants.map((u) => {
     const cloned = { ...u };
     cloned.effects = Array.isArray(u.effects) ? u.effects.map((e) => ({ ...e })) : [];
@@ -452,6 +452,9 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
         let skillPower = (skill.power || 1) * (1 + (abilityLevel - 1) * 0.05) * (1 + awaken * 0.1);
         // Signature premium: a signature must clearly beat a same-power Legendary.
         if (skill.signature) skillPower *= SIGNATURE_BONUS.DAMAGE;
+        // COMBO CHAIN: the battle view feeds in a team-wide combo multiplier that
+        // ramps while allies keep the hit chain alive (enemy actions break it).
+        skillPower *= extraPowerMult;
         skillPower *= wishDmgMult;
         skillPower *= slotDmgMult;
         skillPower *= stageDmgMult;
@@ -478,6 +481,13 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           dmg = Math.floor(dmg * (1.4 + awaken * 0.04 + (skill.signature ? SIGNATURE_BONUS.CRIT_DMG : 0)));
         }
         // --- Conditional damage modifiers ---
+        // BREAK window: broken (stagger-shattered) targets take amplified damage
+        // from every source. This is the payoff for filling the stagger bar.
+        const brokenEff = t.effects.find((e) => e.type === "broken");
+        if (brokenEff) {
+          dmg = Math.floor(dmg * (1 + (brokenEff.val || 0.5)));
+          attacker.lastAction = { ...attacker.lastAction, msg: "BREAK!" };
+        }
         if (META.bonus_vs_status && t.effects.some((e) => e.type === META.bonus_vs_status.status)) {
           dmg = Math.floor(dmg * (META.bonus_vs_status.mult || 1.5));
           attacker.lastAction = { ...attacker.lastAction, msg: "EXPLOIT" };
@@ -486,6 +496,12 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
         if (META.execute_below && t.hp / t.maxHp <= META.execute_below) {
           dmg = Math.floor(dmg * (META.execute_mult || 1.8));
           attacker.lastAction = { ...attacker.lastAction, msg: "EXECUTE" };
+        }
+        // Cait Sith JACKPOT bonus: on a triple-match roll, anything already low
+        // gets deleted on top of the jackpot damage multiplier.
+        if (slotJackpot && META.jackpot_execute_below && t.hp / t.maxHp <= META.jackpot_execute_below) {
+          dmg = Math.floor(dmg * (META.jackpot_execute_mult || 2.2));
+          attacker.lastAction = { ...attacker.lastAction, msg: "★JACKPOT EXECUTE★" };
         }
         if (META.bonus_vs_full_hp && t.hp / t.maxHp >= (META.bonus_vs_full_hp.above || 0.8)) {
           dmg = Math.floor(dmg * (META.bonus_vs_full_hp.mult || 1.6));
@@ -668,7 +684,11 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           const stg = (skill.meta?.stagger_bonus || 1) * (skill.id && skill.id.includes("crit") ? 15 : 8);
           t.stagger = Math.min(t.maxStagger, (t.stagger || 0) + Math.floor(stg));
           if (t.stagger >= t.maxStagger) {
-            t.effects.push({ type: "stun", duration: 1, val: 0, label: "STAGGERED" });
+            // BREAK: a filled stagger bar is now a real payoff window -- the enemy
+            // is stunned for 2 turns AND takes +50% damage from everything while
+            // broken. Build the bar, then dump your burst window into it.
+            t.effects.push({ type: "stun", duration: 2, val: 0, label: "STAGGERED" });
+            t.effects.push({ type: "broken", duration: 2, val: 0.5, label: "BREAK" });
             t.stagger = 0;
             playSound("mugen_fall" + (Math.random() < 0.34 ? "" : Math.random() < 0.5 ? "2" : "3"), 0.5);
           }
@@ -797,6 +817,10 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement }) 
   const isStatic = unit.effects.some((e) => e.type === "static") && !unit.dead;
   const isElemEmpowered = unit.effects.some((e) => e.type === "buff_elemdmg") && !unit.dead;
   const isCrushed = unit.effects.some((e) => e.type === "crushed") && !unit.dead;
+  const isBroken = unit.effects.some((e) => e.type === "broken") && !unit.dead;
+  // Attack telegraph: an enemy whose turn gauge is nearly full flashes a warning.
+  // Guarding during this window grants a PERFECT GUARD (see triggerDefend).
+  const isTelegraphing = unit.isEnemy && !unit.dead && (unit.gauge || 0) >= 78;
   const groupedEffects = useMemo(() => {
     const groups = {};
     unit.effects.forEach((e) => {
@@ -830,7 +854,7 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement }) 
   return /* @__PURE__ */ jsxDEV(
     "div",
     {
-      className: `battle-unit ${unit.isEnemy ? "is-enemy" : "is-ally"} ${unit.dead ? "dead-dissolve" : "battle-unit-idle"} ${isActiveTurn ? "acting active-turn" : ""} ${isHit ? "is-hit" : ""} ${isMarked ? "is-marked" : ""} ${unit.isBoss ? "is-boss" : ""} ${isStaggered ? "staggered-unit" : ""} ${unit.cosmetics?.borderClass || ""} ${stance ? "stance-glow-active" : ""} ${hasShield ? "has-active-shield" : ""} ${isFrozen ? "is-frozen" : ""} ${isStunned ? "is-stunned" : ""} ${isBurned ? "is-burned" : ""} ${isStatic ? "is-static" : ""} ${isElemEmpowered ? "is-elem-empowered" : ""} ${isCrushed ? "is-crushed" : ""}`,
+      className: `battle-unit ${unit.isEnemy ? "is-enemy" : "is-ally"} ${unit.dead ? "dead-dissolve" : "battle-unit-idle"} ${isActiveTurn ? "acting active-turn" : ""} ${isHit ? "is-hit" : ""} ${isMarked ? "is-marked" : ""} ${unit.isBoss ? "is-boss" : ""} ${isStaggered ? "staggered-unit" : ""} ${unit.cosmetics?.borderClass || ""} ${stance ? "stance-glow-active" : ""} ${hasShield ? "has-active-shield" : ""} ${isFrozen ? "is-frozen" : ""} ${isStunned ? "is-stunned" : ""} ${isBurned ? "is-burned" : ""} ${isStatic ? "is-static" : ""} ${isElemEmpowered ? "is-elem-empowered" : ""} ${isCrushed ? "is-crushed" : ""} ${isBroken ? "is-broken" : ""} ${isTelegraphing ? "is-telegraphing" : ""}`,
       onClick: () => unit.isEnemy && onMark && onMark(),
       style: {
         "--stance-color": stanceColor,
@@ -842,6 +866,7 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement }) 
           lineNumber: 500,
           columnNumber: 21
         }),
+        isTelegraphing && /* @__PURE__ */ jsxDEV("div", { className: "attack-telegraph", children: "!" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
         stance && /* @__PURE__ */ jsxDEV("div", { className: "stance-indicator-tag", style: { "--stance-color": stanceColor }, children: [
           /* @__PURE__ */ jsxDEV("div", { className: "stance-icon-mini" }, void 0, false, {
             fileName: "<stdin>",
@@ -867,7 +892,7 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement }) 
           lineNumber: 509,
           columnNumber: 8
         }),
-        /* @__PURE__ */ jsxDEV("div", { className: `unit-avatar-wrapper ${unit.gauge >= 100 ? "active-turn" : ""}`, style: { position: "relative", width: unit.isBoss ? "130px" : "85px", height: unit.isBoss ? "130px" : "85px" }, children: [
+        /* @__PURE__ */ jsxDEV("div", { className: `unit-avatar-wrapper ${unit.isBoss ? "boss-size" : "std-size"} ${unit.gauge >= 100 ? "active-turn" : ""}`, style: { position: "relative" }, children: [
           hasShield && /* @__PURE__ */ jsxDEV("div", { className: `shield-vfx-overlay ${shieldHitActive ? "shield-hit" : ""}` }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 512,
