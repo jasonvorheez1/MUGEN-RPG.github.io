@@ -112,19 +112,46 @@ const SettingsView = ({ setAppState, setView, settings, setSettings, stats, save
     window.location.reload();
   };
 
-  const exportSave = () => {
+  const exportSave = async () => {
     const data = {};
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key.startsWith("mugen_")) data[key] = localStorage.getItem(key);
+      // Exclude local-device backup snapshots -- they're a safety net for THIS
+      // browser (restorable from Settings → Data → Local Backups), not
+      // portable save data. Bundling them into every export was tripling the
+      // file size for no benefit and pushing long-played saves past what a
+      // fresh import could safely write back to storage.
+      if (key.startsWith("mugen_") && !key.startsWith("mugen_backup")) data[key] = localStorage.getItem(key);
     }
     data.__meta = JSON.stringify({ exportedAt: Date.now(), version: 3 });
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const json = JSON.stringify(data);
+
+    let blob, filename;
+    if (typeof CompressionStream !== "undefined") {
+      // Gzip-compress the export via the browser's native (de)compression
+      // streams -- no library needed. JSON compresses very well (usually
+      // 80-90% smaller), so this keeps even very long-played saves compact.
+      try {
+        const compressedStream = new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"));
+        blob = await new Response(compressedStream).blob();
+        filename = `mugen_save_${new Date().toISOString().slice(0, 10)}.json.gz`;
+      } catch (err) {
+        console.warn("Compression failed, falling back to plain JSON export", err);
+        blob = new Blob([json], { type: "application/json" });
+        filename = `mugen_save_${new Date().toISOString().slice(0, 10)}.json`;
+      }
+    } else {
+      // Older browser without CompressionStream support -- fall back to a
+      // plain (uncompressed) export rather than blocking the feature.
+      blob = new Blob([json], { type: "application/json" });
+      filename = `mugen_save_${new Date().toISOString().slice(0, 10)}.json`;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `mugen_save_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = filename;
     a.click();
+    URL.revokeObjectURL(url);
     playSound("purchase", 0.4);
   };
 
@@ -142,12 +169,36 @@ const SettingsView = ({ setAppState, setView, settings, setSettings, stats, save
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
+      // Step 0: decode. Gzip-compressed exports (.json.gz, produced by the
+      // Export Save button above) are detected by their magic bytes rather
+      // than file extension, so a renamed/re-extensioned file still works.
+      // Plain, uncompressed .json exports (including older saves from before
+      // compression was added) continue to work unchanged.
+      let jsonText;
+      try {
+        const bytes = new Uint8Array(event.target.result);
+        const isGzip = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+        if (isGzip) {
+          if (typeof DecompressionStream === "undefined") {
+            alert("Import Failed: This save file is compressed, but your browser doesn't support decompressing it. Try a recent version of Chrome, Firefox, or Safari.");
+            return;
+          }
+          const decompressedStream = new Blob([event.target.result]).stream().pipeThrough(new DecompressionStream("gzip"));
+          jsonText = await new Response(decompressedStream).text();
+        } else {
+          jsonText = new TextDecoder("utf-8").decode(bytes);
+        }
+      } catch (err) {
+        alert("Import Failed: Couldn't read that file — it may be corrupted or incomplete.");
+        console.error(err);
+        return;
+      }
       // Step 1: parse. A malformed/truncated file fails here specifically --
       // report that instead of a generic "corrupt" catch-all.
       let data;
       try {
-        data = JSON.parse(event.target.result);
+        data = JSON.parse(jsonText);
       } catch (err) {
         alert("Import Failed: That file isn't valid JSON — it looks corrupted or incomplete.");
         return;
@@ -208,7 +259,7 @@ const SettingsView = ({ setAppState, setView, settings, setSettings, stats, save
       }
       window.location.reload();
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const updateSetting = (category, key, value) => {
@@ -332,9 +383,11 @@ const SettingsView = ({ setAppState, setView, settings, setSettings, stats, save
             h(Download, { size: 14, style: { marginRight: 6, verticalAlign: "-2px" } }), "EXPORT SAVE"),
           h("label", { className: "train-btn", style: { background: "#3b82f6", fontSize: "0.8rem", height: 44, padding: "0 15px", flex: 1, minWidth: 160, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" } },
             h(Upload, { size: 14, style: { marginRight: 6 } }), "IMPORT SAVE",
-            h("input", { type: "file", accept: ".json", onChange: importSave, style: { display: "none" } })
+            h("input", { type: "file", accept: ".json,.gz,.json.gz", onChange: importSave, style: { display: "none" } })
           )
         ),
+        h("div", { style: { fontSize: "0.6rem", color: "var(--text-muted)", marginBottom: 14, marginTop: -8 } },
+          "Exports are gzip-compressed automatically (usually 80-90% smaller) and no longer bundle your local backups — older plain .json saves still import fine."),
         h("div", { style: { marginBottom: 18 } },
           h("div", { style: { fontSize: "0.8rem", fontWeight: 800, display: "flex", alignItems: "center", gap: 6, marginBottom: 8 } },
             h(History, { size: 14, color: "#facc15" }), "LOCAL BACKUPS"),
