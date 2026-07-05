@@ -84,7 +84,23 @@ const CampaignView = ({
   // so actively sequencing skills to keep the chain alive genuinely pays off.
   const comboRef = useRef({ count: 0 });
   const [comboDisplay, setComboDisplay] = useState(0);
-  const comboMult = () => 1 + Math.min(0.45, comboRef.current.count * 0.015);
+  // Rebalanced: +2% per hit, hard cap +40%. Skill casts count as 2 hits so
+  // deliberate play climbs the chain visibly faster than autopilot basics.
+  const comboMult = () => 1 + Math.min(0.4, comboRef.current.count * 0.02);
+  // --- JUICE LAYER: hit-stop, screen shake, slam banners, parry flash ---
+  // hit-stop: the whole battle freezes for a beat on heavy impacts. It's the
+  // oldest fighting-game trick there is, and it's what makes hits feel HEAVY.
+  const hitStopUntil = useRef(0);
+  const [sceneShake, setSceneShake] = useState(null);
+  const shakeTimer = useRef(null);
+  const triggerShake = (kind, ms) => {
+    setSceneShake(kind);
+    if (shakeTimer.current) clearTimeout(shakeTimer.current);
+    shakeTimer.current = setTimeout(() => setSceneShake(null), ms);
+  };
+  const [breakBanner, setBreakBanner] = useState(null);
+  const prevBrokenIds = useRef(new Set());
+  const [parryFlash, setParryFlash] = useState(false);
   const bumpCombo = (n = 1) => {
     comboRef.current.count += n;
     setComboDisplay(comboRef.current.count);
@@ -519,6 +535,10 @@ const CampaignView = ({
         u.effects.push({ type: "shield", duration: 2, val: 0.5, label: "PERFECT GUARD" });
         u.effects.push({ type: "buff_atk", duration: 2, val: 0.25, label: "COUNTER STANCE" });
         showDamage(u.id, "PERFECT GUARD!", "heal");
+        // Parry flash: white screen pop + a beat of hit-stop. Pure kimochi.
+        setParryFlash(true);
+        setTimeout(() => setParryFlash(false), 350);
+        hitStopUntil.current = Date.now() + 200;
         playSound("mugen_guard", 0.7);
         playSound("crit_hit", 0.4);
       } else {
@@ -546,7 +566,7 @@ const CampaignView = ({
         forcedTargetId: markedTargetId,
         extraPowerMult: comboMult()
       });
-      bumpCombo();
+      bumpCombo(2);
       applyResonance(nextState, u);
       return nextState;
     });
@@ -560,6 +580,8 @@ const CampaignView = ({
     const timer = setInterval(() => {
       setCombatants((prev) => {
         if (!prev || prev.length === 0 || battleState !== "ACTIVE") return prev;
+        // HIT-STOP: freeze the simulation for a beat after heavy impacts.
+        if (Date.now() < hitStopUntil.current) return prev;
         const alliesAlive = prev.filter((c) => !c.isEnemy && !c.dead).length;
         const enemiesAlive = prev.filter((c) => c.isEnemy && !c.dead).length;
         if (alliesAlive === 0) {
@@ -655,7 +677,7 @@ const CampaignView = ({
                 // an enemy getting a skill off breaks it.
                 if (u.isEnemy) breakCombo();
                 else {
-                  bumpCombo();
+                  bumpCombo(2);
                   applyResonance(next, u);
                 }
               } else {
@@ -703,6 +725,22 @@ const CampaignView = ({
     }, 50);
     return () => clearInterval(timer);
   }, [battleState]);
+  // BREAK slam banner: fire the moment an enemy's stagger bar shatters.
+  React.useEffect(() => {
+    if (battleState !== "ACTIVE") return;
+    const nowBroken = new Set(combatants.filter((c) => c.isEnemy && !c.dead && c.effects.some((e) => e.type === "broken")).map((c) => c.id));
+    nowBroken.forEach((id) => {
+      if (!prevBrokenIds.current.has(id)) {
+        const unit = combatants.find((c) => c.id === id);
+        setBreakBanner(unit?.name || "ENEMY");
+        hitStopUntil.current = Date.now() + 300;
+        triggerShake("heavy", 500);
+        playSound("crit_hit", 0.6);
+        setTimeout(() => setBreakBanner(null), 1400);
+      }
+    });
+    prevBrokenIds.current = nowBroken;
+  }, [combatants, battleState]);
   const handledActionTimes = useRef(/* @__PURE__ */ new Map());
   React.useEffect(() => {
     if (battleState !== "ACTIVE") {
@@ -747,7 +785,17 @@ const CampaignView = ({
     combatants.forEach((u) => {
       if (u.lastAction && handledActionTimes.current.get(u.id) !== u.lastAction.time) {
         const txt = u.lastAction.msg ? u.lastAction.msg : u.lastAction.amount;
-        showDamage(u.lastAction.targetId, txt, u.lastAction.type);
+        // Crits get their own popup styling + weight; heavy hits stop time.
+        const actTarget = combatants.find((c) => c.id === u.lastAction.targetId);
+        const isDmgAction = ["normal", "magic", "basic", "shield_break"].includes(u.lastAction.type);
+        const isHeavy = isDmgAction && (u.lastAction.crit || /BREAK|EXECUTE|JACKPOT/.test(String(u.lastAction.msg || "")) || (actTarget && typeof u.lastAction.amount === "number" && u.lastAction.amount >= actTarget.maxHp * 0.2));
+        showDamage(u.lastAction.targetId, txt, u.lastAction.crit ? "crit" : u.lastAction.type);
+        if (isHeavy) {
+          hitStopUntil.current = Date.now() + 160;
+          triggerShake("heavy", 450);
+        } else if (isDmgAction) {
+          triggerShake("light", 250);
+        }
         handledActionTimes.current.set(u.id, u.lastAction.time);
         if (typeof triggerVisualEffect2 === "function") {
           const target = combatants.find((c) => c.id === u.lastAction.targetId);
@@ -1623,7 +1671,7 @@ const CampaignView = ({
       columnNumber: 13
     }),
     activeBattle && /* @__PURE__ */ jsxDEV("div", { className: "battle-screen animate-fadeIn", children: [
-      activeSkill && /* @__PURE__ */ jsxDEV("div", { className: "skill-banner", children: [
+      activeSkill && /* @__PURE__ */ jsxDEV("div", { className: `skill-banner ${String(activeSkill.name).includes("RESONANCE") ? "resonance-banner" : ""}`, children: [
         /* @__PURE__ */ jsxDEV("div", { className: "skill-banner-text", children: activeSkill.name }, void 0, false, {
           fileName: "<stdin>",
           lineNumber: 5058,
@@ -1770,7 +1818,13 @@ const CampaignView = ({
         lineNumber: 5063,
         columnNumber: 11
       }),
-      /* @__PURE__ */ jsxDEV("div", { className: "battle-scene", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: `battle-scene ${sceneShake ? "scene-shake-" + sceneShake : ""}`, children: [
+        parryFlash && /* @__PURE__ */ jsxDEV("div", { className: "parry-flash-overlay" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        breakBanner && /* @__PURE__ */ jsxDEV("div", { className: "break-banner-wrap", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "break-banner-flash" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("div", { className: "break-banner-text", children: "BREAK!!" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("div", { className: "break-banner-sub", children: [breakBanner, " IS WIDE OPEN"] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
         /* @__PURE__ */ jsxDEV("div", { className: "battle-background-layer", style: { backgroundImage: `url(${activeBattle?.bg || "background_battle.png"})` } }, void 0, false, {
           fileName: "<stdin>",
           lineNumber: 5104,
@@ -1860,9 +1914,9 @@ const CampaignView = ({
           lineNumber: 5135,
           columnNumber: 14
         }),
-        comboDisplay >= 2 && /* @__PURE__ */ jsxDEV("div", { className: "combo-counter", children: [
+        comboDisplay >= 2 && /* @__PURE__ */ jsxDEV("div", { className: `combo-counter ${comboDisplay >= 20 ? "combo-tier-3" : comboDisplay >= 10 ? "combo-tier-2" : "combo-tier-1"}`, children: [
           /* @__PURE__ */ jsxDEV("div", { className: "combo-hits", children: [comboDisplay, " HITS"] }, comboDisplay, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
-          /* @__PURE__ */ jsxDEV("div", { className: "combo-bonus", children: ["+", Math.round(Math.min(45, comboDisplay * 1.5)), "% DMG"] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+          /* @__PURE__ */ jsxDEV("div", { className: "combo-bonus", children: ["+", Math.round(Math.min(40, comboDisplay * 2)), "% DMG"] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
         ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
       ] }, void 0, true, {
         fileName: "<stdin>",

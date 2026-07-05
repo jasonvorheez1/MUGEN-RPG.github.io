@@ -927,7 +927,7 @@
   "signature": true,
   "type": "atk",
   "target": "all_enemies",
-  "power": 1.7,
+  "power": 2.2,
   "cooldown": 150,
   "scalingStat": "luck",
   "flavor": "Lucky! That's a Mog House!",

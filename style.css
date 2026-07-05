@@ -8015,3 +8015,233 @@ select.search-bar {
     .skill-banner-text { font-size: 1.4rem !important; }
     .attack-telegraph { width: 20px; height: 20px; font-size: 0.8rem; top: -20px; }
 }
+
+/* ============================================================
+   JUICE LAYER -- the "PNGs actually fighting" pass.
+   Hit-stop is handled in JS; everything here is the visual read:
+   lunges, screen shake, slam banners, crit pops, parry flash.
+   ============================================================ */
+
+/* --- LUNGE: attacker dashes at the enemy line and snaps back.
+       Applied to the avatar wrapper so boss scale() stays intact. --- */
+.battle-unit.lunge .unit-avatar-wrapper,
+.battle-unit.lunge-crit .unit-avatar-wrapper {
+    animation: none;
+}
+.battle-unit.is-ally.lunge .unit-avatar-wrapper { animation: lunge-up 0.42s cubic-bezier(0.22, 1.4, 0.36, 1); }
+.battle-unit.is-enemy.lunge .unit-avatar-wrapper { animation: lunge-down 0.42s cubic-bezier(0.22, 1.4, 0.36, 1); }
+.battle-unit.is-ally.lunge-crit .unit-avatar-wrapper { animation: lunge-up-crit 0.42s cubic-bezier(0.18, 1.6, 0.3, 1); }
+.battle-unit.is-enemy.lunge-crit .unit-avatar-wrapper { animation: lunge-down-crit 0.42s cubic-bezier(0.18, 1.6, 0.3, 1); }
+@keyframes lunge-up {
+    0% { transform: translateY(0); }
+    28% { transform: translateY(-42px) scale(1.07); filter: brightness(1.4); }
+    55% { transform: translateY(-34px) scale(1.04); }
+    100% { transform: translateY(0); }
+}
+@keyframes lunge-down {
+    0% { transform: translateY(0); }
+    28% { transform: translateY(42px) scale(1.07); filter: brightness(1.4); }
+    55% { transform: translateY(34px) scale(1.04); }
+    100% { transform: translateY(0); }
+}
+@keyframes lunge-up-crit {
+    0% { transform: translateY(0); }
+    22% { transform: translateY(-64px) scale(1.16) rotate(-3deg); filter: brightness(2); }
+    50% { transform: translateY(-50px) scale(1.1); }
+    100% { transform: translateY(0); }
+}
+@keyframes lunge-down-crit {
+    0% { transform: translateY(0); }
+    22% { transform: translateY(64px) scale(1.16) rotate(3deg); filter: brightness(2); }
+    50% { transform: translateY(50px) scale(1.1); }
+    100% { transform: translateY(0); }
+}
+
+/* --- SCREEN SHAKE tiers --- */
+.battle-scene.scene-shake-light { animation: scene-shake-l 0.25s linear; }
+.battle-scene.scene-shake-heavy { animation: scene-shake-h 0.45s linear; }
+@keyframes scene-shake-l {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(3px, -2px); }
+    50% { transform: translate(-3px, 2px); }
+    75% { transform: translate(2px, 1px); }
+}
+@keyframes scene-shake-h {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    15% { transform: translate(-9px, 5px) rotate(-0.5deg); }
+    30% { transform: translate(8px, -6px) rotate(0.4deg); }
+    45% { transform: translate(-7px, 3px); }
+    60% { transform: translate(6px, -3px); }
+    75% { transform: translate(-4px, 2px); }
+    90% { transform: translate(2px, -1px); }
+}
+
+/* --- DAMAGE POPUPS: crits hit different --- */
+.dmg-crit {
+    color: #fff8dc !important;
+    font-size: 2.8rem !important;
+    font-style: italic;
+    -webkit-text-stroke: 2px #b45309;
+    text-shadow: 0 0 24px rgba(250, 204, 21, 0.9), 3px 3px 0 #7c2d12 !important;
+    animation: crit-pop 0.9s cubic-bezier(0.18, 1.5, 0.4, 1) forwards !important;
+    z-index: 120 !important;
+}
+@keyframes crit-pop {
+    0% { transform: translateX(-50%) scale(2.6) rotate(-8deg); opacity: 0; }
+    18% { transform: translateX(-50%) scale(1) rotate(-4deg); opacity: 1; }
+    70% { transform: translateX(-50%) translateY(-24px) rotate(-4deg); opacity: 1; }
+    100% { transform: translateX(-50%) translateY(-46px) rotate(-4deg); opacity: 0; }
+}
+.dmg-magic { color: #c084fc; font-size: 1.6rem; text-shadow: 0 0 12px rgba(192, 132, 252, 0.8), 2px 2px 0 #000; }
+
+/* --- BREAK!! slam banner --- */
+.break-banner-wrap {
+    position: absolute;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+.break-banner-flash {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(255,255,255,0.9), rgba(250,204,21,0.25) 45%, transparent 75%);
+    animation: break-flash 1.4s ease-out forwards;
+}
+@keyframes break-flash {
+    0% { opacity: 1; }
+    30% { opacity: 0.5; }
+    100% { opacity: 0; }
+}
+.break-banner-text {
+    font-family: 'MugenTitle', 'Rajdhani', sans-serif;
+    font-size: 5.5rem;
+    font-weight: 900;
+    font-style: italic;
+    letter-spacing: 4px;
+    color: #facc15;
+    -webkit-text-stroke: 3px #7f1d1d;
+    text-shadow: -4px 0 rgba(239, 68, 68, 0.7), 4px 0 rgba(0, 210, 255, 0.7), 0 6px 18px rgba(0,0,0,0.9);
+    animation: break-slam 1.4s cubic-bezier(0.15, 1.6, 0.3, 1) forwards;
+    transform-origin: center;
+}
+@keyframes break-slam {
+    0% { transform: scale(3.4) rotate(-10deg); opacity: 0; }
+    16% { transform: scale(1) rotate(-6deg); opacity: 1; }
+    80% { transform: scale(1) rotate(-6deg); opacity: 1; }
+    100% { transform: scale(0.92) rotate(-6deg); opacity: 0; }
+}
+.break-banner-sub {
+    font-size: 0.9rem;
+    font-weight: 900;
+    letter-spacing: 5px;
+    color: #fff;
+    background: rgba(0,0,0,0.7);
+    border-top: 1px solid #facc15;
+    border-bottom: 1px solid #facc15;
+    padding: 4px 26px;
+    margin-top: 6px;
+    text-transform: uppercase;
+    animation: break-sub-in 1.4s ease-out forwards;
+}
+@keyframes break-sub-in {
+    0% { transform: translateX(-60px); opacity: 0; }
+    22% { transform: translateX(0); opacity: 1; }
+    82% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* --- PERFECT GUARD parry flash --- */
+.parry-flash-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 90;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 65%, rgba(255,255,255,0.95), rgba(96,165,250,0.35) 40%, transparent 70%);
+    animation: parry-pop 0.35s ease-out forwards;
+}
+@keyframes parry-pop {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* --- COMBO COUNTER escalation tiers --- */
+.combo-counter.combo-tier-1 .combo-hits { color: #e2e8f0; -webkit-text-stroke: 1.5px #334155; }
+.combo-counter.combo-tier-2 .combo-hits {
+    color: #facc15;
+    font-size: 2.7rem;
+    -webkit-text-stroke: 1.5px #92400e;
+    text-shadow: 0 0 18px rgba(250, 204, 21, 0.5);
+}
+.combo-counter.combo-tier-3 .combo-hits {
+    font-size: 3.2rem;
+    background: linear-gradient(180deg, #fef08a 20%, #f97316 60%, #ef4444);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-stroke: 2px #7f1d1d;
+    filter: drop-shadow(0 0 14px rgba(249, 115, 22, 0.8));
+    animation: combo-pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.6), combo-burn 0.7s infinite alternate;
+}
+@keyframes combo-burn {
+    from { filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.6)); }
+    to { filter: drop-shadow(0 0 22px rgba(239, 68, 68, 1)); }
+}
+
+/* --- SKILL BANNER: sharper, faster, more of a "cut-in" --- */
+.skill-banner {
+    background: linear-gradient(90deg, transparent 0%, rgba(5,5,10,0.9) 18%, rgba(233, 69, 96, 0.95) 50%, rgba(5,5,10,0.9) 82%, transparent 100%);
+    border-top: 2px solid rgba(255,255,255,0.4);
+    border-bottom: 2px solid rgba(255,255,255,0.4);
+    overflow: hidden;
+}
+.skill-banner::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 45%;
+    background: linear-gradient(105deg, transparent, rgba(255,255,255,0.35), transparent);
+    animation: banner-sweep 0.9s ease-out;
+    pointer-events: none;
+}
+@keyframes banner-sweep {
+    0% { left: -50%; }
+    100% { left: 110%; }
+}
+.skill-banner-text { transform: skew(-6deg); text-transform: uppercase; }
+
+/* --- ELEMENTAL RESONANCE cut-in variant --- */
+.skill-banner.resonance-banner {
+    background: linear-gradient(90deg, transparent 0%, rgba(5,5,10,0.92) 15%, rgba(0, 210, 255, 0.9) 45%, rgba(168, 85, 247, 0.9) 55%, rgba(5,5,10,0.92) 85%, transparent 100%);
+    border-top-color: #00d2ff;
+    border-bottom-color: #a855f7;
+}
+.skill-banner.resonance-banner .skill-banner-text {
+    color: #fff;
+    -webkit-text-stroke: 1.5px rgba(0, 210, 255, 0.6);
+    text-shadow: 0 0 30px #00d2ff, 0 0 60px #a855f7;
+}
+
+/* Mobile: keep the slam readable without swallowing the screen */
+@media (max-width: 768px) {
+    .break-banner-text { font-size: 3rem; -webkit-text-stroke: 2px #7f1d1d; }
+    .break-banner-sub { font-size: 0.65rem; letter-spacing: 3px; padding: 3px 14px; }
+    .combo-counter.combo-tier-2 .combo-hits { font-size: 1.8rem; }
+    .combo-counter.combo-tier-3 .combo-hits { font-size: 2.1rem; }
+    @keyframes lunge-up {
+        0% { transform: translateY(0); }
+        28% { transform: translateY(-22px) scale(1.07); filter: brightness(1.4); }
+        55% { transform: translateY(-17px) scale(1.04); }
+        100% { transform: translateY(0); }
+    }
+    @keyframes lunge-down {
+        0% { transform: translateY(0); }
+        28% { transform: translateY(22px) scale(1.07); filter: brightness(1.4); }
+        55% { transform: translateY(17px) scale(1.04); }
+        100% { transform: translateY(0); }
+    }
+}

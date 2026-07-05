@@ -477,8 +477,10 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           if (insight) dmg = Math.floor(dmg * (1 + insight.val));
         } else if (ELEMENTS[attacker.element]?.weakTo === t.element) dmg = Math.floor(dmg * 0.8);
         const sigCritBonus = skill.signature ? SIGNATURE_BONUS.CRIT_RATE : 0;
+        let didCrit = false;
         if (Math.random() < (attackerStats.critRate || 0.05) + (awaken >= 5 ? 0.25 : 0) + sigCritBonus || skill.meta?.guaranteed_crit || hiddenPowerReady) {
           dmg = Math.floor(dmg * (1.4 + awaken * 0.04 + (skill.signature ? SIGNATURE_BONUS.CRIT_DMG : 0)));
+          didCrit = true;
         }
         // --- Conditional damage modifiers ---
         // BREAK window: broken (stagger-shattered) targets take amplified damage
@@ -706,7 +708,7 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           const ls = Math.max(attackerStats.lifesteal || 0, skill.meta?.lifesteal || 0, awaken >= 3 ? 0.05 + (awaken - 3) * 0.03 : 0);
           attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.floor(dmg * ls));
         }
-        attacker.lastAction = { targetId: t.id, amount: dmg, type: skill.damageType === "magical" ? "magic" : "normal", damageType: skill.damageType || "physical", time: Date.now(), skillUser: attacker.id, resonated: elementMatches, tacticalUsed: !!attacker._tacticalBonus, msg: wishMsg || undefined };
+        attacker.lastAction = { targetId: t.id, amount: dmg, type: skill.damageType === "magical" ? "magic" : "normal", crit: didCrit, damageType: skill.damageType || "physical", time: Date.now(), skillUser: attacker.id, resonated: elementMatches, tacticalUsed: !!attacker._tacticalBonus, msg: wishMsg || undefined };
         if (hiddenPowerReady) {
           hiddenPowerEff.val = 0;
           attacker.lastAction = { ...attacker.lastAction, msg: "TRUE FORM" };
@@ -793,6 +795,21 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement }) 
     }
     prevMsg.current = msg;
   }, [unit.lastAction?.msg]);
+  // LUNGE: when this unit lands an offensive action, it physically dashes
+  // toward the opposing line and snaps back -- the core "PNGs are actually
+  // fighting" read. Crits get a harder, faster lunge.
+  const [lungeKind, setLungeKind] = useState(null);
+  const prevActTime = useRef(null);
+  useEffect(() => {
+    const act = unit.lastAction;
+    if (!act || act.time === prevActTime.current) return;
+    prevActTime.current = act.time;
+    if (["normal", "magic", "basic", "shield_break"].includes(act.type)) {
+      setLungeKind(act.crit ? "lunge-crit" : "lunge");
+      const t = setTimeout(() => setLungeKind(null), 420);
+      return () => clearTimeout(t);
+    }
+  }, [unit.lastAction?.time]);
   useEffect(() => {
     if (unit.hp < prevHp.current) {
       setIsHit(true);
@@ -854,7 +871,7 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement }) 
   return /* @__PURE__ */ jsxDEV(
     "div",
     {
-      className: `battle-unit ${unit.isEnemy ? "is-enemy" : "is-ally"} ${unit.dead ? "dead-dissolve" : "battle-unit-idle"} ${isActiveTurn ? "acting active-turn" : ""} ${isHit ? "is-hit" : ""} ${isMarked ? "is-marked" : ""} ${unit.isBoss ? "is-boss" : ""} ${isStaggered ? "staggered-unit" : ""} ${unit.cosmetics?.borderClass || ""} ${stance ? "stance-glow-active" : ""} ${hasShield ? "has-active-shield" : ""} ${isFrozen ? "is-frozen" : ""} ${isStunned ? "is-stunned" : ""} ${isBurned ? "is-burned" : ""} ${isStatic ? "is-static" : ""} ${isElemEmpowered ? "is-elem-empowered" : ""} ${isCrushed ? "is-crushed" : ""} ${isBroken ? "is-broken" : ""} ${isTelegraphing ? "is-telegraphing" : ""}`,
+      className: `battle-unit ${unit.isEnemy ? "is-enemy" : "is-ally"} ${unit.dead ? "dead-dissolve" : "battle-unit-idle"} ${isActiveTurn ? "acting active-turn" : ""} ${isHit ? "is-hit" : ""} ${isMarked ? "is-marked" : ""} ${unit.isBoss ? "is-boss" : ""} ${isStaggered ? "staggered-unit" : ""} ${unit.cosmetics?.borderClass || ""} ${stance ? "stance-glow-active" : ""} ${hasShield ? "has-active-shield" : ""} ${isFrozen ? "is-frozen" : ""} ${isStunned ? "is-stunned" : ""} ${isBurned ? "is-burned" : ""} ${isStatic ? "is-static" : ""} ${isElemEmpowered ? "is-elem-empowered" : ""} ${isCrushed ? "is-crushed" : ""} ${isBroken ? "is-broken" : ""} ${isTelegraphing ? "is-telegraphing" : ""} ${lungeKind || ""}`,
       onClick: () => unit.isEnemy && onMark && onMark(),
       style: {
         "--stance-color": stanceColor,
