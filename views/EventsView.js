@@ -373,6 +373,7 @@ const EventsView = ({
       maxSkillCd: skills.find((s) => s.id === c.skillId)?.cooldown || 100,
       skillCd: 0,
       isEnemy: false,
+      special: c.special,
       gauge: Math.random() * 30,
       burst: 0,
       effects: [],
@@ -513,6 +514,7 @@ const EventsView = ({
               if (shield) dmg = Math.floor(dmg * (1 - shield.val));
               dmg = applyMitigation(dmg, target.def || 0, 1e3);
               target.hp = Math.max(0, target.hp - dmg);
+              if (!u.isEnemy) { u._battleDamage = (u._battleDamage || 0) + dmg; u._battleBestHit = Math.max(u._battleBestHit || 0, dmg); }
               if (target.hp === 0) {
                 if (!target.isEnemy && target._leaderRevive) {
                   target._leaderRevive = false;

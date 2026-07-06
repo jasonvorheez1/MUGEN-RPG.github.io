@@ -277,7 +277,7 @@ const SocialView = ({
           "RANK ",
           act.rank,
           " ",
-          act.locked && `(LOCKED)`
+          act.locked && `(Unlock: ${act.req})`
         ] }, void 0, true, {
           fileName: "<stdin>",
           lineNumber: 1545,

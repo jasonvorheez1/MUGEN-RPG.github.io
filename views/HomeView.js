@@ -1,5 +1,5 @@
 import { Fragment, jsxDEV } from "react/jsx-dev-runtime";
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Users,
   Sparkles,
@@ -14,6 +14,26 @@ import {
 } from "lucide-react";
 import { ELEMENTS } from "../constants.js";
 import { playSound, calculateSubStat, formatPower } from "../utils.js";
+
+const useCountUp = (value, duration = 800) => {
+  const [display, setDisplay] = useState(0);
+  const fromRef = useRef(0);
+  useEffect(() => {
+    const from = fromRef.current;
+    const start = performance.now();
+    let raf;
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplay(from + (value - from) * eased);
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else fromRef.current = value;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return display;
+};
 
 const HomeView = ({
   characters = [],
@@ -99,6 +119,8 @@ const HomeView = ({
   const nextRankReward = RANK_UNLOCKS[facilityRank + 1] || "More Aura perks";
   const nextStage = campaignProgress;
   const recommendedCP = nextStage * 125e3;
+  const displayAccountLevel = useCountUp(totalAccountLevel);
+  const displayTotalPWR = useCountUp(totalPWR);
   return /* @__PURE__ */ jsxDEV("div", { className: "animate-fadeIn home-dashboard-wrapper", style: { paddingBottom: 100 }, children: [
     /* @__PURE__ */ jsxDEV("div", { className: "home-ambient-container", children: [
       /* @__PURE__ */ jsxDEV("div", { className: "scanning-grid-overlay", style: { opacity: 0.1 } }, void 0, false, {
@@ -322,28 +344,7 @@ const HomeView = ({
                 lineNumber: 175,
                 columnNumber: 21
               }
-            ),
-            /* @__PURE__ */ jsxDEV("div", { style: {
-              position: "absolute",
-              top: "20%",
-              right: "10%",
-              fontSize: "0.5rem",
-              fontFamily: "monospace",
-              color: ELEMENTS[featuredHero?.element || "FIRE"].color,
-              opacity: 0.4,
-              writingMode: "vertical-rl"
-            }, children: Array.from({ length: 8 }).map((_, i) => /* @__PURE__ */ jsxDEV("div", { className: "animate-pulse", style: { animationDelay: `${i * 0.2}s` }, children: [
-              "GUEST 00",
-              i
-            ] }, i, true, {
-              fileName: "<stdin>",
-              lineNumber: 198,
-              columnNumber: 64
-            })) }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 188,
-              columnNumber: 21
-            })
+            )
           ] }, void 0, true, {
             fileName: "<stdin>",
             lineNumber: 165,
@@ -360,13 +361,13 @@ const HomeView = ({
         columnNumber: 11
       }),
       /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", flexDirection: "column", gap: 15 }, children: [
-        /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 25, flex: 1, borderLeft: "4px solid var(--primary)" }, children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 25, flex: 1 }, children: [
           /* @__PURE__ */ jsxDEV("div", { className: "stat-label", style: { marginBottom: 5, letterSpacing: 2 }, children: "STREET REP" }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 207,
             columnNumber: 19
           }),
-          /* @__PURE__ */ jsxDEV("div", { className: "stat-value text-pulse", style: { fontSize: "3rem" }, children: formatPower(totalAccountLevel) }, void 0, false, {
+          /* @__PURE__ */ jsxDEV("div", { className: "stat-value text-pulse", style: { fontSize: "3rem" }, children: formatPower(Math.round(displayAccountLevel)) }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 208,
             columnNumber: 19
@@ -428,7 +429,7 @@ const HomeView = ({
                 lineNumber: 223,
                 columnNumber: 27
               }),
-              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.4rem", fontWeight: 900, color: "#fff" }, children: formatPower(totalPWR) }, void 0, false, {
+              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.4rem", fontWeight: 900, color: "#fff" }, children: formatPower(Math.round(displayTotalPWR)) }, void 0, false, {
                 fileName: "<stdin>",
                 lineNumber: 224,
                 columnNumber: 27
@@ -584,7 +585,7 @@ const HomeView = ({
           }),
           /* @__PURE__ */ jsxDEV("div", { style: { display: "grid", gridTemplateColumns: isMobile2 ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 15 }, children: [
             /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 15, textAlign: "center" }, children: [
-              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#94a3b8", fontWeight: 900, marginBottom: 5 }, children: "MATERIALS" }, void 0, false, {
+              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.72rem", color: "#94a3b8", fontWeight: 900, marginBottom: 5 }, children: "MATERIALS" }, void 0, false, {
                 fileName: "<stdin>",
                 lineNumber: 277,
                 columnNumber: 23
@@ -600,7 +601,7 @@ const HomeView = ({
               columnNumber: 19
             }),
             /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 15, textAlign: "center" }, children: [
-              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#f97316", fontWeight: 900, marginBottom: 5 }, children: "ESSENCE" }, void 0, false, {
+              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.72rem", color: "#f97316", fontWeight: 900, marginBottom: 5 }, children: "ESSENCE" }, void 0, false, {
                 fileName: "<stdin>",
                 lineNumber: 281,
                 columnNumber: 23
@@ -616,7 +617,7 @@ const HomeView = ({
               columnNumber: 19
             }),
             /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 15, textAlign: "center" }, children: [
-              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#a855f7", fontWeight: 900, marginBottom: 5 }, children: "STAR POWER" }, void 0, false, {
+              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.72rem", color: "#a855f7", fontWeight: 900, marginBottom: 5 }, children: "STAR POWER" }, void 0, false, {
                 fileName: "<stdin>",
                 lineNumber: 285,
                 columnNumber: 23
@@ -632,7 +633,7 @@ const HomeView = ({
               columnNumber: 19
             }),
             /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 15, textAlign: "center" }, children: [
-              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#facc15", fontWeight: 900, marginBottom: 5 }, children: "TOKENS" }, void 0, false, {
+              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.72rem", color: "#facc15", fontWeight: 900, marginBottom: 5 }, children: "TOKENS" }, void 0, false, {
                 fileName: "<stdin>",
                 lineNumber: 289,
                 columnNumber: 23
@@ -714,7 +715,7 @@ const HomeView = ({
         columnNumber: 9
       }),
       /* @__PURE__ */ jsxDEV("div", { className: "home-sidebar-ops", style: { display: "flex", flexDirection: "column", gap: 20 }, children: [
-        /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { borderLeft: "4px solid var(--gem-color)", padding: 20, background: "linear-gradient(135deg, rgba(34, 211, 238, 0.05), transparent)" }, children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 20 }, children: [
           /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 15 }, children: [
             /* @__PURE__ */ jsxDEV(Monitor, { size: 18, color: "var(--gem-color)" }, void 0, false, {
               fileName: "<stdin>",
@@ -789,7 +790,7 @@ const HomeView = ({
           lineNumber: 319,
           columnNumber: 13
         }),
-        /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 20, borderLeft: "4px solid #ef4444" }, children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 20 }, children: [
           /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 15 }, children: [
             /* @__PURE__ */ jsxDEV(Trophy, { size: 18, color: "#ef4444" }, void 0, false, {
               fileName: "<stdin>",
@@ -849,7 +850,7 @@ const HomeView = ({
           lineNumber: 340,
           columnNumber: 13
         }),
-        /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { borderLeft: "4px solid #facc15", padding: 20 }, children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { borderLeft: "4px solid var(--gem-color)", padding: 20 }, children: [
           /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }, children: [
             /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
               /* @__PURE__ */ jsxDEV(Database, { size: 18, color: "#facc15" }, void 0, false, {
@@ -898,7 +899,7 @@ const HomeView = ({
               lineNumber: 370,
               columnNumber: 21
             }),
-            /* @__PURE__ */ jsxDEV("button", { className: "sb-btn confirm", style: { height: 32, padding: "0 16px", fontSize: "0.7rem" }, onClick: claimVault, disabled: vaultCredits <= 0, children: "HARVEST" }, void 0, false, {
+            /* @__PURE__ */ jsxDEV("button", { className: `sb-btn confirm${vaultCredits > 0 ? " home-claim-glow" : ""}`, style: { height: 32, padding: "0 16px", fontSize: "0.7rem" }, onClick: claimVault, disabled: vaultCredits <= 0, children: "HARVEST" }, void 0, false, {
               fileName: "<stdin>",
               lineNumber: 371,
               columnNumber: 21
@@ -913,7 +914,7 @@ const HomeView = ({
           lineNumber: 358,
           columnNumber: 13
         }),
-        /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { borderLeft: "4px solid #00d2ff", padding: 20 }, children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { borderLeft: "4px solid var(--gem-color)", padding: 20 }, children: [
           /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 15 }, children: /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
             /* @__PURE__ */ jsxDEV(Gem, { size: 18, color: "#00d2ff" }, void 0, false, {
               fileName: "<stdin>",
@@ -951,7 +952,7 @@ const HomeView = ({
               lineNumber: 384,
               columnNumber: 21
             }),
-            /* @__PURE__ */ jsxDEV("button", { className: "sb-btn confirm", style: { background: "#00d2ff", height: 32, padding: "0 16px", fontSize: "0.7rem" }, onClick: claimGeode, disabled: unclaimedGems < 1, children: "COLLECT" }, void 0, false, {
+            /* @__PURE__ */ jsxDEV("button", { className: `sb-btn confirm${unclaimedGems >= 1 ? " home-claim-glow" : ""}`, style: { background: "#00d2ff", height: 32, padding: "0 16px", fontSize: "0.7rem" }, onClick: claimGeode, disabled: unclaimedGems < 1, children: "COLLECT" }, void 0, false, {
               fileName: "<stdin>",
               lineNumber: 388,
               columnNumber: 21

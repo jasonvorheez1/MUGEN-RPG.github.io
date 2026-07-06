@@ -360,14 +360,23 @@ const SettingsView = ({ setAppState, setView, settings, setSettings, stats, save
           min: 0.5, max: 3, step: 0.25,
           format: (v) => v + "x",
           onChange: (v) => updateSetting("gameplay", "dialogueSpeed", v)
-        })
+        }),
+        h("button", {
+          className: "train-btn",
+          style: { marginTop: 16, width: "auto", padding: "10px 20px" },
+          onClick: () => {
+            localStorage.removeItem("mugen_intro_seen");
+            playSound("ui_select", 0.3);
+            if (typeof createFloatingText === "function") createFloatingText("Intro will replay on next reload", false, "#4ade80");
+          }
+        }, "REPLAY INTRO")
       ),
 
       // VISUALS -------------------------------------------------------------
       activeTab === "graphics" && h("div", { className: "animate-fadeIn" },
         h(SectionTitle, { icon: h(Monitor, { size: 18 }), text: "Visual FX" }),
         h(Toggle, { label: "Particles", checked: graphics.particles !== false, onChange: (v) => updateSetting("graphics", "particles", v) }),
-        h(Toggle, { label: "Screen Shake", checked: graphics.shake !== false, onChange: (v) => updateSetting("graphics", "shake", v) }),
+        h(Toggle, { label: "Screen Shake", hint: "Also covers battle hit-stop flashes, parry flash, and lunge dashes", checked: graphics.shake !== false, onChange: (v) => updateSetting("graphics", "shake", v) }),
         h(Toggle, { label: "Scanlines (CRT Effect)", checked: graphics.scanlines !== false, onChange: (v) => updateSetting("graphics", "scanlines", v) }),
         h(Toggle, { label: "Dialogue Animations", checked: graphics.animations !== false, onChange: (v) => updateSetting("graphics", "animations", v) }),
         h("div", { style: { marginTop: 20 } },

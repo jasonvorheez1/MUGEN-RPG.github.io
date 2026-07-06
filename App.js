@@ -52,7 +52,9 @@ const App = () => {
   const [particles, setParticles] = useState([]);
   const [autoTrainLevel, setAutoTrainLevel] = useState(0);
   const [view, setView] = useState("home");
-  const [appState, setAppState] = useState("launcher");
+  // Skip the launcher/cutscene sequence for returning players -- it used to
+  // replay in full on every single reload with no way to bypass it.
+  const [appState, setAppState] = useState(() => localStorage.getItem("mugen_intro_seen") === "true" ? "menu" : "launcher");
   const [showSquadBuilder, setShowSquadBuilder] = useState(false);
   const [showMobileMore, setShowMobileMore] = useState(false);
   const [rankUpUnlocks, setRankUpUnlocks] = useState(null);
@@ -1418,6 +1420,7 @@ Data: { ${promptLines} }`;
       }
       if (introFrame >= 4) {
         setAppState("menu");
+        localStorage.setItem("mugen_intro_seen", "true");
         playSound("mugen_fight", 0.6);
       }
     }, children: [
@@ -2395,7 +2398,7 @@ Data: { ${promptLines} }`;
             columnNumber: 112
           }),
           " ",
-          gems
+          gems.toLocaleString()
         ] }, void 0, true, {
           fileName: "<stdin>",
           lineNumber: 1685,
@@ -2423,7 +2426,7 @@ Data: { ${promptLines} }`;
             columnNumber: 113
           }),
           " ",
-          aura
+          aura.toLocaleString()
         ] }, void 0, true, {
           fileName: "<stdin>",
           lineNumber: 1689,
@@ -2436,7 +2439,7 @@ Data: { ${promptLines} }`;
             columnNumber: 110
           }),
           " ",
-          essence
+          essence.toLocaleString()
         ] }, void 0, true, {
           fileName: "<stdin>",
           lineNumber: 1690,
@@ -2449,7 +2452,7 @@ Data: { ${promptLines} }`;
             columnNumber: 111
           }),
           " ",
-          materials
+          materials.toLocaleString()
         ] }, void 0, true, {
           fileName: "<stdin>",
           lineNumber: 1691,
@@ -2493,7 +2496,7 @@ Data: { ${promptLines} }`;
         lineNumber: 1699,
         columnNumber: 31
       }),
-      view === "campaign" && /* @__PURE__ */ jsxDEV(CampaignView, { characters, selectedCharIndex, unlockedIds, credits, setCredits, gems, setGems, aura, setAura, stamina, setStamina, maxStamina, createFloatingText, campaignProgress, setCampaignProgress, setShards, squadIds, setSquadIds, triggerVisualEffect, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, skills, materials, setMaterials, essence, setEssence, items, addToInventory, setCharacters, setShowSquadBuilder, campaignRanks, setCampaignRanks, auraUpgrades }, void 0, false, {
+      view === "campaign" && /* @__PURE__ */ jsxDEV(CampaignView, { characters, selectedCharIndex, unlockedIds, credits, setCredits, gems, setGems, aura, setAura, stamina, setStamina, maxStamina, createFloatingText, campaignProgress, setCampaignProgress, setShards, squadIds, setSquadIds, triggerVisualEffect, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, skills, materials, setMaterials, essence, setEssence, items, addToInventory, setCharacters, setShowSquadBuilder, campaignRanks, setCampaignRanks, auraUpgrades, settings }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1700,
         columnNumber: 33

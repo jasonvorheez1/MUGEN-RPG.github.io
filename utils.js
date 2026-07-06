@@ -61,6 +61,26 @@ export const getSpecialStatMult = (char, normalizedStat) => {
   return 1 + (val - SPECIAL_BASE) * SPECIAL_PCT_PER_POINT;
 };
 
+// Display names for each SPECIAL archetype's reshaped signature form (Courier's
+// "Lucky 38 Override" today; shared so the roster detail screen and the
+// in-battle skill dock show the exact same label for the exact same build.
+export const SPECIAL_ARCHETYPE_NAMES = {
+  str: "Strongarm Shot", per: "Dead-Eye", end: "Dug In", cha: "Rally Cry",
+  int: "Overcharge (Mage Kit)", agi: "Fleet-Footed", lck: "Lucky Break"
+};
+// Same dominant-stat resolution the combat engine uses (CombatSystem.js
+// `dynamic_special` block): highest SPECIAL stat wins, ties break by a fixed
+// priority order, baseline (no investment) resolves to null (basic attack).
+export const getDominantSpecialKey = (special) => {
+  if (!special) return null;
+  const entries = Object.entries(special);
+  const maxVal = Math.max(SPECIAL_BASE, ...entries.map(([, v]) => v || SPECIAL_BASE));
+  if (maxVal <= SPECIAL_BASE) return null;
+  const topKeys = entries.filter(([, v]) => (v || SPECIAL_BASE) === maxVal).map(([k]) => k);
+  const priority = ["int", "agi", "str", "per", "end", "cha", "lck"];
+  return priority.find((k) => topKeys.includes(k)) || topKeys[0];
+};
+
 export const getBondRankName = (level, relationship) => {
   // Normalize relationship strings to the keys used in PATH_ADJECTIVES / PATH_TITLES
   const relKey = (relationship || '').toLowerCase().includes('romant') ? 'Romantic'

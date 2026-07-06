@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.js";
 import { CAMPAIGN_CONTENT, ELEMENTS, LEADER_SKILLS, COSMETICS } from "../constants.js";
-import { calculateStat, playSound, calculateSubStat, getTierEfficiency, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, incrementCourierFieldBattles } from "../utils.js";
+import { calculateStat, playSound, calculateSubStat, getTierEfficiency, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, incrementCourierFieldBattles, getDominantSpecialKey, SPECIAL_ARCHETYPE_NAMES } from "../utils.js";
 import { isMobile, CampaignIntro } from "./ViewShared.js";
 
 const CampaignView = ({
@@ -43,8 +43,13 @@ const CampaignView = ({
   setShowSquadBuilder,
   campaignRanks = {},
   setCampaignRanks,
-  auraUpgrades = {}
+  auraUpgrades = {},
+  settings
 }) => {
+  // Accessibility: reuse the existing Settings > Graphics > "Screen Shake"
+  // toggle to also gate the newer hit-stop/parry-flash/lunge battle juice --
+  // one switch for anyone who finds it distracting or is photosensitive.
+  const fxEnabled = settings?.graphics?.shake !== false;
   const [activeBattle, setActiveBattle] = useState(null);
   const [battleRewards, setBattleRewards] = useState(null);
   const [battleRank, setBattleRank] = useState("C");
@@ -94,6 +99,7 @@ const CampaignView = ({
   const [sceneShake, setSceneShake] = useState(null);
   const shakeTimer = useRef(null);
   const triggerShake = (kind, ms) => {
+    if (!fxEnabled) return;
     setSceneShake(kind);
     if (shakeTimer.current) clearTimeout(shakeTimer.current);
     shakeTimer.current = setTimeout(() => setSceneShake(null), ms);
@@ -405,6 +411,7 @@ const CampaignView = ({
         skillCd: 0,
         maxSkillCd: s1?.cooldown || 100,
         isEnemy: false,
+        special: c.special,
         gauge: Math.random() * 30,
         burst: 0,
         activeSynergies,
@@ -536,8 +543,13 @@ const CampaignView = ({
         u.effects.push({ type: "buff_atk", duration: 2, val: 0.25, label: "COUNTER STANCE" });
         showDamage(u.id, "PERFECT GUARD!", "heal");
         // Parry flash: white screen pop + a beat of hit-stop. Pure kimochi.
-        setParryFlash(true);
-        setTimeout(() => setParryFlash(false), 350);
+        // (Flash is gated behind the Screen Shake accessibility toggle; the
+        // brief hit-stop pause itself isn't a flashing/motion effect so it
+        // stays regardless.)
+        if (fxEnabled) {
+          setParryFlash(true);
+          setTimeout(() => setParryFlash(false), 350);
+        }
         hitStopUntil.current = Date.now() + 200;
         playSound("mugen_guard", 0.7);
         playSound("crit_hit", 0.4);
@@ -701,6 +713,7 @@ const CampaignView = ({
                     if (shield) dmg = Math.floor(dmg * (1 - shield.val));
                     dmg = applyMitigation(dmg, tStats.def, 1e3);
                     target.hp = Math.max(0, target.hp - dmg);
+                    if (!u.isEnemy) { u._battleDamage = (u._battleDamage || 0) + dmg; u._battleBestHit = Math.max(u._battleBestHit || 0, dmg); }
                     if (u.isEnemy) breakCombo();
                     else bumpCombo();
                     if (target.hp === 0) {
@@ -1892,7 +1905,8 @@ const CampaignView = ({
             unit: u,
             isMarked: markedTargetId === u.id,
             onMark: () => setMarkedTargetId(u.id),
-            floatingDamages: floatingDamages.filter((d) => d.targetId === u.id)
+            floatingDamages: floatingDamages.filter((d) => d.targetId === u.id),
+            reducedFx: !fxEnabled
           },
           u.id,
           false,
@@ -1906,7 +1920,7 @@ const CampaignView = ({
           lineNumber: 5124,
           columnNumber: 14
         }),
-        /* @__PURE__ */ jsxDEV("div", { className: "battle-formation hero-row", children: combatants.filter((c) => !c.isEnemy).map((u) => /* @__PURE__ */ jsxDEV(BattleUnit, { unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id) }, u.id, false, {
+        /* @__PURE__ */ jsxDEV("div", { className: "battle-formation hero-row", children: combatants.filter((c) => !c.isEnemy).map((u) => /* @__PURE__ */ jsxDEV(BattleUnit, { unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id), reducedFx: !fxEnabled }, u.id, false, {
           fileName: "<stdin>",
           lineNumber: 5137,
           columnNumber: 19
@@ -2004,6 +2018,13 @@ const CampaignView = ({
             lineNumber: 5158,
             columnNumber: 25
           }),
+          // Dynamic-signature indicator (e.g. Courier's "Lucky 38 Override"):
+          // shows which archetype the skill is currently reshaped into based
+          // on the unit's SPECIAL build, since the button label/desc is static.
+          (skill1?.meta?.dynamic_special || skill2?.meta?.dynamic_special) && /* @__PURE__ */ jsxDEV("div", { className: "dyn-form-badge", children: (() => {
+            const dominant = getDominantSpecialKey(u.special);
+            return dominant ? SPECIAL_ARCHETYPE_NAMES[dominant] : "Basic Attack";
+          })() }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
           /* @__PURE__ */ jsxDEV(
             "button",
             {

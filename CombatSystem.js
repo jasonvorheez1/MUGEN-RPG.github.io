@@ -394,6 +394,39 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
       if (stage.dmgMult) stageDmgMult = stage.dmgMult;
       attacker.lastAction = { ...attacker.lastAction, msg: stage.msg || ("STAGE " + attacker._stageCycle) };
     }
+    // DYNAMIC SPECIAL — the skill itself is defined by whichever SPECIAL stat
+    // (see utils.js SPECIAL_STATS) the unit has invested in most. No investment
+    // yet (every stat still at baseline) means a plain, unmodified basic attack;
+    // once a stat pulls ahead of the rest the skill reshapes around that
+    // archetype -- e.g. INT overcharges into a mage-style burn/magic-power kit,
+    // AGI turns into a speed/slow scout kit. Ties break by a fixed priority so
+    // the same build always produces the same kit (no randomness).
+    let dynDmgMult = 1;
+    attacker._dynArchetypeDamageType = null;
+    if (META.dynamic_special && attacker.special) {
+      const entries = Object.entries(attacker.special);
+      const baseline = META.dynamic_special.baseline || 1;
+      const maxVal = Math.max(baseline, ...entries.map(([, v]) => v || baseline));
+      if (maxVal > baseline) {
+        const topKeys = entries.filter(([, v]) => (v || baseline) === maxVal).map(([k]) => k);
+        const priority = ["int", "agi", "str", "per", "end", "cha", "lck"];
+        const dominant = priority.find((k) => topKeys.includes(k)) || topKeys[0];
+        const archetype = META.dynamic_special.archetypes?.[dominant];
+        if (archetype) {
+          const enemiesNow = next.filter((u) => u.isEnemy !== attacker.isEnemy && !u.dead);
+          if (Array.isArray(archetype.self_effects)) archetype.self_effects.forEach((e) => attacker.effects.push({ ...e, val: scaleVal(e.val) }));
+          if (Array.isArray(archetype.team_effects)) livingAllies.forEach((a) => archetype.team_effects.forEach((e) => a.effects.push({ ...e, val: scaleVal(e.val) })));
+          if (Array.isArray(archetype.enemy_effects)) enemiesNow.forEach((e) => archetype.enemy_effects.forEach((eff) => e.effects.push({ ...eff, val: scaleVal(eff.val) })));
+          if (archetype.heal_pct) livingAllies.forEach((a) => { a.hp = Math.min(a.maxHp, a.hp + Math.floor(a.maxHp * archetype.heal_pct)); });
+          if (archetype.burst) livingAllies.forEach((a) => { a.burst = Math.min(100, (a.burst || 0) + archetype.burst); });
+          if (archetype.dmgMult) dynDmgMult = archetype.dmgMult;
+          if (archetype.damageType) attacker._dynArchetypeDamageType = archetype.damageType;
+          attacker.lastAction = { ...attacker.lastAction, msg: archetype.msg || dominant.toUpperCase() };
+        }
+      } else {
+        attacker.lastAction = { ...attacker.lastAction, msg: META.dynamic_special.baseMsg || undefined };
+      }
+    }
     targets.forEach((t) => {
       if (!t || t.dead) return;
       if (skill.statusEffects) {
@@ -424,6 +457,7 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
         const sigHealMult = skill.signature ? SIGNATURE_BONUS.HEAL : 1;
         const amt = Math.floor(scalingVal * ((skill.power || 1) * (1 + (abilityLevel - 1) * 0.05)) * (isLimitBreak ? 2.5 : 1) * sigHealMult);
         t.hp = Math.min(t.maxHp, t.hp + amt);
+        if (!attacker.isEnemy) attacker._battleHealing = (attacker._battleHealing || 0) + amt;
         attacker.lastAction = { targetId: t.id, amount: amt, type: "heal", time: Date.now(), skillUser: attacker.id };
         return;
       }
@@ -433,7 +467,7 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           attacker.lastAction = { targetId: t.id, amount: "MISS", type: "miss", time: Date.now(), skillUser: attacker.id };
           return;
         }
-        let isMagic = skill.damageType === "magical" || attackerStats.magicAtk > attackerStats.atk;
+        let isMagic = skill.damageType === "magical" || attacker._dynArchetypeDamageType === "magical" || attackerStats.magicAtk > attackerStats.atk;
         let offense = isMagic ? attackerStats.magicAtk : attackerStats.atk;
         if (skill.scalingStat) {
           const s = String(skill.scalingStat || "").toLowerCase();
@@ -458,6 +492,7 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
         skillPower *= wishDmgMult;
         skillPower *= slotDmgMult;
         skillPower *= stageDmgMult;
+        skillPower *= dynDmgMult;
         if (hiddenPowerReady) skillPower *= META.hidden_power_mult || 4;
         if (META.scales_missing_hp) skillPower *= 1 + (1 - attacker.hp / attacker.maxHp) * META.scales_missing_hp;
         if (META.scales_current_hp) skillPower *= 1 + (attacker.hp / attacker.maxHp) * META.scales_current_hp;
@@ -581,6 +616,12 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           }
         }
         t.hp = Math.max(0, t.hp - dmg);
+        // Battle report tracking: per-unit damage totals + biggest single hit,
+        // read by VictoryScreen for the post-battle breakdown.
+        if (!attacker.isEnemy) {
+          attacker._battleDamage = (attacker._battleDamage || 0) + dmg;
+          attacker._battleBestHit = Math.max(attacker._battleBestHit || 0, dmg);
+        }
         if (t.hp === 0) {
           if (!t.isEnemy && t._leaderRevive) {
             t._leaderRevive = false;
@@ -744,7 +785,7 @@ const TacticalStanceRow = ({ currentStance, onStanceChange }) => {
     columnNumber: 9
   });
 };
-const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement }) => {
+const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement, reducedFx = false }) => {
   const [isHit, setIsHit] = useState(false);
   const [ghostHpPercent, setGhostHpPercent] = useState(0);
   const prevHp = useRef(unit.hp);
@@ -871,7 +912,7 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement }) 
   return /* @__PURE__ */ jsxDEV(
     "div",
     {
-      className: `battle-unit ${unit.isEnemy ? "is-enemy" : "is-ally"} ${unit.dead ? "dead-dissolve" : "battle-unit-idle"} ${isActiveTurn ? "acting active-turn" : ""} ${isHit ? "is-hit" : ""} ${isMarked ? "is-marked" : ""} ${unit.isBoss ? "is-boss" : ""} ${isStaggered ? "staggered-unit" : ""} ${unit.cosmetics?.borderClass || ""} ${stance ? "stance-glow-active" : ""} ${hasShield ? "has-active-shield" : ""} ${isFrozen ? "is-frozen" : ""} ${isStunned ? "is-stunned" : ""} ${isBurned ? "is-burned" : ""} ${isStatic ? "is-static" : ""} ${isElemEmpowered ? "is-elem-empowered" : ""} ${isCrushed ? "is-crushed" : ""} ${isBroken ? "is-broken" : ""} ${isTelegraphing ? "is-telegraphing" : ""} ${lungeKind || ""}`,
+      className: `battle-unit ${unit.isEnemy ? "is-enemy" : "is-ally"} ${unit.dead ? "dead-dissolve" : "battle-unit-idle"} ${isActiveTurn ? "acting active-turn" : ""} ${isHit ? "is-hit" : ""} ${isMarked ? "is-marked" : ""} ${unit.isBoss ? "is-boss" : ""} ${isStaggered ? "staggered-unit" : ""} ${unit.cosmetics?.borderClass || ""} ${stance ? "stance-glow-active" : ""} ${hasShield ? "has-active-shield" : ""} ${isFrozen ? "is-frozen" : ""} ${isStunned ? "is-stunned" : ""} ${isBurned ? "is-burned" : ""} ${isStatic ? "is-static" : ""} ${isElemEmpowered ? "is-elem-empowered" : ""} ${isCrushed ? "is-crushed" : ""} ${isBroken ? "is-broken" : ""} ${isTelegraphing ? "is-telegraphing" : ""} ${reducedFx ? "" : lungeKind || ""}`,
       onClick: () => unit.isEnemy && onMark && onMark(),
       style: {
         "--stance-color": stanceColor,
@@ -1204,6 +1245,24 @@ const VictoryScreen = ({ combatants, rewards, onConfirm }) => {
     if (score > 40) return { letter: "B", color: "#60a5fa", desc: "CLEAN SWEEP", glow: "#60a5fa" };
     return { letter: "C", color: "#94a3b8", desc: "CLOSE CALL", glow: "#94a3b8" };
   }, [avgHpPercent]);
+  // BATTLE REPORT: per-ally damage/healing/best-hit totals were tracked live
+  // during combat (attacker._battleDamage / _battleBestHit / _battleHealing).
+  // Sort once here so the lineup and highlight cards agree on who did what.
+  const report = useMemo(() => {
+    const sorted = allies.slice().sort((a, b) => (b._battleDamage || 0) - (a._battleDamage || 0));
+    const topDamage = sorted[0];
+    const bestHitUnit = allies.slice().sort((a, b) => (b._battleBestHit || 0) - (a._battleBestHit || 0))[0];
+    const topHealer = allies.slice().sort((a, b) => (b._battleHealing || 0) - (a._battleHealing || 0))[0];
+    const totalTeamDamage = allies.reduce((s, a) => s + (a._battleDamage || 0), 0);
+    return {
+      sorted,
+      mvp: topDamage && topDamage._battleDamage > 0 ? topDamage : allies.filter((a) => !a.dead).sort((a, b) => b.hp - a.hp)[0] || allies[0],
+      bestHitUnit: bestHitUnit && bestHitUnit._battleBestHit > 0 ? bestHitUnit : null,
+      topHealer: topHealer && topHealer._battleHealing > 0 ? topHealer : null,
+      totalTeamDamage
+    };
+  }, [allies]);
+  const pendingTimeouts = useRef([]);
   useEffect(() => {
     playSound("victory_fanfare", 0.8);
     playSound("mugen_victory_voice", 0.5);
@@ -1213,30 +1272,86 @@ const VictoryScreen = ({ combatants, rewards, onConfirm }) => {
     }, 1200);
     const t2 = setTimeout(() => {
       setPhase(2);
-      playSound("reward_tally", 0.4);
-    }, 2200);
+      playSound("reward_tally", 0.3);
+    }, 2400);
     const t3 = setTimeout(() => {
       setPhase(3);
-    }, 3500);
+      playSound("reward_tally", 0.4);
+    }, 3700);
     const t4 = setTimeout(() => {
       setPhase(4);
-    }, 5e3);
+    }, 5200);
+    const t5 = setTimeout(() => {
+      setPhase(5);
+    }, 6700);
+    pendingTimeouts.current = [t1, t2, t3, t4, t5];
     return () => {
-      [t1, t2, t3, t4].forEach(clearTimeout);
+      pendingTimeouts.current.forEach(clearTimeout);
     };
   }, []);
   useEffect(() => {
-    if (phase === 3 && rewards.items && rewards.items.length > 0) {
+    if (phase === 4 && rewards.items && rewards.items.length > 0) {
       rewards.items.forEach((item, i) => {
-        setTimeout(() => {
+        const t = setTimeout(() => {
           setVisibleItems((prev) => [...prev, item]);
           playSound("item_pop", 0.3);
         }, i * 250);
+        pendingTimeouts.current.push(t);
       });
     }
   }, [phase, rewards.items]);
-  const mvp = allies.filter((a) => !a.dead).sort((a, b) => b.hp - a.hp)[0] || allies[0];
+  // SKIP: an impatient/repeat player can jump straight to the confirm button
+  // instead of sitting through ~6.7s of staged reveals every single battle.
+  // Cancels every still-pending timeout and instantly reveals everything
+  // that timeout chain would have shown (loot items included).
+  const skipToEnd = () => {
+    pendingTimeouts.current.forEach(clearTimeout);
+    pendingTimeouts.current = [];
+    if (rewards.items && rewards.items.length > 0) setVisibleItems(rewards.items);
+    setPhase(5);
+    playSound("ui_select", 0.3);
+  };
+  const mvp = report.mvp;
+  const renderSquadReport = () => {
+    const h = React.createElement;
+    return h("div", { className: "victory-squad-report animate-fadeIn" },
+      // Full squad lineup: every ally who fought, ranked by damage dealt, with
+      // a post-battle HP bar and a crown on whoever tops the report.
+      h("div", { className: "vic-squad-row" },
+        report.sorted.map((a, i) => {
+          const hpPct = Math.max(0, a.hp / a.maxHp * 100);
+          const isTop = a === report.mvp && a._battleDamage > 0;
+          return h("div", { key: a.id || i, className: `vic-squad-card ${a.dead ? "ko" : ""} ${isTop ? "top" : ""}`, style: { animationDelay: `${i * 0.08}s` } },
+            isTop && h("div", { className: "vic-squad-crown" }, "★ MVP"),
+            h("img", { src: a.img, className: "vic-squad-img" }),
+            a.dead && h("div", { className: "vic-squad-ko" }, "KO"),
+            h("div", { className: "vic-squad-hpbar" }, h("div", { className: "vic-squad-hpfill", style: { width: `${hpPct}%`, background: hpPct > 60 ? "#22c55e" : hpPct > 25 ? "#facc15" : "#ef4444" } })),
+            h("div", { className: "vic-squad-name" }, String(a.name || "").split(" ")[0]),
+            h("div", { className: "vic-squad-dmg" }, a._battleDamage ? a._battleDamage.toLocaleString() + " DMG" : "—")
+          );
+        })
+      ),
+      // Highlight cards: MVP total damage, biggest single hit, top healer (if any).
+      h("div", { className: "vic-highlight-row" },
+        h("div", { className: "vic-highlight-card", style: { "--hl-color": rankInfo.color } },
+          h("div", { className: "vic-highlight-label" }, "TEAM DAMAGE"),
+          h("div", { className: "vic-highlight-val" }, h(TallyNumber, { target: report.totalTeamDamage, color: "#fff" }))
+        ),
+        report.bestHitUnit && h("div", { className: "vic-highlight-card", style: { "--hl-color": "#ef4444" } },
+          h("div", { className: "vic-highlight-label" }, "BIGGEST HIT"),
+          h("div", { className: "vic-highlight-val" }, h(TallyNumber, { target: report.bestHitUnit._battleBestHit, color: "#ef4444" })),
+          h("div", { className: "vic-highlight-sub" }, String(report.bestHitUnit.name || "").split(" ")[0])
+        ),
+        report.topHealer && h("div", { className: "vic-highlight-card", style: { "--hl-color": "#4ade80" } },
+          h("div", { className: "vic-highlight-label" }, "TOP HEALER"),
+          h("div", { className: "vic-highlight-val" }, h(TallyNumber, { target: report.topHealer._battleHealing, color: "#4ade80" })),
+          h("div", { className: "vic-highlight-sub" }, String(report.topHealer.name || "").split(" ")[0])
+        )
+      )
+    );
+  };
   return /* @__PURE__ */ jsxDEV("div", { className: "battle-result-overlay", style: { background: "radial-gradient(circle at center, #1a1a2e 0%, #05050a 100%)", perspective: "1000px" }, children: [
+    phase < 5 && /* @__PURE__ */ jsxDEV("button", { className: "vic-skip-btn", onClick: skipToEnd, children: "SKIP >>" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
     /* @__PURE__ */ jsxDEV("div", { className: "anime-speed-lines", style: { opacity: 0.2 } }, void 0, false, {
       fileName: "<stdin>",
       lineNumber: 663,
@@ -1277,34 +1392,8 @@ const VictoryScreen = ({ combatants, rewards, onConfirm }) => {
         lineNumber: 682,
         columnNumber: 13
       }),
-      phase >= 2 && /* @__PURE__ */ jsxDEV("div", { className: "victory-content-wrap", children: [
-        /* @__PURE__ */ jsxDEV("div", { className: "mvp-spotlight animate-popIn", children: [
-          /* @__PURE__ */ jsxDEV("div", { className: "mvp-label", children: "BATTLE MVP" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 692,
-            columnNumber: 17
-          }),
-          /* @__PURE__ */ jsxDEV("div", { className: "mvp-hero-box", style: { borderColor: rankInfo.color }, children: [
-            /* @__PURE__ */ jsxDEV("img", { src: mvp.img, className: "mvp-avatar-img" }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 694,
-              columnNumber: 21
-            }),
-            /* @__PURE__ */ jsxDEV("div", { className: "mvp-name-tag", children: mvp.name }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 695,
-              columnNumber: 21
-            })
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 693,
-            columnNumber: 17
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 691,
-          columnNumber: 14
-        }),
+      phase >= 2 && renderSquadReport(),
+      phase >= 3 && /* @__PURE__ */ jsxDEV("div", { className: "victory-content-wrap", children: [
         /* @__PURE__ */ jsxDEV("div", { className: "rewards-grid-vic animate-popIn", children: Object.entries(rewards).map(([key, val]) => {
           if (key === "items" || val <= 0) return null;
           const icons = { credits: /* @__PURE__ */ jsxDEV(Database, { size: 16 }, void 0, false, {
@@ -1371,7 +1460,7 @@ const VictoryScreen = ({ combatants, rewards, onConfirm }) => {
         lineNumber: 690,
         columnNumber: 11
       }),
-      phase >= 3 && rewards.items && rewards.items.length > 0 && /* @__PURE__ */ jsxDEV("div", { className: "victory-items-reveal animate-fadeIn", children: [
+      phase >= 4 && rewards.items && rewards.items.length > 0 && /* @__PURE__ */ jsxDEV("div", { className: "victory-items-reveal animate-fadeIn", children: [
         /* @__PURE__ */ jsxDEV("div", { className: "reward-header-vic", children: "LOOT ACQUIRED" }, void 0, false, {
           fileName: "<stdin>",
           lineNumber: 721,
@@ -1406,7 +1495,7 @@ const VictoryScreen = ({ combatants, rewards, onConfirm }) => {
         lineNumber: 720,
         columnNumber: 11
       }),
-      phase >= 4 && /* @__PURE__ */ jsxDEV("button", { className: "confirm-vic-btn animate-popIn", onClick: onConfirm, children: [
+      phase >= 5 && /* @__PURE__ */ jsxDEV("button", { className: "confirm-vic-btn animate-popIn", onClick: onConfirm, children: [
         /* @__PURE__ */ jsxDEV("div", { className: "btn-inner", children: "RETURN TO BASE" }, void 0, false, {
           fileName: "<stdin>",
           lineNumber: 736,

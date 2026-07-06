@@ -1730,7 +1730,10 @@ select.search-bar {
     font-weight: 900;
     animation: floatAndFade 1s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
     font-size: 1.6rem;
-    z-index: 1000;
+    /* Above every overlay in the app (squad builder, gacha results, rank-up,
+       challenger view all sit at 5000-9999) so toasts like "Squad full!"
+       are never fired invisibly behind a fullscreen modal. */
+    z-index: 10000;
     text-shadow: 2px 2px 0px rgba(0,0,0,0.8);
     white-space: nowrap;
 }
@@ -2170,6 +2173,32 @@ select.search-bar {
 .home-dashboard-wrapper section.dashboard-section:nth-child(2) { animation-delay: 0.1s; }
 .home-dashboard-wrapper section.dashboard-section:nth-child(3) { animation-delay: 0.2s; }
 
+.home-sidebar-ops > * {
+    animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.home-sidebar-ops > *:nth-child(1) { animation-delay: 0.05s; }
+.home-sidebar-ops > *:nth-child(2) { animation-delay: 0.15s; }
+.home-sidebar-ops > *:nth-child(3) { animation-delay: 0.25s; }
+.home-sidebar-ops > *:nth-child(4) { animation-delay: 0.35s; }
+.home-sidebar-ops > *:nth-child(5) { animation-delay: 0.45s; }
+
+.home-dashboard-wrapper .hex-label {
+    font-size: 0.7rem;
+}
+.home-dashboard-wrapper .hex-val {
+    font-size: 1.15rem;
+}
+.home-dashboard-wrapper .news-tag {
+    font-size: 0.65rem !important;
+}
+.home-dashboard-wrapper .news-item span:not(.news-tag) {
+    font-size: 0.75rem !important;
+}
+
+.home-claim-glow {
+    animation: pulse-glow 1.8s infinite;
+}
+
 .action-inner-vfx {
     position: absolute;
     inset: 0;
@@ -2264,7 +2293,7 @@ select.search-bar {
 }
 
 .stat-label {
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     color: var(--text-muted);
     font-weight: 700;
     letter-spacing: 1px;
@@ -8250,4 +8279,396 @@ select.search-bar {
         55% { transform: translateY(17px) scale(1.04); }
         100% { transform: translateY(0); }
     }
+}
+
+/* ============================================================
+   GACHA RESULTS OVERHAUL -- tiered, grouped, legible at x100.
+   ============================================================ */
+
+.gacha-results-headline {
+    animation: gacha-headline-pop 0.5s cubic-bezier(0.18, 1.5, 0.4, 1);
+}
+@keyframes gacha-headline-pop {
+    0% { transform: scale(2.2); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.pity-triggered-banner {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 16px;
+    border-radius: 20px;
+    background: linear-gradient(90deg, #facc15, #f97316);
+    color: #000;
+    font-weight: 900;
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    animation: pulse-glow 1s infinite alternate;
+}
+
+.gacha-stat-chip {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 8px 18px;
+    min-width: 90px;
+}
+.gacha-stat-label {
+    font-size: 0.55rem;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+}
+.gacha-stat-val {
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: #fff;
+}
+
+.gacha-tier-tally {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+.gacha-tier-pill {
+    font-size: 0.65rem;
+    font-weight: 900;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+}
+
+.gacha-spotlight-row {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+.gacha-spotlight-card {
+    position: relative;
+    width: 130px;
+    height: 168px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #0a0a12;
+    border: 2px solid transparent;
+    box-shadow: 0 0 24px var(--spot-glow, rgba(255,255,255,0.3));
+    animation: gacha-spotlight-in 0.5s cubic-bezier(0.18, 1.4, 0.4, 1) backwards;
+}
+@keyframes gacha-spotlight-in {
+    0% { transform: translateY(30px) scale(0.7); opacity: 0; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.gacha-spotlight-glow {
+    position: absolute;
+    inset: 0;
+    opacity: 0.18;
+    z-index: 0;
+}
+.gacha-spotlight-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+}
+.gacha-spotlight-tier {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    font-size: 0.65rem;
+    font-weight: 900;
+    padding: 2px 8px;
+    border-radius: 6px;
+    z-index: 2;
+}
+.gacha-spotlight-new {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: #4ade80;
+    color: #000;
+    font-size: 0.55rem;
+    font-weight: 900;
+    padding: 2px 6px;
+    border-radius: 6px;
+    z-index: 2;
+    animation: pulse-glow 1s infinite alternate;
+}
+.gacha-spotlight-count {
+    position: absolute;
+    bottom: 26px;
+    right: 6px;
+    background: rgba(0,0,0,0.75);
+    color: #facc15;
+    font-size: 0.65rem;
+    font-weight: 900;
+    padding: 2px 7px;
+    border-radius: 6px;
+    z-index: 2;
+}
+.gacha-spotlight-name {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 14px 8px 6px;
+    z-index: 2;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gacha-results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 8px;
+    background: rgba(0,0,0,0.5);
+    padding: 16px;
+    border-radius: 12px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+.gacha-result-card {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #111;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 0 8px var(--tier-glow, transparent);
+    animation: gacha-card-in 0.3s ease-out backwards;
+}
+@keyframes gacha-card-in {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+.gacha-result-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.gacha-result-card.new-hero {
+    border-color: #4ade80;
+}
+.gacha-result-tier {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    font-size: 0.5rem;
+    font-weight: 900;
+    text-align: center;
+    padding: 1px 0;
+}
+.gacha-result-new {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    background: #4ade80;
+    color: #000;
+    font-size: 0.45rem;
+    font-weight: 900;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+.gacha-result-count {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: rgba(0,0,0,0.8);
+    color: #facc15;
+    font-size: 0.5rem;
+    font-weight: 900;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+@media (max-width: 600px) {
+    .gacha-spotlight-card { width: 100px; height: 132px; }
+    .gacha-results-grid { grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); }
+    .gacha-stat-chip { min-width: 70px; padding: 6px 12px; }
+    .gacha-stat-val { font-size: 0.9rem; }
+}
+
+/* ============================================================
+   VICTORY SCREEN OVERHAUL -- full squad report + highlight cards.
+   ============================================================ */
+
+.victory-squad-report {
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto 16px;
+}
+
+.vic-squad-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.vic-squad-card {
+    position: relative;
+    width: 84px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 8px 6px 6px;
+    text-align: center;
+    animation: vic-squad-in 0.4s cubic-bezier(0.18, 1.4, 0.4, 1) backwards;
+}
+@keyframes vic-squad-in {
+    0% { transform: translateY(20px) scale(0.8); opacity: 0; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.vic-squad-card.top {
+    border-color: #facc15;
+    box-shadow: 0 0 16px rgba(250, 204, 21, 0.4);
+}
+.vic-squad-card.ko { opacity: 0.5; filter: grayscale(0.8); }
+.vic-squad-crown {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #facc15;
+    color: #000;
+    font-size: 0.55rem;
+    font-weight: 900;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    box-shadow: 0 0 8px rgba(250, 204, 21, 0.6);
+}
+.vic-squad-img {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 auto 6px;
+    display: block;
+    border: 2px solid rgba(255,255,255,0.15);
+}
+.vic-squad-ko {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-12deg);
+    color: #ef4444;
+    font-weight: 900;
+    font-size: 0.9rem;
+    -webkit-text-stroke: 1px #000;
+}
+.vic-squad-hpbar {
+    width: 100%;
+    height: 5px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+.vic-squad-hpfill { height: 100%; transition: width 0.6s ease-out; }
+.vic-squad-name {
+    font-size: 0.6rem;
+    font-weight: 800;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.vic-squad-dmg {
+    font-size: 0.55rem;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.vic-highlight-row {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.vic-highlight-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--hl-color, #fff);
+    border-radius: 14px;
+    padding: 10px 20px;
+    text-align: center;
+    min-width: 120px;
+    box-shadow: 0 0 14px color-mix(in srgb, var(--hl-color, #fff) 30%, transparent);
+}
+.vic-highlight-label {
+    font-size: 0.55rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+.vic-highlight-val {
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: var(--hl-color, #fff);
+}
+.vic-highlight-sub {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #fff;
+    margin-top: 2px;
+}
+
+@media (max-width: 600px) {
+    .vic-squad-card { width: 66px; padding: 6px 4px 4px; }
+    .vic-squad-img { width: 40px; height: 40px; }
+    .vic-highlight-card { min-width: 90px; padding: 8px 12px; }
+    .vic-highlight-val { font-size: 1rem; }
+}
+
+/* Victory Screen: skip button (Fix 3, playtesting feedback) */
+.vic-skip-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 20;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s, background 0.2s;
+}
+.vic-skip-btn:hover { opacity: 1; background: rgba(255,255,255,0.16); }
+
+/* Dynamic-signature in-battle indicator (Fix 4, playtesting feedback):
+   shows which SPECIAL archetype a reshaped signature (e.g. Courier's
+   Lucky 38 Override) is currently using, since the static skill label
+   doesn't change even though the effect does. */
+.dyn-form-badge {
+    font-size: 0.5rem;
+    font-weight: 900;
+    text-align: center;
+    color: #a855f7;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    border-radius: 5px;
+    padding: 1px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

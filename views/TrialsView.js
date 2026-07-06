@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.js";
 import { ELEMENTS, TIER_STATS } from "../constants.js";
-import { calculateStat, playSound, calculateSubStat, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, SIGNATURE_BONUS, incrementCourierFieldBattles } from "../utils.js";
+import { calculateStat, playSound, calculateSubStat, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, SIGNATURE_BONUS, incrementCourierFieldBattles, getDominantSpecialKey, SPECIAL_ARCHETYPE_NAMES } from "../utils.js";
 import { CampaignIntro } from "./ViewShared.js";
 
 // Arena league tiers — pure presentation, derived from rank. Gives the ladder the
@@ -539,6 +539,7 @@ const TrialsView = ({
         skillCd2: 0,
         maxSkillCd2: c.skillId2 ? skills.find((s) => s.id === c.skillId2)?.cooldown || 100 : 0,
         isEnemy: false,
+        special: c.special,
         gauge: Math.random() * 50,
         burst: 0,
         effects: [
@@ -784,6 +785,7 @@ const TrialsView = ({
         skillCd2: 0,
         maxSkillCd2: c.skillId2 ? skills.find((s) => s.id === c.skillId2)?.cooldown || 100 : 0,
         isEnemy: false,
+        special: c.special,
         gauge: Math.random() * 50,
         burst: 0,
         effects: [
@@ -880,6 +882,7 @@ const TrialsView = ({
                     if (shield) dmg = Math.floor(dmg * (1 - shield.val));
                     dmg = applyMitigation(dmg, tStats.def, 1e3);
                     target.hp = Math.max(0, target.hp - dmg);
+                    if (!u.isEnemy) { u._battleDamage = (u._battleDamage || 0) + dmg; u._battleBestHit = Math.max(u._battleBestHit || 0, dmg); }
                     if (target.hp === 0) {
                       if (!target.isEnemy && target._leaderRevive) {
                         target._leaderRevive = false;
@@ -1590,21 +1593,24 @@ const TrialsView = ({
             lineNumber: 8030,
             columnNumber: 16
           }),
-          /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 8 }, children: [
-            /* @__PURE__ */ jsxDEV("button", { className: "upgrade-btn", style: { fontSize: "0.7rem" }, onClick: () => setShowSquadBuilder({
-              element: pendingTrial.element,
-              franchise: pendingTrial.franchise,
-              isWildcard: pendingTrial.isWildcard
-            }), children: "SELECT HEROES" }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 8032,
-              columnNumber: 19
-            }),
-            /* @__PURE__ */ jsxDEV("button", { className: "train-btn", style: { width: "auto", padding: "8px 24px" }, disabled: squadIds.length === 0, onClick: () => startTrial(pendingTrial), children: "PROCEED TO TRIAL" }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 8037,
-              columnNumber: 19
-            })
+          /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
+            /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 8 }, children: [
+              /* @__PURE__ */ jsxDEV("button", { className: "upgrade-btn", style: { fontSize: "0.7rem" }, onClick: () => setShowSquadBuilder({
+                element: pendingTrial.element,
+                franchise: pendingTrial.franchise,
+                isWildcard: pendingTrial.isWildcard
+              }), children: "SELECT HEROES" }, void 0, false, {
+                fileName: "<stdin>",
+                lineNumber: 8032,
+                columnNumber: 19
+              }),
+              /* @__PURE__ */ jsxDEV("button", { className: "train-btn", style: { width: "auto", padding: "8px 24px" }, disabled: squadIds.length === 0, onClick: () => startTrial(pendingTrial), children: "PROCEED TO TRIAL" }, void 0, false, {
+                fileName: "<stdin>",
+                lineNumber: 8037,
+                columnNumber: 19
+              })
+            ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+            squadIds.length === 0 && /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.65rem", color: "#ef4444", fontWeight: 700 }, children: "Select at least 1 hero to proceed" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
           ] }, void 0, true, {
             fileName: "<stdin>",
             lineNumber: 8031,
@@ -2004,6 +2010,10 @@ const TrialsView = ({
             lineNumber: 8163,
             columnNumber: 25
           }),
+          (skill1?.meta?.dynamic_special || skill2?.meta?.dynamic_special) && /* @__PURE__ */ jsxDEV("div", { className: "dyn-form-badge", children: (() => {
+            const dominant = getDominantSpecialKey(u.special);
+            return dominant ? SPECIAL_ARCHETYPE_NAMES[dominant] : "Basic Attack";
+          })() }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
           /* @__PURE__ */ jsxDEV("button", { className: "guard-mini-btn", disabled: u.dead || (u.burst || 0) < 30, onClick: () => triggerDefend(u.id), children: [
             /* @__PURE__ */ jsxDEV(Shield, { size: 10 }, void 0, false, {
               fileName: "<stdin>",

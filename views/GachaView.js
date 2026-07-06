@@ -33,6 +33,40 @@ const loadPity = () => {
 };
 const savePity = (obj) => localStorage.setItem("mugen_gacha_pity", JSON.stringify(obj));
 
+// --- Results screen tier presentation --------------------------------------
+// One shared visual language for every rarity so a 100-pull result reads at
+// a glance instead of as a wall of identical boxes.
+const TIER_RANK = ["SS+", "SS", "SS-", "S+", "S", "S-", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "E+", "E", "E-", "F+", "F", "F-"];
+const getTierRank = (tier) => {
+  const t = String(tier || "C").trim().toUpperCase();
+  const idx = TIER_RANK.indexOf(t);
+  return idx === -1 ? TIER_RANK.length : idx;
+};
+const getTierVisual = (tier) => {
+  const t = String(tier || "C").trim().toUpperCase();
+  if (t.startsWith("SS")) return { grad: "linear-gradient(135deg, #fff, #ffd700)", glow: "rgba(255,215,0,0.7)", text: "#000", accent: "#ffd700" };
+  if (t === "S+") return { grad: "linear-gradient(135deg, #00d2ff, #9d50bb)", glow: "rgba(157,80,187,0.65)", text: "#fff", accent: "#c084fc" };
+  if (t.startsWith("S")) return { grad: "linear-gradient(135deg, #facc15, #eab308)", glow: "rgba(234,179,8,0.5)", text: "#000", accent: "#facc15" };
+  if (t.startsWith("A")) return { grad: "linear-gradient(135deg, #c084fc, #a855f7)", glow: "rgba(168,85,247,0.4)", text: "#fff", accent: "#a855f7" };
+  if (t.startsWith("B")) return { grad: "linear-gradient(135deg, #60a5fa, #3b82f6)", glow: "rgba(59,130,246,0.35)", text: "#fff", accent: "#3b82f6" };
+  if (t.startsWith("D") || t.startsWith("E") || t.startsWith("F")) return { grad: "linear-gradient(135deg, #57606f, #414855)", glow: "rgba(87,96,111,0.2)", text: "#cbd5e1", accent: "#64748b" };
+  return { grad: "linear-gradient(135deg, #94a3b8, #64748b)", glow: "rgba(100,116,139,0.25)", text: "#fff", accent: "#94a3b8" };
+};
+// Group a flat pull list into unique-entry cards with a stack count -- a
+// 100-pull that landed 6 copies of the same hero shows ONE card with "x6",
+// not six identical tiles.
+const groupPullResults = (items) => {
+  const map = new Map();
+  items.forEach((item) => {
+    const key = item.isItem ? `item:${item.id}` : `hero:${item.export_id}`;
+    if (!map.has(key)) map.set(key, { ...item, count: 0, anyNew: false });
+    const entry = map.get(key);
+    entry.count += 1;
+    if (item.isNew) entry.anyNew = true;
+  });
+  return Array.from(map.values()).sort((a, b) => getTierRank(a.tier) - getTierRank(b.tier));
+};
+
 const GachaView = ({
   gems,
   setGems,
@@ -159,6 +193,7 @@ const GachaView = ({
     const pulls = [];
     let refundCredits = 0;
     let refundGems = 0;
+    let pityTriggered = false;
     const pityKey = (activeTab === "items" ? "item_" : "") + activeBanner.id;
     let pityCount = pity[pityKey] || 0;
     if (activeTab === "items") {
@@ -178,6 +213,7 @@ const GachaView = ({
         // then hard-guarantees one at ITEM_PITY_HARD_CAP so a dry streak always ends.
         const softBoost = pityCount >= ITEM_PITY_SOFT_START ? (pityCount - ITEM_PITY_SOFT_START) * 0.015 : 0;
         const forced = pityCount >= ITEM_PITY_HARD_CAP && rarities.legendary.length;
+        if (forced) pityTriggered = true;
         const roll = Math.random();
         let selectedRarity = "common";
         if (forced) selectedRarity = "legendary";
@@ -205,6 +241,7 @@ const GachaView = ({
         // Hero pity: soft-boosts SS/S+ odds past PITY_SOFT_START pulls without one,
         // then hard-guarantees a top-tier hero at PITY_HARD_CAP.
         const forced = pityCount >= PITY_HARD_CAP;
+        if (forced) pityTriggered = true;
         const softChance = pityCount >= PITY_SOFT_START ? (pityCount - PITY_SOFT_START) * 0.02 : 0;
         let lucky;
         if (forced || Math.random() < softChance) {
@@ -256,7 +293,8 @@ const GachaView = ({
       savePity(next);
       return next;
     });
-    setResultsData({ items: pulls, totalSpent: actualCost, currency, refund: refundGems || refundCredits || 0 });
+    const newCount = pulls.filter((p) => p.isNew).length;
+    setResultsData({ items: pulls, totalSpent: actualCost, currency, refund: refundGems || refundCredits || 0, pityTriggered, newCount, pullCount: maxPulls });
     setIsSummoning(true);
   };
   const handleSummonClick = (count) => {
@@ -269,6 +307,88 @@ const GachaView = ({
     setTimeout(() => {
       performBatchSummon(count);
     }, 1200);
+  };
+  const renderResultsScreen = () => {
+    const h = React.createElement;
+    const grouped = groupPullResults(resultsData.items);
+    const bestRank = Math.min(...resultsData.items.map((it) => getTierRank(it.tier)));
+    const bestTierIsSS = TIER_RANK[bestRank]?.startsWith("SS");
+    const bestTierIsGreat = TIER_RANK[bestRank]?.startsWith("S") || TIER_RANK[bestRank]?.startsWith("A");
+    const headline = bestTierIsSS ? "JACKPOT!!" : bestTierIsGreat ? "GREAT PULL!" : "SCORE!";
+    const headlineColor = bestTierIsSS ? "#ffd700" : bestTierIsGreat ? "#c084fc" : "#fff";
+    // Spotlight: the best 1-3 unique pulls (by tier), skipped entirely for a
+    // single pull since the whole screen already IS the spotlight.
+    const spotlight = resultsData.pullCount > 1 ? grouped.slice(0, Math.min(3, grouped.length)).filter((g) => getTierRank(g.tier) <= getTierRank("A")) : [];
+    const tierTally = {};
+    resultsData.items.forEach((it) => {
+      const t = it.tier || it.rarity?.toUpperCase() || "C";
+      tierTally[t] = (tierTally[t] || 0) + 1;
+    });
+    const tierChips = Object.entries(tierTally).sort((a, b) => getTierRank(a[0]) - getTierRank(b[0]));
+    return h("div", { className: "animate-fadeIn", style: { width: "94%", maxWidth: "820px", display: "flex", flexDirection: "column", zIndex: 100, maxHeight: "90vh" } },
+      h("div", { className: "glass-panel", style: { padding: "24px 28px", textAlign: "center", borderColor: headlineColor, display: "flex", flexDirection: "column", maxHeight: "90vh" } },
+        // Headline
+        h("h1", { className: "results-header gacha-results-headline", style: { fontFamily: "MugenTitle", fontSize: "2.6rem", margin: 0, color: headlineColor, textShadow: `0 0 24px ${headlineColor}88` } }, headline),
+        resultsData.pityTriggered && h("div", { className: "pity-triggered-banner" }, "★ PITY GUARANTEE TRIGGERED ★"),
+        // Stat bar
+        h("div", { style: { display: "flex", justifyContent: "center", gap: 18, flexWrap: "wrap", margin: "14px 0" } },
+          h("div", { className: "gacha-stat-chip" },
+            h("div", { className: "gacha-stat-label" }, "SPENT"),
+            h("div", { className: "gacha-stat-val", style: { color: "#f87171" } }, resultsData.currency === "gems" ? `${resultsData.totalSpent} GEMS` : `$${resultsData.totalSpent.toLocaleString()}`)
+          ),
+          resultsData.refund > 0 && h("div", { className: "gacha-stat-chip" },
+            h("div", { className: "gacha-stat-label" }, "DUPE REFUND"),
+            h("div", { className: "gacha-stat-val", style: { color: "#4ade80" } }, `+${resultsData.currency === "gems" ? resultsData.refund + " GEMS" : "$" + resultsData.refund.toLocaleString()}`)
+          ),
+          h("div", { className: "gacha-stat-chip" },
+            h("div", { className: "gacha-stat-label" }, "PULLS"),
+            h("div", { className: "gacha-stat-val" }, resultsData.pullCount)
+          ),
+          typeof resultsData.newCount === "number" && h("div", { className: "gacha-stat-chip" },
+            h("div", { className: "gacha-stat-label" }, "NEW"),
+            h("div", { className: "gacha-stat-val", style: { color: "#00d2ff" } }, resultsData.newCount)
+          )
+        ),
+        // Tier breakdown chips
+        tierChips.length > 1 && h("div", { className: "gacha-tier-tally" },
+          tierChips.map(([tier, count]) => {
+            const v = getTierVisual(tier);
+            return h("div", { key: tier, className: "gacha-tier-pill", style: { background: v.grad, color: v.text, boxShadow: `0 0 10px ${v.glow}` } }, `${tier} ×${count}`);
+          })
+        ),
+        // Spotlight for the best pulls
+        spotlight.length > 0 && h("div", { className: "gacha-spotlight-row" },
+          spotlight.map((item, i) => {
+            const v = getTierVisual(item.tier);
+            return h("div", { key: i, className: "gacha-spotlight-card", style: { "--spot-glow": v.glow, animationDelay: `${i * 0.12}s` } },
+              h("div", { className: "gacha-spotlight-glow", style: { background: v.grad } }),
+              item.isItem
+                ? h("div", { className: "gacha-spotlight-img", style: { display: "flex", alignItems: "center", justifyContent: "center", background: "#111" } }, h(Package, { size: 36, color: v.accent }))
+                : h("img", { className: "gacha-spotlight-img", src: item.imageUrl }),
+              h("div", { className: "gacha-spotlight-tier", style: { background: v.grad, color: v.text } }, item.tier || item.rarity?.toUpperCase()),
+              item.anyNew && h("div", { className: "gacha-spotlight-new" }, "NEW"),
+              item.count > 1 && h("div", { className: "gacha-spotlight-count" }, `×${item.count}`),
+              h("div", { className: "gacha-spotlight-name" }, item.name)
+            );
+          })
+        ),
+        // Full grouped results grid
+        h("div", { className: "gacha-results-grid custom-scroll" },
+          grouped.map((item, i) => {
+            const v = getTierVisual(item.tier);
+            return h("div", { key: i, className: `gacha-result-card ${item.anyNew ? "new-hero" : ""}`, style: { "--tier-glow": v.glow, animationDelay: `${Math.min(i, 40) * 0.02}s` } },
+              item.isItem
+                ? h("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#111" } }, h(Package, { size: 22, color: v.accent }))
+                : h("img", { src: item.imageUrl }),
+              h("div", { className: "gacha-result-tier", style: { background: v.grad, color: v.text } }, item.tier || item.rarity?.toUpperCase() || "C"),
+              item.anyNew && h("div", { className: "gacha-result-new" }, "NEW"),
+              item.count > 1 && h("div", { className: "gacha-result-count" }, `×${item.count}`)
+            );
+          })
+        ),
+        h("button", { className: "train-btn", style: { marginTop: 20, background: "#facc15", color: "#000", flexShrink: 0 }, onClick: () => { setIsSummoning(false); setResultsData(null); } }, "COLLECT ALL")
+      )
+    );
   };
   return /* @__PURE__ */ jsxDEV("div", { className: "gacha-view-container animate-fadeIn", style: { position: "relative", height: "100%" }, children: [
     /* @__PURE__ */ jsxDEV("div", { className: "gacha-nightlife-bg" }, void 0, false, {
@@ -513,74 +633,7 @@ const GachaView = ({
         fileName: "<stdin>",
         lineNumber: 3822,
         columnNumber: 13
-      }) : /* @__PURE__ */ jsxDEV("div", { className: "animate-fadeIn", style: { width: "90%", maxWidth: "700px", display: "flex", flexDirection: "column", zIndex: 100 }, children: /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 30, textAlign: "center", borderColor: "#facc15" }, children: [
-        /* @__PURE__ */ jsxDEV("h1", { className: "results-header", style: { fontFamily: "MugenTitle", fontSize: "2.5rem", margin: 0 }, children: "SCORE!" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 3831,
-          columnNumber: 18
-        }),
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: resultsData.refund > 0 ? 4 : 20 }, children: [
-          "SPENT: ",
-          resultsData.currency === "gems" ? `${resultsData.totalSpent} GEMS` : `$${resultsData.totalSpent.toLocaleString()}`
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 3832,
-          columnNumber: 18
-        }),
-        resultsData.refund > 0 && /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.7rem", color: "#4ade80", fontWeight: 800, marginBottom: 20 }, children: [
-          "DUPLICATE REFUND: +",
-          resultsData.currency === "gems" ? `${resultsData.refund} GEMS` : `$${resultsData.refund.toLocaleString()}`
-        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
-        /* @__PURE__ */ jsxDEV("div", { className: "gacha-compact-grid custom-scroll", style: { gridTemplateColumns: "repeat(5, 1fr)", gap: 10, background: "rgba(0,0,0,0.5)", padding: 20 }, children: resultsData.items.map((item, i) => /* @__PURE__ */ jsxDEV("div", { className: `gacha-compact-item ${item.isNew ? "new-hero" : ""}`, style: { borderColor: item.isItem ? "#facc15" : "" }, children: [
-          item.isItem ? /* @__PURE__ */ jsxDEV("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#111" }, children: /* @__PURE__ */ jsxDEV(Package, { size: 24, color: item.rarity === "rare" ? "#3b82f6" : "#a855f7" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 3839,
-            columnNumber: 32
-          }) }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 3838,
-            columnNumber: 29
-          }) : /* @__PURE__ */ jsxDEV("img", { src: item.imageUrl }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 3842,
-            columnNumber: 29
-          }),
-          /* @__PURE__ */ jsxDEV("div", { className: "compact-tier", children: item.tier || item.rarity?.toUpperCase() || "C" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 3844,
-            columnNumber: 26
-          }),
-          item.isNew && /* @__PURE__ */ jsxDEV("div", { className: "compact-tier", style: { background: "#4ade80", color: "#000", left: 0, right: "auto" }, children: "NEW" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 3845,
-            columnNumber: 41
-          })
-        ] }, i, true, {
-          fileName: "<stdin>",
-          lineNumber: 3836,
-          columnNumber: 23
-        })) }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 3834,
-          columnNumber: 18
-        }),
-        /* @__PURE__ */ jsxDEV("button", { className: "train-btn", style: { marginTop: 30, background: "#facc15", color: "#000" }, onClick: () => {
-          setIsSummoning(false);
-          setResultsData(null);
-        }, children: "COLLECT ALL" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 3850,
-          columnNumber: 18
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 3830,
-        columnNumber: 15
-      }) }, void 0, false, {
-        fileName: "<stdin>",
-        lineNumber: 3829,
-        columnNumber: 13
-      })
+      }) : renderResultsScreen()
     ] }, void 0, true, {
       fileName: "<stdin>",
       lineNumber: 3819,

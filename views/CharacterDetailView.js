@@ -13,7 +13,7 @@ import {
   Clover
 } from "lucide-react";
 import { ELEMENTS, LEADER_SKILLS, COSMETICS, TIER_ORDER } from "../constants.js";
-import { calculateStat, getBondRankName, getBondPath, playSound, calculateSubStat, formatPower, SPECIAL_STATS, SPECIAL_LABELS, SPECIAL_DESCRIPTIONS, SPECIAL_BASE, SPECIAL_CAP, getDefaultSpecial, getSpecialLevelInfo, getSpecialSpentPoints, FIELD_XP_PER_POINT } from "../utils.js";
+import { calculateStat, getBondRankName, getBondPath, playSound, calculateSubStat, formatPower, SPECIAL_STATS, SPECIAL_LABELS, SPECIAL_DESCRIPTIONS, SPECIAL_BASE, SPECIAL_CAP, getDefaultSpecial, getSpecialLevelInfo, getSpecialSpentPoints, FIELD_XP_PER_POINT, SPECIAL_ARCHETYPE_NAMES, getDominantSpecialKey } from "../utils.js";
 import { AbilitiesView } from "./AbilitiesView.js";
 
 const CharacterDetailView = ({
@@ -226,8 +226,16 @@ Cost: $${costCredits.toLocaleString()} & ${costEssence} Essence`)) {
     const info = getSpecialLevelInfo(char.courierFieldBattles || 0);
     const spent = getSpecialSpentPoints(special);
     const available = info.totalPoints - spent;
+    const dominant = getDominantSpecialKey(special);
     const h = React.createElement;
     return h("div", { className: "animate-fadeIn", style: { padding: "10px 0" } },
+      h("div", { className: "glass-panel", style: { padding: 16, marginBottom: 16, border: "1px solid #facc15", background: "rgba(250, 204, 21, 0.06)" } },
+        h("div", { style: { fontSize: "0.65rem", fontWeight: 900, color: "#facc15", letterSpacing: 1, marginBottom: 4 } }, "LUCKY 38 OVERRIDE -- CURRENT FORM"),
+        h("div", { style: { fontSize: "1.1rem", fontWeight: 900, color: "#fff" } }, dominant ? SPECIAL_ARCHETYPE_NAMES[dominant] : "Lucky Revolver (Basic Attack)"),
+        h("div", { style: { fontSize: "0.65rem", color: "var(--text-muted)", marginTop: 2 } },
+          dominant ? `Reshaped by ${SPECIAL_LABELS[dominant]} -- your highest SPECIAL stat.` : "No stat leads yet -- put points somewhere to reshape the skill."
+        )
+      ),
       h("div", { className: "glass-panel", style: { padding: 16, marginBottom: 16, border: "1px solid rgba(168, 85, 247, 0.4)" } },
         h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
           h("div", { style: { fontSize: "0.7rem", fontWeight: 900, color: "#a855f7", letterSpacing: 1 } }, "FIELD EXPERIENCE"),
