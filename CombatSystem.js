@@ -161,6 +161,14 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
   });
   const attacker = next.find((u) => u.id === attackerId);
   if (!attacker || attacker.dead) return next;
+  // Temporal snapshot: every cast, every unit's current HP is logged to a small
+  // rolling history. This gives time-travel mechanics (rewind_hp) a REAL past
+  // value to restore rather than a fabricated heal number.
+  next.forEach((u) => {
+    if (!Array.isArray(u._hpHistory)) u._hpHistory = [];
+    u._hpHistory.push(u.hp);
+    if (u._hpHistory.length > 8) u._hpHistory.shift();
+  });
   // Silence: a controlled unit loses its turn entirely (Limit Breaks push through).
   if (!isLimitBreak && (attacker.effects || []).some((e) => e.type === "silence")) {
     attacker.lastAction = { type: "silenced", amount: "SILENCED", msg: "SILENCED", time: Date.now(), skillUser: attacker.id };
@@ -304,6 +312,24 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
     if (META.dispel_enemies) {
       next.filter((u) => u.isEnemy !== attacker.isEnemy && !u.dead).forEach((e) => { e.effects = e.effects.filter((x) => !x.type.startsWith("buff") && x.type !== "shield"); });
     }
+    // HANNAH — "X Marks the Spot": a real turn-economy steal, not a status effect.
+    // Finds whoever is closest to acting next (highest current ATB gauge) and
+    // drains it, genuinely delaying their turn.
+    if (META.steal_next_enemy_turn) {
+      const enemiesNow = next.filter((u) => u.isEnemy !== attacker.isEnemy && !u.dead);
+      let victim = null, bestGauge = -1;
+      enemiesNow.forEach((e) => {
+        const g = e.gauge || 0;
+        if (g > bestGauge) { bestGauge = g; victim = e; }
+      });
+      if (victim) {
+        victim.gauge = Math.max(0, (victim.gauge || 0) - (META.steal_next_enemy_turn.drain || 40));
+        victim.lastAction = { ...victim.lastAction, msg: "TURN STOLEN" };
+      }
+    }
+    if (META.castMusic && typeof window !== "undefined" && window.__mugenPlayUniqueTrack) {
+      window.__mugenPlayUniqueTrack(META.castMusic);
+    }
     // TIMMY TURNER — "I Wish For..." cycles through THREE completely different
     // wishes each cast (Cosmo's chaos / Wanda's wisdom / Fairy teamwork). The
     // stage persists on the caster (_wishStage) across casts, so the same button
@@ -393,6 +419,36 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
       if (stage.burst) livingAllies.forEach((a) => { a.burst = Math.min(100, (a.burst || 0) + stage.burst); });
       if (stage.dmgMult) stageDmgMult = stage.dmgMult;
       attacker.lastAction = { ...attacker.lastAction, msg: stage.msg || ("STAGE " + attacker._stageCycle) };
+      // REWIND HP — a genuine time-rewind, not a flat heal: restores the target
+      // to their ACTUAL logged HP from `turns_ago` casts back (see the
+      // _hpHistory snapshot above), only if that past value beats their current
+      // HP. "most_wounded_ally" reaches for whoever's worst off; "self" only
+      // ever rewinds the caster.
+      if (stage.rewind_hp) {
+        const lookback = stage.rewind_hp.turns_ago || 3;
+        let rewindTarget = null;
+        if (stage.rewind_hp.scope === "self") {
+          rewindTarget = attacker;
+        } else {
+          let bestRatio = 1;
+          livingAllies.forEach((a) => {
+            const ratio = a.hp / a.maxHp;
+            if (ratio < bestRatio) { bestRatio = ratio; rewindTarget = a; }
+          });
+        }
+        if (rewindTarget) {
+          const hist = rewindTarget._hpHistory || [];
+          const idx = Math.max(0, hist.length - 1 - lookback);
+          const pastHp = hist[idx];
+          if (typeof pastHp === "number" && pastHp > rewindTarget.hp) {
+            rewindTarget.hp = Math.min(rewindTarget.maxHp, pastHp);
+            rewindTarget.lastAction = { ...rewindTarget.lastAction, msg: "REWOUND" };
+          }
+        }
+      }
+      if (stage.castMusic && typeof window !== "undefined" && window.__mugenPlayUniqueTrack) {
+        window.__mugenPlayUniqueTrack(stage.castMusic);
+      }
     }
     // DYNAMIC SPECIAL — the skill itself is defined by whichever SPECIAL stat
     // (see utils.js SPECIAL_STATS) the unit has invested in most. No investment
