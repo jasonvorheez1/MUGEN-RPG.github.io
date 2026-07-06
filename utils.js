@@ -1,5 +1,66 @@
 import { AUDIO_URLS, PATH_ADJECTIVES, PATH_TITLES, TIER_STATS, SKILL_TYPES, SKILL_RARITY_CONFIG, LEADER_SKILLS, COSMETICS } from './constants.js';
 
+// ---------------------------------------------------------------------------
+// S.P.E.C.I.A.L. BUILD SYSTEM (currently exclusive to Courier)
+// ---------------------------------------------------------------------------
+// A Fallout-style 7-stat allocation system layered on top of the normal
+// level/gear progression. Each stat starts at a baseline of 1 and can be
+// pushed up to 10 by spending points earned through Courier's own "Field
+// Experience" track (see getSpecialLevelInfo) -- a level curve entirely
+// separate from the character's normal XP/level, so his build is a distinct
+// long-term investment rather than something that falls out of just leveling.
+export const SPECIAL_STATS = ['str', 'per', 'end', 'cha', 'int', 'agi', 'lck'];
+export const SPECIAL_LABELS = {
+  str: 'Strength', per: 'Perception', end: 'Endurance',
+  cha: 'Charisma', int: 'Intelligence', agi: 'Agility', lck: 'Luck'
+};
+export const SPECIAL_DESCRIPTIONS = {
+  str: 'Raw muscle behind every swing -- physical Attack.',
+  per: 'Steady hands, dead-on aim -- Crit Rate.',
+  end: 'Keeps taking hits and keeps standing -- Max HP.',
+  cha: 'Commands the field, wards off retaliation -- Magic Defense.',
+  int: 'Rewires tech and chip logic on the fly -- Magic Attack.',
+  agi: 'Faster reflexes, harder to pin down -- Speed.',
+  lck: "Six bullets, six coincidences -- Luck (crit odds, gacha-flavored skills)."
+};
+export const SPECIAL_STAT_MAP = {
+  str: 'atk', per: 'crit_rate', end: 'hp', cha: 'magic def', int: 'magic atk', agi: 'speed', lck: 'luck'
+};
+export const SPECIAL_BASE = 1;
+export const SPECIAL_CAP = 10;
+// +4% to the mapped stat per point above baseline (point 10 => +36%).
+export const SPECIAL_PCT_PER_POINT = 0.04;
+// Direct flat Crit Rate per PER point above baseline (bypasses the normal
+// luck-derived crit curve so Perception has its own clear identity).
+export const SPECIAL_PER_CRIT_PER_POINT = 1.2;
+
+export const getDefaultSpecial = () => SPECIAL_STATS.reduce((m, k) => ({ ...m, [k]: SPECIAL_BASE }), {});
+
+// Field Experience: Courier's own leveling system, driven purely by battles
+// fought with him in the squad (see App.js incrementCourierFieldXP), not by
+// character level/XP. Every 3 battles grants 1 allocatable SPECIAL point.
+export const FIELD_XP_PER_POINT = 3;
+export const SPECIAL_MAX_LEVEL = 30;
+export const getSpecialLevelInfo = (fieldBattles = 0) => {
+  const level = Math.min(SPECIAL_MAX_LEVEL, Math.floor((fieldBattles || 0) / FIELD_XP_PER_POINT));
+  const intoLevel = (fieldBattles || 0) % FIELD_XP_PER_POINT;
+  const totalPoints = level; // 1 point per level
+  return { level, battlesIntoLevel: intoLevel, battlesForNext: FIELD_XP_PER_POINT, totalPoints, maxed: level >= SPECIAL_MAX_LEVEL };
+};
+
+export const getSpecialSpentPoints = (special) => SPECIAL_STATS.reduce((sum, k) => sum + Math.max(0, (special?.[k] || SPECIAL_BASE) - SPECIAL_BASE), 0);
+
+// Multiplier applied inside calculateStat for whichever combat stat a SPECIAL
+// point is mapped to. Returns 1 (no-op) for characters without a `.special`
+// build -- this only activates for characters the game has opted in.
+export const getSpecialStatMult = (char, normalizedStat) => {
+  if (!char || !char.special) return 1;
+  const entry = Object.entries(SPECIAL_STAT_MAP).find(([, mapped]) => mapped === normalizedStat);
+  if (!entry) return 1;
+  const val = char.special[entry[0]] ?? SPECIAL_BASE;
+  return 1 + (val - SPECIAL_BASE) * SPECIAL_PCT_PER_POINT;
+};
+
 export const getBondRankName = (level, relationship) => {
   // Normalize relationship strings to the keys used in PATH_ADJECTIVES / PATH_TITLES
   const relKey = (relationship || '').toLowerCase().includes('romant') ? 'Romantic'
@@ -317,18 +378,23 @@ export const calculateStat = (base, level, char, characters = [], statType = 'hp
     }
   });
 
+  // 12. SPECIAL build (Courier-exclusive): no-op multiplier of 1 for any
+  // character without a `.special` allocation.
+  const specialMult = getSpecialStatMult(char, normalizedStat);
+
   return Math.floor(
-    currentBase * 
-    growthFactor * 
-    typeMult * 
-    tierBonus * 
-    globalAuraMult * 
-    bondBonus * 
-    franchiseBonus * 
-    ascensionBonus * 
+    currentBase *
+    growthFactor *
+    typeMult *
+    tierBonus *
+    globalAuraMult *
+    bondBonus *
+    franchiseBonus *
+    ascensionBonus *
     duplicateBonus *
     cosmeticCollectionMult *
-    singularityBonus
+    singularityBonus *
+    specialMult
   );
 };
 
@@ -359,7 +425,10 @@ export const calculateSubStat = (char, characters, type, skills = [], auraUpgrad
       // Diminishing returns: Base 5% + (Luck contribution, max ~45% at infinite luck) + Level/Speed small bonus
       // Formula: (Luck / (Luck + 2000)) * 45
       const luckCrit = (luck / (luck + 2000)) * 45;
-      result = Number(Math.min(100, 5 + luckCrit + (speed / 3000) + (level / 50)).toFixed(1));
+      // SPECIAL Perception: flat crit rate per point above baseline, independent
+      // of the luck curve above -- gives PER its own clear identity in a build.
+      const perCrit = char.special ? ((char.special.per ?? 1) - 1) * SPECIAL_PER_CRIT_PER_POINT : 0;
+      result = Number(Math.min(100, 5 + luckCrit + perCrit + (speed / 3000) + (level / 50)).toFixed(1));
       break;
     case 'crit_dmg':
       result = Number((150 + (atk / 400) + ((char.ascension || 0) * 25)).toFixed(1));
@@ -454,6 +523,16 @@ export const getStatGain = (base) => Math.floor(base * 0.08);
 // below is the tuned, shipped behavior: DEF == `constant` gives 50% mitigation.
 // Skills use 4500, basic attacks use 1000 (their original values), preserved via
 // the optional `constant` argument.
+// Courier's "Field Experience" -- his own leveling system (see
+// getSpecialLevelInfo above), separate from normal character XP/level.
+// Ticks once per victory he's fielded in, alive or dead, regardless of mode.
+export const incrementCourierFieldBattles = (setCharacters, combatants) => {
+  if (typeof setCharacters !== 'function') return;
+  const fielded = (combatants || []).some((c) => !c.isEnemy && c.name === 'Courier');
+  if (!fielded) return;
+  setCharacters((prev) => prev.map((c) => c.name === 'Courier' ? { ...c, courierFieldBattles: (c.courierFieldBattles || 0) + 1 } : c));
+};
+
 export const DEF_CONSTANT = 4500;
 
 // Fraction of damage that gets through after defense mitigation.

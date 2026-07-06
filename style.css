@@ -3197,8 +3197,14 @@ select.search-bar {
 
 .gacha-btn-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
+}
+@media (max-width: 600px) {
+    .gacha-btn-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .gacha-main-btn { padding: 10px 6px; }
+    .gacha-main-btn .btn-label { font-size: 0.85rem !important; }
+    .gacha-main-btn .btn-sub { font-size: 0.65rem; }
 }
 
 .gacha-main-btn {

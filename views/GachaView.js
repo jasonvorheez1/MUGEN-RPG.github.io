@@ -8,6 +8,31 @@ import {
 } from "lucide-react";
 import { playSound } from "../utils.js";
 
+// Duplicate-hero refund: a fraction of that single pull's cost is handed back
+// as currency, and the existing per-dupe stat bonus is buffed. Softens the
+// "I already have this one" feeling instead of pulls just vanishing.
+const DUPLICATE_REFUND_PCT = 0.35;
+const DUPLICATE_STAT_BONUS = 0.015;
+// PITY: track pulls-since-last-high-tier per banner in localStorage (survives
+// reloads and rides along with normal save export/import since it's a
+// "mugen_"-prefixed key). Soft pity starts nudging the odds up; hard pity
+// guarantees a top-tier hero/item outright so a bad streak always ends.
+const PITY_SOFT_START = 90;
+const PITY_HARD_CAP = 150;
+// Tier strings in the wild include variants like "SS-", "SS+", "S-" beyond the
+// six canonical buckets, so match by prefix rather than an exact set --
+// anything in the SS family or S+ counts as a pity-satisfying top-tier pull.
+const isHighTier = (tier) => {
+  const t = String(tier || "").toUpperCase();
+  return t.startsWith("SS") || t === "S+";
+};
+const ITEM_PITY_SOFT_START = 30;
+const ITEM_PITY_HARD_CAP = 50;
+const loadPity = () => {
+  try { return JSON.parse(localStorage.getItem("mugen_gacha_pity") || "{}"); } catch (e) { return {}; }
+};
+const savePity = (obj) => localStorage.setItem("mugen_gacha_pity", JSON.stringify(obj));
+
 const GachaView = ({
   gems,
   setGems,
@@ -29,6 +54,7 @@ const GachaView = ({
   });
   const [resultsData, setResultsData] = useState(null);
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
+  const [pity, setPity] = useState(loadPity);
   useEffect(() => {
     localStorage.setItem("mugen_gacha_skip", skipAnim);
   }, [skipAnim]);
@@ -37,10 +63,14 @@ const GachaView = ({
   const BASE_CASH_PULL_COST = 15e4;
   const ITEM_PULL_COST = 5e4;
   const X10_DISCOUNT_MULT = 0.85;
+  const X100_DISCOUNT_MULT = 0.7;
   const currentOwned = unlockedIds.length;
-  const inflationCapMult = 3.5;
-  const dynamicCashCost = Math.floor(BASE_CASH_PULL_COST * Math.min(inflationCapMult, Math.pow(1.08, currentOwned)));
-  const dynamicGemCost = Math.floor(BASE_GEM_PULL_COST * Math.min(inflationCapMult, Math.pow(1.04, currentOwned)));
+  // Grind-easing pass: inflation used to cap at 3.5x (and climbed fast — 1.08/1.04
+  // per owned hero) which made pulls feel worse and worse the more you played.
+  // Softer cap + slower growth keeps the loop from punishing progression.
+  const inflationCapMult = 1.8;
+  const dynamicCashCost = Math.floor(BASE_CASH_PULL_COST * Math.min(inflationCapMult, Math.pow(1.045, currentOwned)));
+  const dynamicGemCost = Math.floor(BASE_GEM_PULL_COST * Math.min(inflationCapMult, Math.pow(1.02, currentOwned)));
   const banners = React.useMemo(() => {
     const dayIndex = (/* @__PURE__ */ new Date()).getDay();
     const franchiseCounts = characters.reduce((m, c) => {
@@ -116,7 +146,8 @@ const GachaView = ({
     const currency = activeBanner.currency;
     const costPer = activeBanner.cost;
     const x10Cost = Math.ceil(costPer * 10 * X10_DISCOUNT_MULT);
-    const actualCost = maxPulls === 10 ? x10Cost : costPer * maxPulls;
+    const x100Cost = Math.ceil(costPer * 100 * X100_DISCOUNT_MULT);
+    const actualCost = maxPulls === 100 ? x100Cost : maxPulls === 10 ? x10Cost : costPer * maxPulls;
     const balance = currency === "gems" ? gems : credits;
     if (balance < actualCost) {
       createFloatingText(`Need ${currency === "gems" ? "Gems" : "Cash"}!`, true);
@@ -126,6 +157,10 @@ const GachaView = ({
     if (currency === "gems") setGems((g) => g - actualCost);
     else setCredits((c) => c - actualCost);
     const pulls = [];
+    let refundCredits = 0;
+    let refundGems = 0;
+    const pityKey = (activeTab === "items" ? "item_" : "") + activeBanner.id;
+    let pityCount = pity[pityKey] || 0;
     if (activeTab === "items") {
       const pool = Object.keys(items || {});
       const rarities = { "legendary": [], "epic": [], "rare": [], "uncommon": [], "common": [] };
@@ -139,9 +174,14 @@ const GachaView = ({
         }
       });
       for (let i = 0; i < maxPulls; i++) {
+        // Item pity: soft-boosts legendary odds past ITEM_PITY_SOFT_START pulls,
+        // then hard-guarantees one at ITEM_PITY_HARD_CAP so a dry streak always ends.
+        const softBoost = pityCount >= ITEM_PITY_SOFT_START ? (pityCount - ITEM_PITY_SOFT_START) * 0.015 : 0;
+        const forced = pityCount >= ITEM_PITY_HARD_CAP && rarities.legendary.length;
         const roll = Math.random();
         let selectedRarity = "common";
-        if (roll < 0.04 && rarities.legendary.length) selectedRarity = "legendary";
+        if (forced) selectedRarity = "legendary";
+        else if (roll < 0.04 + softBoost && rarities.legendary.length) selectedRarity = "legendary";
         else if (roll < 0.15 && rarities.epic.length) selectedRarity = "epic";
         else if (roll < 0.4 && rarities.rare.length) selectedRarity = "rare";
         else if (roll < 0.7 && rarities.uncommon.length) selectedRarity = "uncommon";
@@ -150,6 +190,7 @@ const GachaView = ({
         const item = items[id];
         pulls.push({ ...item, isItem: true, id, tier: item.rarity.toUpperCase() });
         addToInventory(id);
+        pityCount = selectedRarity === "legendary" ? 0 : pityCount + 1;
       }
       playSound2("gacha_results");
     } else {
@@ -157,21 +198,39 @@ const GachaView = ({
       const newUnlockedIds = [];
       const pullsMap = {};
       for (let i = 0; i < maxPulls; i++) {
+        let bannerPool = pool;
+        if (activeBanner.filter?.type === "franchise") bannerPool = pool.filter((c) => c.franchise === activeBanner.filter.value);
+        else if (activeBanner.filter?.type === "element") bannerPool = pool.filter((c) => c.element === activeBanner.filter.value);
+        if (!bannerPool.length) bannerPool = pool;
+        // Hero pity: soft-boosts SS/S+ odds past PITY_SOFT_START pulls without one,
+        // then hard-guarantees a top-tier hero at PITY_HARD_CAP.
+        const forced = pityCount >= PITY_HARD_CAP;
+        const softChance = pityCount >= PITY_SOFT_START ? (pityCount - PITY_SOFT_START) * 0.02 : 0;
         let lucky;
-        if (activeBanner.filter?.type === "franchise") {
-          const fPool = pool.filter((c) => c.franchise === activeBanner.filter.value);
-          lucky = Math.random() < 0.35 && fPool.length ? fPool[Math.floor(Math.random() * fPool.length)] : pool[Math.floor(Math.random() * pool.length)];
-        } else if (activeBanner.filter?.type === "element") {
-          const ePool = pool.filter((c) => c.element === activeBanner.filter.value);
-          lucky = Math.random() < 0.6 && ePool.length ? ePool[Math.floor(Math.random() * ePool.length)] : pool[Math.floor(Math.random() * pool.length)];
-        } else {
-          lucky = pool[Math.floor(Math.random() * pool.length)];
+        if (forced || Math.random() < softChance) {
+          const highPool = bannerPool.filter((c) => isHighTier(c.tier));
+          lucky = highPool.length ? highPool[Math.floor(Math.random() * highPool.length)] : null;
         }
+        if (!lucky) {
+          if (activeBanner.filter?.type === "franchise") {
+            lucky = Math.random() < 0.35 && bannerPool.length ? bannerPool[Math.floor(Math.random() * bannerPool.length)] : pool[Math.floor(Math.random() * pool.length)];
+          } else if (activeBanner.filter?.type === "element") {
+            lucky = Math.random() < 0.6 && bannerPool.length ? bannerPool[Math.floor(Math.random() * bannerPool.length)] : pool[Math.floor(Math.random() * pool.length)];
+          } else {
+            lucky = pool[Math.floor(Math.random() * pool.length)];
+          }
+        }
+        pityCount = isHighTier(lucky.tier) ? 0 : pityCount + 1;
         const isNew = !unlockedIds.includes(lucky.export_id) && !newUnlockedIds.includes(lucky.export_id);
         pulls.push({ ...lucky, isNew });
         if (!pullsMap[lucky.export_id]) pullsMap[lucky.export_id] = { count: 0, bonus: 0 };
         pullsMap[lucky.export_id].count += 1;
-        if (!isNew) pullsMap[lucky.export_id].bonus += 5e-3;
+        if (!isNew) {
+          pullsMap[lucky.export_id].bonus += DUPLICATE_STAT_BONUS;
+          const unitCost = maxPulls === 100 ? x100Cost / 100 : maxPulls === 10 ? x10Cost / 10 : costPer;
+          if (currency === "gems") refundGems += Math.ceil(unitCost * DUPLICATE_REFUND_PCT);
+          else refundCredits += Math.ceil(unitCost * DUPLICATE_REFUND_PCT);
+        }
         if (isNew) newUnlockedIds.push(lucky.export_id);
       }
       if (newUnlockedIds.length > 0) {
@@ -188,9 +247,16 @@ const GachaView = ({
         }
         return c;
       }));
-      playSound2(pulls.some((p) => p.isNew && ["SS", "S+"].includes(p.tier)) ? "gacha_legendary" : "gacha_results");
+      if (refundGems > 0) setGems((g) => g + refundGems);
+      if (refundCredits > 0) setCredits((c) => c + refundCredits);
+      playSound2(pulls.some((p) => p.isNew && isHighTier(p.tier)) ? "gacha_legendary" : "gacha_results");
     }
-    setResultsData({ items: pulls, totalSpent: actualCost, currency });
+    setPity((prev) => {
+      const next = { ...prev, [pityKey]: pityCount };
+      savePity(next);
+      return next;
+    });
+    setResultsData({ items: pulls, totalSpent: actualCost, currency, refund: refundGems || refundCredits || 0 });
     setIsSummoning(true);
   };
   const handleSummonClick = (count) => {
@@ -289,17 +355,35 @@ const GachaView = ({
     }),
     /* @__PURE__ */ jsxDEV("div", { className: "gacha-controls", style: { zIndex: 10, position: "relative", marginTop: -30, padding: "0 20px" }, children: /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { background: "rgba(20, 20, 30, 0.95)", border: "1px solid rgba(255,255,255,0.1)", padding: 25, display: "flex", flexDirection: "column", gap: 20, borderRadius: 24 }, children: [
       /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "var(--primary)", fontWeight: 900 }, children: [
-          "INFLATION SURGE: +",
-          ((dynamicCashCost / BASE_CASH_PULL_COST - 1) * 100).toFixed(0),
-          "% COST (BASED ON ",
-          currentOwned,
-          " OWNED)"
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 3788,
-          columnNumber: 17
-        }),
+        /* @__PURE__ */ jsxDEV("div", { children: [
+          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "var(--primary)", fontWeight: 900 }, children: [
+            "INFLATION SURGE: +",
+            ((dynamicCashCost / BASE_CASH_PULL_COST - 1) * 100).toFixed(0),
+            "% COST (BASED ON ",
+            currentOwned,
+            " OWNED)"
+          ] }, void 0, true, {
+            fileName: "<stdin>",
+            lineNumber: 3788,
+            columnNumber: 17
+          }),
+          activeTab === "heroes" && /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#facc15", fontWeight: 900, marginTop: 4 }, children: [
+            "PITY: ",
+            pity[activeBanner.id] || 0,
+            " / ",
+            PITY_HARD_CAP,
+            " pulls -- guaranteed SS/S+ by then (soft odds ramp from ",
+            PITY_SOFT_START,
+            ")"
+          ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          activeTab === "items" && /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#facc15", fontWeight: 900, marginTop: 4 }, children: [
+            "PITY: ",
+            pity["item_" + activeBanner.id] || 0,
+            " / ",
+            ITEM_PITY_HARD_CAP,
+            " pulls -- guaranteed Legendary by then"
+          ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
         /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", alignItems: "center", gap: 12 }, children: /* @__PURE__ */ jsxDEV("div", { style: { background: "rgba(255,255,255,0.05)", padding: "8px 16px", borderRadius: 20, display: "flex", gap: 8, alignItems: "center" }, children: [
           /* @__PURE__ */ jsxDEV("input", { type: "checkbox", id: "skipAnim", checked: skipAnim, onChange: (e) => setSkipAnim(e.target.checked), style: { accentColor: "var(--primary)" } }, void 0, false, {
             fileName: "<stdin>",
@@ -378,7 +462,12 @@ const GachaView = ({
           fileName: "<stdin>",
           lineNumber: 3809,
           columnNumber: 15
-        })
+        }),
+        /* @__PURE__ */ jsxDEV("button", { className: "gacha-main-btn x100", style: { background: "linear-gradient(180deg, #a855f7, #6b21a8)", border: "none", boxShadow: "0 10px 30px rgba(168, 85, 247, 0.4)" }, onClick: () => handleSummonClick(100), children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "btn-label", style: { fontSize: "1.4rem", color: "#fff", textShadow: "none" }, children: "PULL x100" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("div", { className: "btn-sub", style: { color: "#fff", fontWeight: 800 }, children: activeBanner.currency === "gems" ? `${Math.ceil(activeBanner.cost * 100 * X100_DISCOUNT_MULT)}` : `$${Math.ceil(activeBanner.cost * 100 * X100_DISCOUNT_MULT).toLocaleString()}` }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", top: 5, right: 5, background: "#ef4444", color: "#fff", fontSize: "0.6rem", fontWeight: 900, padding: "2px 6px", borderRadius: 4 }, children: "-30% OFF" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
       ] }, void 0, true, {
         fileName: "<stdin>",
         lineNumber: 3803,
@@ -430,7 +519,7 @@ const GachaView = ({
           lineNumber: 3831,
           columnNumber: 18
         }),
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: 20 }, children: [
+        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: resultsData.refund > 0 ? 4 : 20 }, children: [
           "SPENT: ",
           resultsData.currency === "gems" ? `${resultsData.totalSpent} GEMS` : `$${resultsData.totalSpent.toLocaleString()}`
         ] }, void 0, true, {
@@ -438,6 +527,10 @@ const GachaView = ({
           lineNumber: 3832,
           columnNumber: 18
         }),
+        resultsData.refund > 0 && /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.7rem", color: "#4ade80", fontWeight: 800, marginBottom: 20 }, children: [
+          "DUPLICATE REFUND: +",
+          resultsData.currency === "gems" ? `${resultsData.refund} GEMS` : `$${resultsData.refund.toLocaleString()}`
+        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
         /* @__PURE__ */ jsxDEV("div", { className: "gacha-compact-grid custom-scroll", style: { gridTemplateColumns: "repeat(5, 1fr)", gap: 10, background: "rgba(0,0,0,0.5)", padding: 20 }, children: resultsData.items.map((item, i) => /* @__PURE__ */ jsxDEV("div", { className: `gacha-compact-item ${item.isNew ? "new-hero" : ""}`, style: { borderColor: item.isItem ? "#facc15" : "" }, children: [
           item.isItem ? /* @__PURE__ */ jsxDEV("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#111" }, children: /* @__PURE__ */ jsxDEV(Package, { size: 24, color: item.rarity === "rare" ? "#3b82f6" : "#a855f7" }, void 0, false, {
             fileName: "<stdin>",

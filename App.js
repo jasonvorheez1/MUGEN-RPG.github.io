@@ -2513,7 +2513,7 @@ Data: { ${promptLines} }`;
         lineNumber: 1703,
         columnNumber: 30
       }),
-      view === "trials" && /* @__PURE__ */ jsxDEV(TrialsView, { characters, unlockedIds, createFloatingText, squadIds, setSquadIds, setShowSquadBuilder, clearedTrials, setClearedTrials, setGems, setAura, stamina, setStamina, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, triggerVisualEffect, endlessFloor, setEndlessFloor, arenaRank, setArenaRank, setCredits, setMaterials, setEssence, skills, auraUpgrades }, void 0, false, {
+      view === "trials" && /* @__PURE__ */ jsxDEV(TrialsView, { characters, unlockedIds, createFloatingText, squadIds, setSquadIds, setShowSquadBuilder, clearedTrials, setClearedTrials, setGems, setAura, stamina, setStamina, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, triggerVisualEffect, endlessFloor, setEndlessFloor, arenaRank, setArenaRank, setCredits, setMaterials, setEssence, skills, auraUpgrades, setCharacters }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1704,
         columnNumber: 31

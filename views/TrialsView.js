@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.js";
 import { ELEMENTS, TIER_STATS } from "../constants.js";
-import { calculateStat, playSound, calculateSubStat, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, SIGNATURE_BONUS } from "../utils.js";
+import { calculateStat, playSound, calculateSubStat, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, SIGNATURE_BONUS, incrementCourierFieldBattles } from "../utils.js";
 import { CampaignIntro } from "./ViewShared.js";
 
 // Arena league tiers — pure presentation, derived from rank. Gives the ladder the
@@ -116,7 +116,8 @@ const TrialsView = ({
   setEssence,
   skills,
   setShowSquadBuilder,
-  auraUpgrades = {}
+  auraUpgrades = {},
+  setCharacters
 }) => {
   const [pendingTrial, setPendingTrial] = useState(null);
   const [activeTrial, setActiveTrial] = useState(null);
@@ -816,6 +817,7 @@ const TrialsView = ({
           setBattleState("WIN");
           playSound("victory", 0.8);
           if (setIsVictoryMusic) setIsVictoryMusic(true);
+          incrementCourierFieldBattles(setCharacters, prev);
           return prev;
         }
         const next = prev.map((u) => ({ ...u, effects: [...u.effects || []] }));

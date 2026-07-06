@@ -13,7 +13,7 @@ import {
   Clover
 } from "lucide-react";
 import { ELEMENTS, LEADER_SKILLS, COSMETICS, TIER_ORDER } from "../constants.js";
-import { calculateStat, getBondRankName, getBondPath, playSound, calculateSubStat, formatPower } from "../utils.js";
+import { calculateStat, getBondRankName, getBondPath, playSound, calculateSubStat, formatPower, SPECIAL_STATS, SPECIAL_LABELS, SPECIAL_DESCRIPTIONS, SPECIAL_BASE, SPECIAL_CAP, getDefaultSpecial, getSpecialLevelInfo, getSpecialSpentPoints, FIELD_XP_PER_POINT } from "../utils.js";
 import { AbilitiesView } from "./AbilitiesView.js";
 
 const CharacterDetailView = ({
@@ -204,6 +204,67 @@ Cost: $${costCredits.toLocaleString()} & ${costEssence} Essence`)) {
   const trainBatch = (n, e) => {
     if (n <= 0) return;
     for (let i = 0; i < n; i++) handleTrain(false, e);
+  };
+  // SPECIAL BUILD (Courier-exclusive): Fallout-style 7-stat allocation with
+  // its own "Field Experience" leveling track (battles fought, not char XP/level).
+  const isSpecialEligible = char.name === "Courier";
+  const setSpecialPoint = (statKey, delta) => {
+    const current = char.special || getDefaultSpecial();
+    const info = getSpecialLevelInfo(char.courierFieldBattles || 0);
+    const spent = getSpecialSpentPoints(current);
+    const newVal = (current[statKey] ?? SPECIAL_BASE) + delta;
+    if (newVal < SPECIAL_BASE || newVal > SPECIAL_CAP) return;
+    if (delta > 0 && spent >= info.totalPoints) {
+      createFloatingText("No SPECIAL points available -- win more battles!", true);
+      return;
+    }
+    setCharacters((prev) => prev.map((c) => c.export_id === char.export_id ? { ...c, special: { ...current, [statKey]: newVal } } : c));
+    playSound(delta > 0 ? "ui_select" : "ui_cancel", 0.3);
+  };
+  const renderSpecialTab = () => {
+    const special = char.special || getDefaultSpecial();
+    const info = getSpecialLevelInfo(char.courierFieldBattles || 0);
+    const spent = getSpecialSpentPoints(special);
+    const available = info.totalPoints - spent;
+    const h = React.createElement;
+    return h("div", { className: "animate-fadeIn", style: { padding: "10px 0" } },
+      h("div", { className: "glass-panel", style: { padding: 16, marginBottom: 16, border: "1px solid rgba(168, 85, 247, 0.4)" } },
+        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
+          h("div", { style: { fontSize: "0.7rem", fontWeight: 900, color: "#a855f7", letterSpacing: 1 } }, "FIELD EXPERIENCE"),
+          h("div", { style: { fontSize: "0.9rem", fontWeight: 900, color: "#fff" } }, `LV. ${info.level}${info.maxed ? " (MAX)" : ""}`)
+        ),
+        h("div", { className: "tech-progress-bar", style: { width: "100%", height: 8, background: "rgba(255,255,255,0.05)", marginBottom: 6 } },
+          h("div", { className: "tech-progress-fill", style: { width: `${info.maxed ? 100 : info.battlesIntoLevel / info.battlesForNext * 100}%`, background: "#a855f7" } })
+        ),
+        h("div", { style: { fontSize: "0.65rem", color: "var(--text-muted)" } },
+          info.maxed ? "Field Experience maxed out." : `${info.battlesIntoLevel} / ${info.battlesForNext} battles fielded toward next SPECIAL point`
+        ),
+        h("div", { style: { fontSize: "0.65rem", color: "#facc15", fontWeight: 800, marginTop: 8 } },
+          `${available} POINT${available === 1 ? "" : "S"} AVAILABLE (respec any time, free)`
+        )
+      ),
+      h("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+        SPECIAL_STATS.map((key) => {
+          const val = special[key] ?? SPECIAL_BASE;
+          return h("div", { key, className: "glass-panel", style: { padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 } },
+            h("div", { style: { flex: 1, minWidth: 0 } },
+              h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline" } },
+                h("div", { style: { fontSize: "0.8rem", fontWeight: 900, color: "#fff" } }, `${SPECIAL_LABELS[key]} (${key.toUpperCase()})`),
+                h("div", { style: { fontSize: "0.75rem", fontWeight: 900, color: "#a855f7" } }, `${val} / ${SPECIAL_CAP}`)
+              ),
+              h("div", { style: { fontSize: "0.6rem", color: "var(--text-muted)", marginTop: 2 } }, SPECIAL_DESCRIPTIONS[key]),
+              h("div", { className: "tech-progress-bar", style: { width: "100%", height: 5, background: "rgba(255,255,255,0.05)", marginTop: 6 } },
+                h("div", { className: "tech-progress-fill", style: { width: `${(val - SPECIAL_BASE) / (SPECIAL_CAP - SPECIAL_BASE) * 100}%`, background: "#facc15" } })
+              )
+            ),
+            h("div", { style: { display: "flex", flexDirection: "column", gap: 4 } },
+              h("button", { className: "sb-icon-btn", style: { width: 28, height: 28 }, disabled: val >= SPECIAL_CAP || available <= 0, onClick: () => setSpecialPoint(key, 1) }, "+"),
+              h("button", { className: "sb-icon-btn", style: { width: 28, height: 28 }, disabled: val <= SPECIAL_BASE, onClick: () => setSpecialPoint(key, -1) }, "-")
+            )
+          );
+        })
+      )
+    );
   };
   const renderTrainingTab = () => {
     const h = React.createElement;
@@ -1163,7 +1224,11 @@ ${costEss > 0 ? `- ${costEss} Essence
           fileName: "<stdin>",
           lineNumber: 899,
           columnNumber: 13
-        })
+        }),
+        isSpecialEligible && /* @__PURE__ */ jsxDEV("button", { className: `deck-tab ${activeTab === "special" ? "active" : ""}`, style: { color: "#a855f7" }, onClick: () => {
+          setActiveTab("special");
+          playSound("ui_select", 0.2);
+        }, children: "SPECIAL" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
       ] }, void 0, true, {
         fileName: "<stdin>",
         lineNumber: 895,
@@ -1171,6 +1236,7 @@ ${costEss > 0 ? `- ${costEss} Essence
       }),
       /* @__PURE__ */ jsxDEV("div", { className: "deck-content custom-scroll", children: [
         activeTab === "training" && renderTrainingTab(),
+        activeTab === "special" && isSpecialEligible && renderSpecialTab(),
         activeTab === "abilities" && /* @__PURE__ */ jsxDEV(AbilitiesView, { char, characters, credits, setCredits, gems, setGems, essence, setEssence, setCharacters, selectedCharIndex: characters.indexOf(char), createFloatingText, skills, auraUpgrades }, void 0, false, {
           fileName: "<stdin>",
           lineNumber: 959,

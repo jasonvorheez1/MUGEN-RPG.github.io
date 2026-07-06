@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.js";
 import { CAMPAIGN_CONTENT, ELEMENTS, LEADER_SKILLS, COSMETICS } from "../constants.js";
-import { calculateStat, playSound, calculateSubStat, getTierEfficiency, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation } from "../utils.js";
+import { calculateStat, playSound, calculateSubStat, getTierEfficiency, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, incrementCourierFieldBattles } from "../utils.js";
 import { isMobile, CampaignIntro } from "./ViewShared.js";
 
 const CampaignView = ({
@@ -593,6 +593,7 @@ const CampaignView = ({
           setBattleState("WIN");
           playSound("victory", 0.8);
           if (setIsVictoryMusic) setIsVictoryMusic(true);
+          incrementCourierFieldBattles(setCharacters, prev);
           const id = activeBattle.id;
           const r = activeBattle.rewards || {};
           const allies = prev.filter((c) => !c.isEnemy);

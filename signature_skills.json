@@ -3618,5 +3618,42 @@
   "statusEffects": [
    { "type": "burn", "chance": 0.9, "duration": 4, "val": 0.1, "label": "AMATERASU" }
   ]
+ },
+ {
+  "id": "sig_courier_lucky38",
+  "owner": "Courier",
+  "name": "Lucky 38 Override",
+  "desc": "The Platinum Chip's systems max out and the Courier's whole kit reshuffles around whichever Package is active this cast -- Survivalist digs in and blasts through cover, Diplomat drops every foe's guard and patches up the squad, Mercenary goes for the throat. Same button, three completely different fights, cycling every use.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.1,
+  "cooldown": 130,
+  "scalingStat": "atk",
+  "flavor": "Six bullets, more than enough to kill anything that moves.",
+  "damageType": "physical",
+  "meta": {
+   "ignore_evasion": true,
+   "stage_cycle": [
+    {
+     "team_effects": [{ "type": "buff_def", "duration": 3, "val": 0.25, "label": "SURVIVALIST PACKAGE" }],
+     "enemy_effects": [{ "type": "poison", "duration": 3, "val": 0.08, "label": "BLED OUT" }],
+     "msg": "SURVIVALIST PACKAGE"
+    },
+    {
+     "enemy_effects": [{ "type": "debuff_atk", "duration": 3, "val": 0.3, "label": "TALKED DOWN" }],
+     "heal_pct": 0.12,
+     "team_effects": [{ "type": "buff_crit", "duration": 3, "val": 0.12, "label": "DIPLOMAT PACKAGE" }],
+     "msg": "DIPLOMAT PACKAGE"
+    },
+    {
+     "dmgMult": 1.6,
+     "team_effects": [{ "type": "buff_atk", "duration": 3, "val": 0.3, "label": "MERCENARY PACKAGE" }],
+     "burst": 20,
+     "msg": "MERCENARY PACKAGE"
+    }
+   ]
+  }
  }
 ]

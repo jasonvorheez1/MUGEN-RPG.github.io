@@ -11,8 +11,30 @@ import {
 } from "lucide-react";
 import { BattleUnit, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.js";
 import { ELEMENTS } from "../constants.js";
-import { calculateStat, playSound, calculateSubStat, getEnemyStatsFromCP, applyLeaderBonus, applyMitigation } from "../utils.js";
+import { calculateStat, playSound, calculateSubStat, getEnemyStatsFromCP, applyLeaderBonus, applyMitigation, incrementCourierFieldBattles } from "../utils.js";
 import { CampaignIntro } from "./ViewShared.js";
+
+// VANGUARD LEDGER: a lifetime-earned Event Token milestone track -- something
+// to work toward in Events beyond grinding stages and spending in the shop.
+// Progress is total tokens ever earned (never reduced by shop spending), so
+// it's a second, always-forward-moving reward rail running alongside the
+// spendable Token balance.
+const MILESTONE_TIERS = [
+  { at: 5000, reward: { credits: 3e6 }, label: "5,000 TOKENS EARNED" },
+  { at: 15000, reward: { gems: 200 }, label: "15,000 TOKENS EARNED" },
+  { at: 35000, reward: { materials: 6e4, essence: 1500 }, label: "35,000 TOKENS EARNED" },
+  { at: 75000, reward: { gems: 500, items: ["multiverse_core"] }, label: "75,000 TOKENS EARNED" },
+  { at: 150000, reward: { gems: 900, items: ["xp_grand_tome"] }, label: "150,000 TOKENS EARNED" },
+  { at: 300000, reward: { gems: 1800, materials: 2e5, essence: 5000, items: ["bond_eternal_crystal"] }, label: "300,000 TOKENS EARNED" }
+];
+const loadLedger = () => {
+  try {
+    return {
+      progress: parseInt(localStorage.getItem("mugen_event_ledger_progress") || "0", 10) || 0,
+      claimed: JSON.parse(localStorage.getItem("mugen_event_ledger_claimed") || "[]")
+    };
+  } catch (e) { return { progress: 0, claimed: [] }; }
+};
 
 const EventsView = ({
   characters = [],
@@ -50,6 +72,31 @@ const EventsView = ({
 }) => {
   const [activeEvent, setActiveEvent] = useState(null);
   const [viewMode, setViewMode] = useState("list");
+  const [ledger, setLedger] = useState(loadLedger);
+  const claimLedgerTier = (tier) => {
+    if (ledger.progress < tier.at || ledger.claimed.includes(tier.at)) return;
+    const r = tier.reward;
+    if (r.credits) setCredits((c) => c + r.credits);
+    if (r.gems) setGems((g) => g + r.gems);
+    if (r.materials) {
+      setMaterials((s) => s + r.materials);
+      const cur = parseInt(localStorage.getItem("mugen_materials") || "0", 10);
+      localStorage.setItem("mugen_materials", String(cur + r.materials));
+    }
+    if (r.essence) {
+      setEssence((e) => e + r.essence);
+      const curE = parseInt(localStorage.getItem("mugen_essence") || "0", 10);
+      localStorage.setItem("mugen_essence", String(curE + r.essence));
+    }
+    if (Array.isArray(r.items)) r.items.forEach((it) => addToInventory(it));
+    setLedger((prev) => {
+      const next = { ...prev, claimed: [...prev.claimed, tier.at] };
+      localStorage.setItem("mugen_event_ledger_claimed", JSON.stringify(next.claimed));
+      return next;
+    });
+    createFloatingText(`LEDGER TIER CLAIMED: ${tier.label}`, false, "#facc15");
+    playSound("jackpot");
+  };
   const [battleState, setBattleState] = useState("IDLE");
   const [activeStage, setActiveStage] = useState(null);
   const [pendingStage, setPendingStage] = useState(null);
@@ -68,6 +115,7 @@ const EventsView = ({
       if (typeof setIsVictoryMusic === "function") setIsVictoryMusic(false);
       return;
     }
+    incrementCourierFieldBattles(setCharacters, combatants);
     const r = activeStage.rewards || {};
     const luckRoll = Math.random();
     const isGreatSuccess = luckRoll < 0.15;
@@ -93,7 +141,15 @@ const EventsView = ({
       localStorage.setItem("mugen_essence", String(curE + addE));
       window.dispatchEvent(new CustomEvent("mugen_materials_changed", { detail: { essence: curE + addE } }));
     }
-    if (r.tokens) setEventTokens((t) => t + Math.floor(r.tokens * rewardMult));
+    if (r.tokens) {
+      const earned = Math.floor(r.tokens * rewardMult);
+      setEventTokens((t) => t + earned);
+      setLedger((prev) => {
+        const nextProgress = prev.progress + earned;
+        localStorage.setItem("mugen_event_ledger_progress", String(nextProgress));
+        return { ...prev, progress: nextProgress };
+      });
+    }
     if (Array.isArray(r.items) && r.items.length > 0) {
       r.items.forEach((it) => {
         addToInventory(it);
@@ -640,12 +696,67 @@ const EventsView = ({
         fileName: "<stdin>",
         lineNumber: 6951,
         columnNumber: 11
-      })
+      }),
+      /* @__PURE__ */ jsxDEV("div", { className: "event-card neon-hover", style: { background: "linear-gradient(135deg, rgba(168, 85, 247, 0.15), transparent)", borderRadius: 24, padding: 30, border: "1px solid #a855f7", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", position: "relative", overflow: "hidden" }, onClick: () => setViewMode("ledger"), children: /* @__PURE__ */ jsxDEV("div", { style: { position: "relative", zIndex: 10 }, children: [
+        /* @__PURE__ */ jsxDEV(Star, { size: 48, color: "#a855f7", style: { marginBottom: 15 }, className: "animate-pulse" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        /* @__PURE__ */ jsxDEV("h3", { style: { margin: 0, fontSize: "1.6rem", fontWeight: 900, color: "#a855f7" }, children: "VANGUARD LEDGER" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        /* @__PURE__ */ jsxDEV("p", { style: { fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 8 }, children: "Lifetime token milestones -- one-time rewards that never expire" }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        MILESTONE_TIERS.some((t) => ledger.progress >= t.at && !ledger.claimed.includes(t.at)) && /* @__PURE__ */ jsxDEV("div", { style: { marginTop: 10, display: "inline-block", background: "#facc15", color: "#000", fontSize: "0.65rem", fontWeight: 900, padding: "3px 10px", borderRadius: 20, animation: "pulse-glow 1.5s infinite" }, children: "TIER READY TO CLAIM" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+      ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }) }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
     ] }, void 0, true, {
       fileName: "<stdin>",
       lineNumber: 6917,
       columnNumber: 8
     }),
+    viewMode === "ledger" && /* @__PURE__ */ jsxDEV("div", { className: "animate-fadeIn", children: [
+      /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }, children: [
+        /* @__PURE__ */ jsxDEV("button", { className: "upgrade-btn", onClick: () => setViewMode("list"), style: { padding: "10px 20px" }, children: [
+          /* @__PURE__ */ jsxDEV(ChevronLeft, { size: 16 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          " BACK"
+        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        /* @__PURE__ */ jsxDEV("div", { style: { textAlign: "right" }, children: [
+          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#a855f7", fontWeight: 900, letterSpacing: 2 }, children: "LIFETIME TOKENS EARNED" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.4rem", fontWeight: 900, color: "#fff" }, children: ledger.progress.toLocaleString() }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+      ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+      /* @__PURE__ */ jsxDEV("h2", { style: { margin: "0 0 6px 0", fontFamily: "Cinzel" }, children: "VANGUARD LEDGER" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+      /* @__PURE__ */ jsxDEV("p", { style: { fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 25 }, children: "Every Event Token you've ever earned counts toward these tiers -- spending tokens in the Exchange Hub never rolls this back. Clear rifts at your own pace; the ledger only moves forward." }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+      /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", flexDirection: "column", gap: 14 }, children: MILESTONE_TIERS.map((tier, i) => {
+        const isClaimed = ledger.claimed.includes(tier.at);
+        const isReady = !isClaimed && ledger.progress >= tier.at;
+        const prevAt = i > 0 ? MILESTONE_TIERS[i - 1].at : 0;
+        const segProgress = Math.max(0, Math.min(1, (ledger.progress - prevAt) / (tier.at - prevAt)));
+        const rewardParts = [];
+        if (tier.reward.credits) rewardParts.push(`$${tier.reward.credits.toLocaleString()}`);
+        if (tier.reward.gems) rewardParts.push(`${tier.reward.gems} Gems`);
+        if (tier.reward.materials) rewardParts.push(`${tier.reward.materials.toLocaleString()} Materials`);
+        if (tier.reward.essence) rewardParts.push(`${tier.reward.essence.toLocaleString()} Essence`);
+        if (Array.isArray(tier.reward.items)) tier.reward.items.forEach((it) => rewardParts.push(it.replace(/_/g, " ")));
+        return /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 20, borderRadius: 16, border: `1px solid ${isClaimed ? "rgba(74, 222, 128, 0.4)" : isReady ? "#facc15" : "rgba(255,255,255,0.1)"}`, opacity: isClaimed ? 0.6 : 1 }, children: [
+          /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }, children: [
+            /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.85rem", fontWeight: 900, color: isClaimed ? "#4ade80" : "#fff" }, children: tier.label }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+            /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.7rem", color: "#facc15", fontWeight: 800 }, children: rewardParts.join(" + ") }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+          ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("div", { className: "tech-progress-bar", style: { width: "100%", height: 8, background: "rgba(255,255,255,0.05)", marginBottom: 10 }, children: /* @__PURE__ */ jsxDEV("div", { className: "tech-progress-fill", style: { width: `${segProgress * 100}%`, background: isClaimed ? "#4ade80" : "#a855f7" } }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }) }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
+            /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.65rem", color: "var(--text-muted)" }, children: [Math.min(ledger.progress, tier.at).toLocaleString(), " / ", tier.at.toLocaleString()] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+            /* @__PURE__ */ jsxDEV(
+              "button",
+              {
+                className: "train-btn",
+                disabled: !isReady,
+                style: { width: "auto", padding: "8px 20px", fontSize: "0.75rem", background: isClaimed ? "#334155" : isReady ? "#facc15" : "#1e293b", color: isReady ? "#000" : "#fff", opacity: isClaimed ? 0.7 : 1 },
+                onClick: () => claimLedgerTier(tier),
+                children: isClaimed ? "CLAIMED" : isReady ? "CLAIM" : "LOCKED"
+              },
+              void 0,
+              false,
+              { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }
+            )
+          ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+        ] }, tier.at, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 });
+      }) }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+    ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
     viewMode === "stages" && !activeStage && /* @__PURE__ */ jsxDEV("div", { className: "animate-fadeIn", children: [
       /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }, children: [
         /* @__PURE__ */ jsxDEV("button", { className: "upgrade-btn", onClick: () => {
