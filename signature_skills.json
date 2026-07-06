@@ -3695,7 +3695,7 @@
   "id": "sig_hannah",
   "owner": "Hannah",
   "name": "X Marks the Spot",
-  "desc": "TREASURE HUNTER'S EYE: never misses -- she's cased this joint already. Rips a buff right out of the target's pocket and marks them for the whole crew to follow up on (-25% DEF, 3 turns). Catch someone still at full health and it's an ambush bonus -- untouched vaults get cracked hardest. Quick hands mean this always lands twice.",
+  "desc": "TREASURE HUNTER'S EYE: never misses -- she's cased this joint already. Rips a buff right out of the target's pocket and marks them for the whole crew to follow up on (-25% DEF, 3 turns). Catch someone still at full health and it's an ambush bonus -- untouched vaults get cracked hardest. Quick hands mean this always lands twice, and she picks the next guy's pocket for their turn before they even get to move.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
@@ -3710,14 +3710,16 @@
    "steal_buff": true,
    "mark": { "def_down": 0.25, "duration": 3, "label": "MARKED FOR LOOTING" },
    "bonus_vs_full_hp": { "above": 0.85, "mult": 1.75 },
-   "extra_hits": 1
+   "extra_hits": 1,
+   "steal_next_enemy_turn": { "drain": 40 },
+   "castMusic": "Megadeth-99 Ways To Die.mid"
   }
  },
  {
   "id": "sig_doc_brown",
   "owner": "Doc Brown",
   "name": "1.21 Gigawatts",
-  "desc": "TEMPORAL RECALIBRATION: three fixed jumps, same order every time. 1955 just gets the DeLorean up to speed. 1985 rips a hole in their defenses and juices the whole squad's offense. 2015 is the payoff -- a full-power strike that patches the timeline: heals the crew, floods Burst, and hands out a squad-wide crit buff. No randomness, just physics.",
+  "desc": "TEMPORAL RECALIBRATION: three fixed jumps, same order every time. 1955 just gets the DeLorean up to speed. 1985 rips a hole in their defenses and juices the whole squad's offense. 2015 is the real payoff -- a full-power strike that reaches back and restores whichever ally is worst off to their actual HP from a few turns back, floods Burst, and hands out a squad-wide crit buff. Not a heal -- an honest-to-god rewind.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
@@ -3742,9 +3744,10 @@
     },
     {
      "dmgMult": 2.6,
-     "heal_pct": 0.12,
+     "rewind_hp": { "turns_ago": 4, "scope": "most_wounded_ally" },
      "burst": 20,
      "team_effects": [{ "type": "buff_crit", "duration": 4, "val": 0.2, "label": "TIMELINE FIXED" }],
+     "castMusic": "Megadeth-Tornado Of Souls.mid",
      "msg": "GREAT SCOTT!"
     }
    ]
@@ -3754,7 +3757,7 @@
   "id": "sig_marty_mcfly",
   "owner": "Marty Mcfly",
   "name": "Nobody Calls Me Chicken",
-  "desc": "CONFIDENCE SURGE: three fixed beats, same order every time. First the hoverboard kicks in, then he starts talking like his old man never taught him different, then the temper finally shows up. Each stage psyches Marty up a little more for the next one.",
+  "desc": "CONFIDENCE SURGE: three fixed beats, same order every time. First the hoverboard kicks in, then he starts talking like his old man never taught him different, then he borrows a page out of Doc's book -- a quick hop back to how he was feeling a second ago. Each stage psyches Marty up a little more for the next one.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
@@ -3778,7 +3781,8 @@
     },
     {
      "dmgMult": 1.35,
-     "self_effects": [{ "type": "buff_atk", "duration": 3, "val": 0.15, "label": "RILED UP" }],
+     "rewind_hp": { "turns_ago": 1, "scope": "self" },
+     "castMusic": "Megadeth-Peace Sells.mid",
      "msg": "NOBODY CALLS ME CHICKEN"
     }
    ]
