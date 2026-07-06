@@ -966,6 +966,17 @@ Data: { ${promptLines} }`;
   }, [setCharacters]);
   useEffect(() => {
     try {
+      window.__mugenPlayUniqueTrack = (file) => {
+        playMidi("music/unique/" + file).catch((e) => console.warn("Unique track playback failed", e));
+      };
+      return () => {
+        delete window.__mugenPlayUniqueTrack;
+      };
+    } catch (e) {
+    }
+  }, []);
+  useEffect(() => {
+    try {
       window.claimVictory = window.claimVictory || function() {
         console.warn("[stub] claimVictory() called but no global handler exists.");
       };
