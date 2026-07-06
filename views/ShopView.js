@@ -55,6 +55,7 @@ const ShopView = ({
   const [autorollActive, setAutorollActive] = useState(false);
   const [rollsRemaining, setRollsRemaining] = useState(0);
   const [activeTab, setActiveTab] = useState("supplies");
+  const [gambleResult, setGambleResult] = useState(null);
   const isFeatureUnlocked = (f) => unlockedFeatures.includes(f);
   const summonHero = () => {
     const ROLL_COST = 1500;
@@ -239,6 +240,56 @@ const ShopView = ({
     if (recipe.cost.gems) max = Math.min(max, Math.floor(gems / recipe.cost.gems));
     return max;
   };
+  const COOKING_RECIPES = [
+    { id: "cook_r_pepper", output: "cook_pepper_stew", qty: 1, cost: { materials: 9e4, essence: 350 }, name: "Spicy Pepper Stew", desc: "A dish that fights back. Fire heroes eat it like candy." },
+    { id: "cook_r_melon", output: "cook_melon_salad", qty: 1, cost: { materials: 9e4, essence: 350 }, name: "Chilled Melon Salad", desc: "Sliced cold and served fast -- a dockside favorite." },
+    { id: "cook_r_waffles", output: "cook_windy_waffles", qty: 1, cost: { materials: 9e4, essence: 350 }, name: "Windy Waffles", desc: "Light, airy, and gone in three bites." },
+    { id: "cook_r_honey", output: "cook_honey_tart", qty: 1, cost: { materials: 9e4, essence: 350 }, name: "Honey Glow Tart", desc: "Golden and glowing, it hums faintly in the right hands." },
+    { id: "cook_r_sausage", output: "cook_blackened_sausage", qty: 1, cost: { materials: 9e4, essence: 350 }, name: "Blackened Sausages", desc: "Charred past the point most would call it done." },
+    { id: "cook_r_pretzel", output: "cook_trail_pretzel", qty: 1, cost: { materials: 9e4, essence: 350 }, name: "Trail Pretzel", desc: "No element, no gimmick -- just hits the spot." },
+    { id: "cook_r_whiskey", output: "cook_whiskey_toast", qty: 1, cost: { materials: 6e4, essence: 350 }, name: "Aged Whiskey Toast", desc: "One glass, raised to the crew." },
+    { id: "cook_r_wine", output: "cook_wine_reserve", qty: 1, cost: { materials: 18e4, essence: 1100, gems: 150 }, name: "Vintage Wine Reserve", desc: "Cellared long before the rift." },
+    { id: "cook_r_sushi", output: "cook_sushi_platter", qty: 1, cost: { materials: 15e4, essence: 900, credits: 3e5 }, name: "Chef's Sushi Platter", desc: "A meal shared is a bond formed." },
+    { id: "cook_r_feast", output: "cook_hearty_feast", qty: 1, cost: { materials: 22e4, essence: 1400, credits: 6e5 }, name: "Hearty Feast", desc: "Nobody leaves this table hungry." },
+    { id: "cook_r_banquet", output: "cook_grand_banquet", qty: 1, cost: { materials: 12e5, essence: 9e3, credits: 15e6, gems: 800 }, name: "The Grand Banquet", desc: "Every dish the kitchen knows how to make, all at once." }
+  ];
+  const GAMBLE_COOK_COST = { materials: 3e4, essence: 200, credits: 5e4 };
+  const GAMBLE_COOK_POOL = [
+    { output: "cook_pepper_stew", weight: 15 },
+    { output: "cook_melon_salad", weight: 15 },
+    { output: "cook_windy_waffles", weight: 15 },
+    { output: "cook_honey_tart", weight: 15 },
+    { output: "cook_blackened_sausage", weight: 15 },
+    { output: "cook_trail_pretzel", weight: 15 },
+    { output: "cook_sushi_platter", weight: 6 },
+    { output: "cook_whiskey_toast", weight: 6 },
+    { output: "cook_wine_reserve", weight: 3 },
+    { output: "cook_hearty_feast", weight: 3 },
+    { output: "cook_grand_banquet", weight: 1 }
+  ];
+  const canAffordGamble = materials >= GAMBLE_COOK_COST.materials && essence >= GAMBLE_COOK_COST.essence && credits >= GAMBLE_COOK_COST.credits;
+  const handleGambleCook = () => {
+    if (!canAffordGamble) {
+      createFloatingText("Not enough resources to cook", true);
+      return;
+    }
+    setMaterials((m) => m - GAMBLE_COOK_COST.materials);
+    setEssence((e) => e - GAMBLE_COOK_COST.essence);
+    setCredits((c) => c - GAMBLE_COOK_COST.credits);
+    const totalWeight = GAMBLE_COOK_POOL.reduce((sum, e) => sum + e.weight, 0);
+    let roll = Math.random() * totalWeight;
+    let picked = GAMBLE_COOK_POOL[0];
+    for (const entry of GAMBLE_COOK_POOL) {
+      if (roll < entry.weight) { picked = entry; break; }
+      roll -= entry.weight;
+    }
+    addToInventory(picked.output, 1);
+    const outputItem = items[picked.output] || { name: picked.output };
+    setGambleResult(outputItem);
+    playSound("craft");
+    if (picked.output === "cook_grand_banquet") playSound("jackpot");
+    createFloatingText(`Cooked up: ${outputItem.name}!`, false, "#4ade80");
+  };
   return /* @__PURE__ */ jsxDEV("div", { className: "shop-view-wrapper animate-fadeIn", style: { padding: "10px 0" }, children: [
     isSummoning && /* @__PURE__ */ jsxDEV("div", { className: "summoning-overlay", children: !summonResult ? /* @__PURE__ */ jsxDEV(Fragment, { children: [
       /* @__PURE__ */ jsxDEV("div", { className: "summoning-circle", children: [
@@ -407,6 +458,11 @@ const ShopView = ({
         lineNumber: 2782,
         columnNumber: 9
       }),
+      /* @__PURE__ */ jsxDEV("button", { className: `shop-tab-v3 ${activeTab === "cooking" ? "active" : ""}`, onClick: () => setActiveTab("cooking"), children: [
+        /* @__PURE__ */ jsxDEV(Activity, { size: 16 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        " ",
+        /* @__PURE__ */ jsxDEV("span", { children: "COOKING" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+      ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
       /* @__PURE__ */ jsxDEV("button", { className: `shop-tab-v3 ${activeTab === "exchange" ? "active" : ""}`, onClick: () => setActiveTab("exchange"), children: [
         /* @__PURE__ */ jsxDEV(Database, { size: 16 }, void 0, false, {
           fileName: "<stdin>",
@@ -2068,6 +2124,49 @@ const ShopView = ({
       lineNumber: 3386,
       columnNumber: 9
     }),
+    activeTab === "cooking" && /* @__PURE__ */ jsxDEV("div", { className: "animate-fadeIn", children: [
+      gambleResult && /* @__PURE__ */ jsxDEV("div", { className: "summoning-overlay", onClick: () => setGambleResult(null), children: /* @__PURE__ */ jsxDEV("div", { className: "glass-panel animate-popIn", style: { padding: 40, textAlign: "center", maxWidth: 340, border: "2px solid var(--gem-color)" }, children: [
+        gambleResult.imageUrl && /* @__PURE__ */ jsxDEV("img", { src: gambleResult.imageUrl, style: { width: 90, height: 90, objectFit: "contain", marginBottom: 15 } }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        /* @__PURE__ */ jsxDEV("h2", { style: { margin: "0 0 5px 0", fontFamily: "Cinzel", letterSpacing: 1 }, children: gambleResult.name }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        /* @__PURE__ */ jsxDEV("p", { style: { fontSize: "0.8rem", opacity: 0.8, margin: "10px 0 25px 0" }, children: gambleResult.desc }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        /* @__PURE__ */ jsxDEV("button", { className: "train-btn", onClick: () => setGambleResult(null), children: "NICE" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+      ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }) }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+      /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 25, marginBottom: 25, textAlign: "center", background: "linear-gradient(135deg, rgba(250, 204, 21, 0.08), rgba(15, 23, 42, 0.8))", borderColor: "rgba(250, 204, 21, 0.3)" }, children: [
+        /* @__PURE__ */ jsxDEV(Activity, { size: 36, color: "#facc15", style: { marginBottom: 12 } }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        /* @__PURE__ */ jsxDEV("h3", { style: { margin: 0, fontSize: "1.3rem", fontWeight: 900, color: "#fff" }, children: "GAMBLE COOK" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        /* @__PURE__ */ jsxDEV("p", { style: { fontSize: "0.8rem", color: "#94a3b8", maxWidth: 420, margin: "8px auto" }, children: "Throw resources at the stove and see what comes out. Cheaper than any single recipe -- but you don't pick the dish." }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "center", gap: 15, margin: "12px 0 18px 0", flexWrap: "wrap" }, children: [
+          /* @__PURE__ */ jsxDEV("span", { style: { fontSize: "0.75rem", fontWeight: 800, color: materials >= GAMBLE_COOK_COST.materials ? "#fff" : "#ef4444" }, children: `${GAMBLE_COOK_COST.materials.toLocaleString()} Materials` }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("span", { style: { fontSize: "0.75rem", fontWeight: 800, color: essence >= GAMBLE_COOK_COST.essence ? "#f97316" : "#ef4444" }, children: `${GAMBLE_COOK_COST.essence.toLocaleString()} Essence` }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("span", { style: { fontSize: "0.75rem", fontWeight: 800, color: credits >= GAMBLE_COOK_COST.credits ? "#facc15" : "#ef4444" }, children: `$${GAMBLE_COOK_COST.credits.toLocaleString()}` }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+        /* @__PURE__ */ jsxDEV("button", { className: "train-btn", style: { width: "auto", padding: "12px 40px" }, onClick: handleGambleCook, disabled: !canAffordGamble, children: "COOK!" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+      ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+      /* @__PURE__ */ jsxDEV("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }, children: COOKING_RECIPES.map((recipe, idx) => {
+        const max = calculateMaxCraft(recipe);
+        const outputItem = items[recipe.output] || { name: recipe.name, icon: "Package" };
+        return /* @__PURE__ */ jsxDEV("div", { className: "shop-card-v3 animate-shop-entry", style: { animationDelay: `${idx * 0.04}s`, padding: 20, textAlign: "left", minHeight: "auto" }, children: [
+          /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 15, marginBottom: 15 }, children: [
+            /* @__PURE__ */ jsxDEV("div", { style: { width: 56, height: 56, borderRadius: 16, background: "rgba(255,255,255,0.03)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }, children: outputItem.imageUrl ? /* @__PURE__ */ jsxDEV("img", { src: outputItem.imageUrl, style: { width: "100%", height: "100%", objectFit: "contain" } }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }) : /* @__PURE__ */ jsxDEV(Activity, { size: 24, color: "var(--primary)" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }) }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("h4", { style: { margin: 0, fontSize: "1.1rem", fontWeight: 900, color: "#fff" }, children: recipe.name }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.7rem", color: "var(--text-muted)", marginTop: 4 }, children: ["Output: ", recipe.qty || 1, "x ", outputItem.name] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+            ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+          ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("p", { style: { margin: "0 0 15px 0", fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.4, height: "2.8em", overflow: "hidden" }, children: recipe.desc }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("div", { style: { background: "rgba(0,0,0,0.2)", padding: 12, borderRadius: 12, marginBottom: 20 }, children: [
+            /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.65rem", fontWeight: 900, color: "var(--text-muted)", marginBottom: 8, textTransform: "uppercase" }, children: "Resources Required:" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+            /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", flexWrap: "wrap", gap: 10 }, children: [
+              recipe.cost.materials && /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: "0.75rem", fontWeight: 800, color: materials >= recipe.cost.materials ? "#fff" : "#ef4444" }, children: [/* @__PURE__ */ jsxDEV(Package, { size: 12 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }), " ", recipe.cost.materials] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+              recipe.cost.essence && /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: "0.75rem", fontWeight: 800, color: essence >= recipe.cost.essence ? "#f97316" : "#ef4444" }, children: [/* @__PURE__ */ jsxDEV(Star, { size: 12 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }), " ", recipe.cost.essence] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+              recipe.cost.credits && /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: "0.75rem", fontWeight: 800, color: credits >= recipe.cost.credits ? "#facc15" : "#ef4444" }, children: [/* @__PURE__ */ jsxDEV(Database, { size: 12 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }), " $", recipe.cost.credits] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+              recipe.cost.gems && /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: "0.75rem", fontWeight: 800, color: gems >= recipe.cost.gems ? "#00d2ff" : "#ef4444" }, children: [/* @__PURE__ */ jsxDEV(Gem, { size: 12 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }), " ", recipe.cost.gems] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+            ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+          ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("button", { className: "shop-buy-btn", style: { width: "100%", padding: "10px", fontSize: "0.8rem", background: max >= 1 ? "var(--primary)" : "#334155", border: "none" }, onClick: () => handleCraft(recipe, 1), disabled: max < 1, children: "COOK x1" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+        ] }, recipe.id, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 });
+      }) }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+    ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
     activeTab === "aura" && /* @__PURE__ */ jsxDEV("div", { className: "animate-fadeIn", children: [
       /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 25, marginBottom: 25, textAlign: "center", background: "linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(15, 23, 42, 0.8))", borderColor: "rgba(168, 85, 247, 0.3)" }, children: [
         /* @__PURE__ */ jsxDEV(Sparkles, { size: 40, color: "#a855f7", style: { marginBottom: 15 } }, void 0, false, {

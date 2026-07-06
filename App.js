@@ -1180,7 +1180,13 @@ Data: { ${promptLines} }`;
     }
   }, [stats]);
   useEffect(() => {
-    if (!isYTReady || !hasStarted) return;
+    // hasStarted only ever flips true from a tap on the launcher's pre-interaction
+    // gate (also where AudioContext gets resumed) -- but returning players skip
+    // the launcher entirely (mugen_intro_seen), so hasStarted stays false forever
+    // for them. Only require it while actually sitting on that pre-tap screen;
+    // once appState has moved past "launcher" the gate no longer applies.
+    console.warn("MUSIC_DEBUG", { isYTReady, hasStarted, appState, view });
+    if (!isYTReady || (appState === "launcher" && !hasStarted)) return;
     const getCampaignChapterId = () => {
       try {
         for (const chap of CAMPAIGN_CONTENT) {

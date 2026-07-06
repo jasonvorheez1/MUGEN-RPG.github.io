@@ -266,6 +266,48 @@ const InventoryView = ({
         setStamina((s) => s + 200);
         createFloatingText("OVERCHARGED +200!", false, "#fbbf24");
         break;
+      case "cook_hearty_feast":
+        setStamina((s) => s + 320);
+        createFloatingText("OVERCHARGED +320!", false, "#fbbf24");
+        break;
+      case "cook_sushi_platter": {
+        setStamina((s) => s + 260);
+        createFloatingText("OVERCHARGED +260!", false, "#fbbf24");
+        setCharacters((prev) => {
+          const next = [...prev];
+          const idx = next.findIndex((c2) => String(c2.export_id) === String(targetId));
+          if (idx === -1) return prev;
+          const c = { ...next[idx] };
+          c.bondXp += Math.floor(400 * getBondMultiplier(c));
+          while (c.bondXp >= c.nextBondXp && c.bondLevel < 100) {
+            c.bondXp -= c.nextBondXp;
+            c.bondLevel++;
+            c.nextBondXp = 80 + c.bondLevel * 25;
+          }
+          next[idx] = c;
+          return next;
+        });
+        createFloatingText("+400 Bond", false, "#f472b6");
+        break;
+      }
+      case "cook_grand_banquet": {
+        setStamina((s) => s + 300);
+        createFloatingText("OVERCHARGED +300!", false, "#fbbf24");
+        setCharacters((prev) => {
+          const next = [...prev];
+          const c = { ...next[tIndex] };
+          c.xp += 2e6;
+          while (c.xp >= c.nextXp) {
+            c.xp -= c.nextXp;
+            c.level++;
+            c.nextXp = Math.floor(100 * Math.pow(1.15, c.level - 1));
+          }
+          next[tIndex] = c;
+          return next;
+        });
+        createFloatingText("+2,000,000 XP", false, "#f472b6");
+        break;
+      }
       case "mystery_crate": {
         const r = Math.random();
         if (r < 0.5) {
@@ -292,7 +334,13 @@ const InventoryView = ({
       case "catalyst_wind":
       case "catalyst_light":
       case "catalyst_dark":
-      case "catalyst_neutral": {
+      case "catalyst_neutral":
+      case "cook_pepper_stew":
+      case "cook_melon_salad":
+      case "cook_windy_waffles":
+      case "cook_honey_tart":
+      case "cook_blackened_sausage":
+      case "cook_trail_pretzel": {
         const xpMap = {
           xp_scroll: 5e3,
           xp_tome: 25e3,
@@ -305,10 +353,16 @@ const InventoryView = ({
           catalyst_wind: 2e4,
           catalyst_light: 2e4,
           catalyst_dark: 2e4,
-          catalyst_neutral: 25e3
+          catalyst_neutral: 25e3,
+          cook_pepper_stew: 5e4,
+          cook_melon_salad: 5e4,
+          cook_windy_waffles: 5e4,
+          cook_honey_tart: 5e4,
+          cook_blackened_sausage: 5e4,
+          cook_trail_pretzel: 5e4
         };
         let gain = xpMap[itemId];
-        if (itemId.startsWith("catalyst_") && targetChar) {
+        if ((itemId.startsWith("catalyst_") || itemId.startsWith("cook_")) && targetChar) {
           const itemEl = item.element;
           if (itemEl === targetChar.element) {
             gain *= 2;
@@ -333,8 +387,10 @@ const InventoryView = ({
       case "bond_gift":
       case "bond_gift_rare":
       case "bond_gift_epic":
-      case "bond_gift_legendary": {
-        const baseGains = { bond_gift: 500, bond_gift_rare: 1500, bond_gift_epic: 5e3, bond_gift_legendary: 15e3 };
+      case "bond_gift_legendary":
+      case "cook_whiskey_toast":
+      case "cook_wine_reserve": {
+        const baseGains = { bond_gift: 500, bond_gift_rare: 1500, bond_gift_epic: 5e3, bond_gift_legendary: 15e3, cook_whiskey_toast: 1e3, cook_wine_reserve: 3e3 };
         let gain = baseGains[itemId];
         const isMatch = item.element === targetChar.element;
         if (isMatch) gain = Math.floor(gain * 1.5);
