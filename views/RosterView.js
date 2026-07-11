@@ -7,14 +7,109 @@ import {
 } from "lucide-react";
 import { ELEMENTS } from "../constants.js";
 import { TierBadge, CustomSelect } from "../components.js";
-import { calculateStat, playSound, calculateSubStat } from "../utils.js";
+import { calculateStat, playSound, calculateSubStat, getOptimalLoadout } from "../utils.js";
 
-const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, unlockedIds = [], shards = {}, setShards, setUnlockedIds, credits = 0, setCredits, playSound: playSound2, skills = [], auraUpgrades = {}, favorites = [], setFavorites }) => {
+const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, unlockedIds = [], shards = {}, setShards, setUnlockedIds, credits = 0, setCredits, playSound: playSound2, skills = [], auraUpgrades = {}, favorites = [], setFavorites, setCharacters = () => {}, inventory = {}, items = {}, removeFromInventory = () => {}, createFloatingText = () => {}, triggerVisualEffect = () => {}, gearInventory = [], setGearInventory }) => {
+  // QoL: "OPTIMIZE ALL" -- runs the same FF-style gear optimizer across every
+  // unlocked hero in one pass, highest-Power first, so scarce shared gear
+  // flows to whoever benefits most instead of being handed out arbitrarily.
+  const [optimizingAll, setOptimizingAll] = useState(false);
+  const applyOptimizeAll = () => {
+    if (typeof setGearInventory !== "function" || !gearInventory.length) {
+      createFloatingText("No gear owned yet", true);
+      return;
+    }
+    setOptimizingAll(true);
+    const unlockedChars = characters
+      .filter((c) => unlockedIds.map(String).includes(String(c.export_id)))
+      .slice()
+      .sort((a, b) => Number(calculateSubStat(b, characters, "pwr", skills, auraUpgrades)) - Number(calculateSubStat(a, characters, "pwr", skills, auraUpgrades)));
+    const claimed = new Set();
+    let changedCount = 0;
+    setCharacters((prev) => {
+      const byId = new Map(prev.map((c) => [String(c.export_id), c]));
+      unlockedChars.forEach((uc) => {
+        const c = byId.get(String(uc.export_id));
+        if (!c) return;
+        const best = getOptimalLoadout(c, gearInventory, claimed);
+        const before = c.equipSlots || {};
+        if (["weapon", "armor", "trinket"].some((slot) => before[slot] !== best[slot])) {
+          changedCount++;
+          byId.set(String(uc.export_id), { ...c, equipSlots: best });
+        }
+      });
+      return prev.map((c) => byId.get(String(c.export_id)) || c);
+    });
+    playSound("equip");
+    createFloatingText(changedCount ? `★ OPTIMIZED GEAR FOR ${changedCount} HERO${changedCount === 1 ? "" : "ES"} ★` : "Already optimal across the roster!", false, "#4ade80");
+    setOptimizingAll(false);
+  };
+  // Mass leveling ("Academy"): pour a stockpiled XP item across the whole roster
+  // at once instead of one hero at a time -- the fast build-up path for 200+ chars.
+  const XP_BULK_VALUES = {
+    xp_scroll: 5e3, xp_tome: 25e3, xp_ultra_tome: 25e4, xp_grand_tome: 5e6,
+    xp_omega_log: 25e6, xp_soul_gem: 45e6, xp_reality_script: 7e7,
+    catalyst_fire: 2e4, catalyst_water: 2e4, catalyst_wind: 2e4, catalyst_light: 2e4, catalyst_dark: 2e4, catalyst_neutral: 25e3,
+    cook_pepper_stew: 5e4, cook_melon_salad: 5e4, cook_windy_waffles: 5e4, cook_honey_tart: 5e4, cook_blackened_sausage: 5e4, cook_trail_pretzel: 5e4,
+    cook_grand_banquet: 2e6
+  };
+  const ownedXpItems = Object.keys(XP_BULK_VALUES).filter((id) => (inventory[id] || 0) > 0);
+  const [bulkItem, setBulkItem] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const applyMassLevel = () => {
+    const id = bulkItem || ownedXpItems[0];
+    if (!id || (inventory[id] || 0) <= 0) { createFloatingText("No XP items in stock", true); return; }
+    const per = XP_BULK_VALUES[id];
+    let stock = inventory[id] || 0;
+    let used = 0, levelsGained = 0;
+    // Feed one item at a time to whichever unlocked hero is furthest from 100,
+    // so a stockpile lifts the whole roster evenly rather than over-capping one.
+    setCharacters((prev) => {
+      const next = prev.map((c) => ({ ...c }));
+      const pool = () => next.filter((c) => unlockedIds.map(String).includes(String(c.export_id)) && (c.level || 1) < 100)
+        .sort((a, b) => (a.level || 1) - (b.level || 1));
+      let guard = 0;
+      while (stock > 0 && guard < 100000) {
+        guard++;
+        const p = pool();
+        if (!p.length) break;
+        const c = p[0];
+        const before = c.level || 1;
+        c.xp = (c.xp || 0) + per;
+        c.nextXp = c.nextXp || Math.floor(100 * Math.pow(1.15, before - 1));
+        while (c.xp >= c.nextXp && c.level < 100) {
+          c.xp -= c.nextXp;
+          c.level = (c.level || 1) + 1;
+          c.nextXp = Math.floor(100 * Math.pow(1.15, c.level - 1));
+          levelsGained++;
+        }
+        stock--; used++;
+      }
+      return next;
+    });
+    if (used > 0) {
+      removeFromInventory(id, used);
+      try { triggerVisualEffect("fx_powerup.png", 50, 45, 2.2); } catch (e) {}
+      playSound("levelUp");
+      createFloatingText(`+${levelsGained} levels across the roster!`, false, "#4ade80");
+    } else {
+      createFloatingText("All unlocked heroes already Lv.100", false, "#facc15");
+    }
+  };
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("power");
   const [sortOrder, setSortOrder] = useState("desc");
   const [filterTier, setFilterTier] = useState("All");
   const [filterGrowth, setFilterGrowth] = useState("All");
+  // QoL filters: element, series/franchise, and owned/signature toggles.
+  const [filterElement, setFilterElement] = useState("All");
+  const [filterFranchise, setFilterFranchise] = useState("All");
+  const [ownedOnly, setOwnedOnly] = useState(false);
+  const [sigOnly, setSigOnly] = useState(false);
+  // Set of character names that have a signature (for the "signature" filter + team-building).
+  const sigOwners = useMemo(() => new Set((skills || []).filter((s) => s.signature).map((s) => s.owner)), [skills]);
+  // All franchises present in the roster, for the series dropdown + series team-building.
+  const franchiseList = useMemo(() => Array.from(new Set((characters || []).map((c) => c && c.franchise).filter(Boolean))).sort(), [characters]);
   const processedCharacters = useMemo(() => {
     if (!characters) return [];
     return characters.filter((c) => {
@@ -25,7 +120,11 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
       const tier = (c.suggestedTier || c.tier || "C").trim();
       const matchesTier = filterTier === "All" || tier === filterTier || filterTier === "S" && tier === "S+";
       const matchesGrowth = filterGrowth === "All" || c.growthType === filterGrowth;
-      return matchesSearch && matchesTier && matchesGrowth;
+      const matchesElement = filterElement === "All" || c.element === filterElement;
+      const matchesFranchise = filterFranchise === "All" || franchise === filterFranchise;
+      const matchesOwned = !ownedOnly || unlockedIds?.includes(c.export_id);
+      const matchesSig = !sigOnly || sigOwners.has(name);
+      return matchesSearch && matchesTier && matchesGrowth && matchesElement && matchesFranchise && matchesOwned && matchesSig;
     }).sort((a, b) => {
       const aUnlocked = unlockedIds?.includes(a.export_id);
       const bUnlocked = unlockedIds?.includes(b.export_id);
@@ -40,6 +139,7 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
       else if (sortBy === "name") comparison = (a.name || "").localeCompare(b.name || "");
       else if (sortBy === "power") comparison = Number(calculateSubStat(b, characters, "pwr", skills, auraUpgrades)) - Number(calculateSubStat(a, characters, "pwr", skills, auraUpgrades));
       else if (sortBy === "element") comparison = (a.element || "").localeCompare(b.element || "") || (a.name || "").localeCompare(b.name || "");
+      else if (sortBy === "franchise") comparison = (a.franchise || "").localeCompare(b.franchise || "") || (a.name || "").localeCompare(b.name || "");
       else if (sortBy === "magic_atk") comparison = Number(calculateSubStat(b, characters, "magic_atk", skills, auraUpgrades)) - Number(calculateSubStat(a, characters, "magic_atk", skills, auraUpgrades));
       else if (sortBy === "magic_def") comparison = Number(calculateSubStat(b, characters, "magic_def", skills, auraUpgrades)) - Number(calculateSubStat(a, characters, "magic_def", skills, auraUpgrades));
       else if (["hp", "atk", "def", "speed"].includes(sortBy)) {
@@ -49,8 +149,36 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
       } else if (sortBy === "bond") comparison = (b.bondLevel || 0) - (a.bondLevel || 0);
       return sortOrder === "desc" ? comparison : -comparison;
     });
-  }, [characters, search, sortBy, sortOrder, filterTier, filterGrowth, unlockedIds, skills, auraUpgrades, favorites]);
+  }, [characters, search, sortBy, sortOrder, filterTier, filterGrowth, filterElement, filterFranchise, ownedOnly, sigOnly, sigOwners, unlockedIds, skills, auraUpgrades, favorites]);
+  const h = React.createElement;
+  const massLevelPanel = h("div", { key: "mass-level", className: "glass-panel", style: { padding: 14, marginBottom: 16, borderLeft: "4px solid #4ade80", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 } }, [
+    h("div", { key: "hd", style: { minWidth: 150 } }, [
+      h("div", { key: "t", style: { fontSize: "0.8rem", fontWeight: 900, color: "#4ade80", letterSpacing: 1 } }, "⚡ THE ACADEMY"),
+      h("div", { key: "s", style: { fontSize: "0.6rem", color: "#94a3b8" } }, "Pour XP stock across every unlocked hero at once")
+    ]),
+    ownedXpItems.length ? h("select", {
+      key: "sel", className: "search-bar", style: { margin: 0, height: 40, flex: "1 1 200px", background: "#111", border: "1px solid #333" },
+      value: bulkItem || ownedXpItems[0], onChange: (e) => setBulkItem(e.target.value)
+    }, ownedXpItems.map((id) => h("option", { key: id, value: id }, `${(items[id] && items[id].name) || id} ×${inventory[id]} (${XP_BULK_VALUES[id].toLocaleString()} XP ea)`)))
+      : h("div", { key: "none", style: { flex: 1, fontSize: "0.75rem", color: "#94a3b8", fontStyle: "italic" } }, "No XP items in stock — earn or craft some, then pour them here."),
+    h("button", {
+      key: "go", className: "train-btn", style: { width: "auto", padding: "10px 22px", opacity: ownedXpItems.length ? 1 : 0.5 },
+      disabled: !ownedXpItems.length, onClick: applyMassLevel
+    }, "POUR ACROSS ROSTER")
+  ]);
+  const optimizeAllPanel = h("div", { key: "optimize-all", className: "glass-panel", style: { padding: 14, marginBottom: 16, borderLeft: "4px solid #4ade80", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 } }, [
+    h("div", { key: "hd", style: { minWidth: 150, flex: 1 } }, [
+      h("div", { key: "t", style: { fontSize: "0.8rem", fontWeight: 900, color: "#4ade80", letterSpacing: 1 } }, "⚡ OPTIMIZE ALL GEAR"),
+      h("div", { key: "s", style: { fontSize: "0.6rem", color: "#94a3b8" } }, `Auto-equip the best owned gear (${gearInventory.length} piece${gearInventory.length === 1 ? "" : "s"} owned) across every unlocked hero, strongest first.`)
+    ]),
+    h("button", {
+      key: "go", className: "train-btn", style: { width: "auto", padding: "10px 22px", opacity: gearInventory.length ? 1 : 0.5 },
+      disabled: !gearInventory.length || optimizingAll, onClick: applyOptimizeAll
+    }, optimizingAll ? "OPTIMIZING…" : "OPTIMIZE ALL")
+  ]);
   return /* @__PURE__ */ jsxDEV("div", { style: { padding: "16px 0" }, children: [
+    massLevelPanel,
+    optimizeAllPanel,
     /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }, children: [
       /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 8, width: "100%" }, children: [
         /* @__PURE__ */ jsxDEV(
@@ -119,6 +247,7 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
               { value: "magic_def", label: "By Magic Def" },
               { value: "speed", label: "By Speed" },
               { value: "element", label: "By Element" },
+              { value: "franchise", label: "By Series" },
               { value: "name", label: "By Name (A-Z)" }
             ]
           },
@@ -157,6 +286,29 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
         lineNumber: 1684,
         columnNumber: 9
       }),
+      h("div", { key: "qol-filters", style: { display: "flex", gap: 8, width: "100%", flexWrap: "wrap", paddingBottom: 4, alignItems: "center" } }, [
+        h(CustomSelect, {
+          key: "el", value: filterElement, onChange: (e) => setFilterElement(e.target.value), style: { width: "140px" },
+          options: [{ value: "All", label: "All Elements" }, ...["FIRE", "WATER", "WIND", "LIGHT", "DARK", "EARTH", "NEUTRAL"].map((el) => ({ value: el, label: el.charAt(0) + el.slice(1).toLowerCase() }))]
+        }),
+        h(CustomSelect, {
+          key: "fr", value: filterFranchise, onChange: (e) => setFilterFranchise(e.target.value), style: { width: "180px" },
+          options: [{ value: "All", label: "All Series" }, ...franchiseList.map((f) => ({ value: f, label: f.length > 22 ? f.slice(0, 21) + "…" : f }))]
+        }),
+        h("button", {
+          key: "owned", onClick: () => setOwnedOnly((v) => !v),
+          style: { padding: "7px 12px", borderRadius: 8, fontSize: "0.62rem", fontWeight: 800, border: ownedOnly ? "2px solid #4ade80" : "1px solid #333", background: ownedOnly ? "rgba(74,222,128,0.15)" : "rgba(255,255,255,0.04)", color: ownedOnly ? "#4ade80" : "#cbd5e1", cursor: "pointer" }
+        }, "OWNED ONLY"),
+        h("button", {
+          key: "sig", onClick: () => setSigOnly((v) => !v),
+          style: { padding: "7px 12px", borderRadius: 8, fontSize: "0.62rem", fontWeight: 800, border: sigOnly ? "2px solid #facc15" : "1px solid #333", background: sigOnly ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.04)", color: sigOnly ? "#facc15" : "#cbd5e1", cursor: "pointer" }
+        }, "★ HAS SIGNATURE"),
+        (filterElement !== "All" || filterFranchise !== "All" || ownedOnly || sigOnly) && h("button", {
+          key: "clear", onClick: () => { setFilterElement("All"); setFilterFranchise("All"); setOwnedOnly(false); setSigOnly(false); },
+          style: { padding: "7px 10px", borderRadius: 8, fontSize: "0.62rem", fontWeight: 800, border: "1px solid #ef4444", background: "transparent", color: "#fca5a5", cursor: "pointer" }
+        }, "CLEAR ×"),
+        h("span", { key: "count", style: { fontSize: "0.62rem", fontWeight: 800, color: "#94a3b8", marginLeft: "auto" } }, `${processedCharacters.length} shown`)
+      ]),
       /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 4, width: "100%", overflowX: "auto", paddingBottom: 4 }, children: [
         /* @__PURE__ */ jsxDEV("span", { style: { fontSize: "0.6rem", fontWeight: 900, display: "flex", alignItems: "center", marginRight: 4 }, children: "TIER:" }, void 0, false, {
           fileName: "<stdin>",
@@ -253,6 +405,10 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
                 lineNumber: 1773,
                 columnNumber: 19
               }),
+              (c.ascension || 0) > 0 ? /* @__PURE__ */ jsxDEV("div", { style: { color: "#facc15", fontSize: "0.6rem", fontWeight: 900 }, children: [
+                "\u2605",
+                c.ascension
+              ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }) : null,
               /* @__PURE__ */ jsxDEV("div", { style: { color: ELEMENTS[c.element]?.color || "#fff", fontSize: "0.6rem", fontWeight: 800 }, children: [
                 "\u2022 ",
                 c.element

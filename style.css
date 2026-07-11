@@ -3476,6 +3476,264 @@ select.search-bar {
     100% { transform: translate(150%, 150%) rotate(-45deg); opacity: 0; }
 }
 
+/* Night-out intro: big marquee word rendered like a neon storefront sign. */
+.intro-neon-word {
+    font-family: 'Cinzel', serif;
+    font-style: italic;
+    font-weight: 900;
+    font-size: min(14vw, 5rem);
+    letter-spacing: 6px;
+    z-index: 20;
+    animation: neon-buzz 1.1s linear infinite;
+}
+
+/* =========================================================================
+   BOSS HP BANNER -- the big top-of-screen bar for boss encounters. Was
+   referenced in JSX (CampaignView/TrialsView) with no base rules anywhere in
+   this file, so it rendered as an unstyled block; added here properly (fixes
+   Campaign's boss bar too, not just the new Trials one).
+   ========================================================================= */
+.boss-hp-container {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    width: 70%; max-width: 560px; z-index: 40;
+    background: rgba(5, 8, 16, 0.78); border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 14px; padding: 10px 18px 12px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 0 34px rgba(239, 68, 68, 0.18), inset 0 0 20px rgba(0, 0, 0, 0.4);
+    animation: boss-bar-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes boss-bar-in {
+    0% { opacity: 0; transform: translateX(-50%) translateY(-22px); }
+    100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.boss-hp-main { position: relative; height: 16px; border-radius: 8px; overflow: hidden; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.15); }
+.boss-stagger-bar { position: relative; height: 6px; border-radius: 4px; overflow: hidden; margin-top: 5px; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(250, 204, 21, 0.25); }
+.stagger-fill { height: 100%; transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 0 8px #facc15; }
+
+/* =========================================================================
+   TRIALS -- endgame-worthy battle-scene dressing: tier/floor badge + ambient
+   motes tinted to the mission's flavor (arena tier color / void purple /
+   element color), layered behind the formation so it reads as atmosphere
+   rather than clutter.
+   ========================================================================= */
+.trial-mission-badge {
+    position: absolute; top: 14px; left: 16px; z-index: 41;
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(5, 8, 16, 0.78); border-radius: 12px; padding: 8px 14px;
+    border: 1px solid var(--tmb-color, #a855f7); backdrop-filter: blur(6px);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--tmb-color, #a855f7) 35%, transparent);
+}
+.trial-mission-emblem { font-size: 1.4rem; color: var(--tmb-color, #a855f7); text-shadow: 0 0 12px var(--tmb-color, #a855f7); line-height: 1; }
+.trial-mission-text { display: flex; flex-direction: column; }
+.trial-mission-label { font-size: 0.5rem; font-weight: 900; letter-spacing: 2px; color: var(--tmb-color, #a855f7); }
+.trial-mission-name { font-size: 0.8rem; font-weight: 900; color: #fff; letter-spacing: 0.5px; }
+.trial-ambient-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+.trial-mote {
+    position: absolute; bottom: -20px; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--tmb-color, #a855f7); box-shadow: 0 0 10px var(--tmb-color, #a855f7);
+    opacity: 0; animation: trial-mote-rise linear infinite;
+}
+@keyframes trial-mote-rise {
+    0%   { transform: translateY(0) translateX(0); opacity: 0; }
+    10%  { opacity: 0.75; }
+    90%  { opacity: 0.4; }
+    100% { transform: translateY(-115vh) translateX(var(--mote-drift, 20px)); opacity: 0; }
+}
+.trial-vignette { position: absolute; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at 50% 105%, color-mix(in srgb, var(--tmb-color, #a855f7) 22%, transparent) 0%, transparent 65%); }
+.trial-rank-pulse { animation: trial-rank-pulse-anim 2.2s ease-in-out infinite; }
+@keyframes trial-rank-pulse-anim {
+    0%, 100% { box-shadow: 0 0 22px color-mix(in srgb, var(--tmb-color, #a855f7) 35%, transparent); }
+    50% { box-shadow: 0 0 34px color-mix(in srgb, var(--tmb-color, #a855f7) 55%, transparent); }
+}
+
+/* =========================================================================
+   PROJECTILES -- ranged casts (fireball/ice shard/etc.) fly an actual orb
+   from caster to target instead of just playing the caster's wind-up. See
+   ProjectileLayer/Projectile in CombatSystem.js. `left`/`top` are set inline
+   to the caster's captured spawn point; `--dx`/`--dy` (also inline, per
+   instance) carry the travel distance so one keyframe rule fits every shot.
+   ========================================================================= */
+.projectile-layer { position: absolute; inset: 0; pointer-events: none; z-index: 65; overflow: visible; }
+.projectile-wrap {
+    position: absolute; width: 0; height: 0;
+    animation: projectile-fly 0.55s var(--proj-delay, 0ms) cubic-bezier(0.32, 0, 0.67, 1) both;
+}
+.projectile-orb {
+    position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff, var(--proj-color, #fff) 55%, transparent 100%);
+    box-shadow: 0 0 10px var(--proj-color, #fff), 0 0 22px var(--proj-color, #fff), 0 0 3px #fff;
+    animation: projectile-spin 0.4s linear infinite;
+}
+.projectile-trail {
+    position: absolute; left: 0; top: -3px; width: 26px; height: 6px; border-radius: 50%;
+    background: linear-gradient(to left, var(--proj-color, #fff), transparent);
+    opacity: 0.7; filter: blur(1px);
+    transform-origin: left center;
+    transform: rotate(var(--proj-angle, 0deg)) translateX(-26px);
+}
+@keyframes projectile-fly {
+    0%   { transform: translate(0, 0) scale(0.3); opacity: 0; }
+    12%  { opacity: 1; transform: translate(calc(var(--dx) * 0.08), calc(var(--dy) * 0.08)) scale(1); }
+    92%  { opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; }
+}
+@keyframes projectile-spin {
+    from { filter: hue-rotate(0deg) brightness(1.1); }
+    50%  { filter: hue-rotate(8deg) brightness(1.4); }
+    to   { filter: hue-rotate(0deg) brightness(1.1); }
+}
+
+/* Occasional dips like a tube sign with a loose connection. */
+@keyframes neon-buzz {
+    0%, 100% { opacity: 1; }
+    88% { opacity: 1; }
+    89% { opacity: 0.55; }
+    90% { opacity: 1; }
+    95% { opacity: 0.8; }
+    96% { opacity: 1; }
+}
+
+/* Final logo: stutters twice before the tube fully ignites and holds. */
+.neon-sign-ignite {
+    animation: neon-ignite 1.6s ease-out forwards;
+}
+
+@keyframes neon-ignite {
+    0% { opacity: 0; }
+    8% { opacity: 0.9; }
+    12% { opacity: 0.1; }
+    20% { opacity: 0.75; }
+    26% { opacity: 0.2; }
+    38% { opacity: 1; }
+    44% { opacity: 0.5; }
+    55%, 100% { opacity: 1; }
+}
+
+/* =========================================================================
+   MC-HOME — the rebuilt nightlife home page ("Midnight District" dashboard)
+   ========================================================================= */
+.mc-home { position: relative; max-width: 1200px; margin: 0 auto; padding: 16px; }
+
+/* header marquee */
+.mc-marquee {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    padding: 18px 22px; border-radius: 18px; margin-bottom: 16px;
+    border: 1px solid rgba(255, 46, 203, 0.25);
+    background: linear-gradient(120deg, rgba(255,46,203,0.08), rgba(0,210,255,0.05) 60%, transparent);
+    flex-wrap: wrap;
+}
+.mc-clock-label { font-size: 0.55rem; font-weight: 900; letter-spacing: 4px; color: #ff2ecb; }
+.mc-clock { font-size: 2rem; font-weight: 900; font-family: 'Cinzel', serif; font-style: italic; line-height: 1.1; text-shadow: 0 0 20px rgba(255,46,203,0.4); }
+.mc-clock-sub { font-size: 0.55rem; letter-spacing: 3px; color: var(--text-muted); }
+.mc-marquee-right { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.mc-rep-chip {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    padding: 8px 14px; border-radius: 999px; font-size: 0.7rem; font-weight: 900; letter-spacing: 2px;
+    border: 1px solid rgba(250, 204, 21, 0.4); background: rgba(250, 204, 21, 0.08); color: #facc15;
+    transition: all 0.2s;
+}
+.mc-rep-chip:hover { background: rgba(250, 204, 21, 0.18); box-shadow: 0 0 18px rgba(250,204,21,0.25); }
+.mc-rep-chip-lv { color: #fff; opacity: 0.7; font-size: 0.6rem; }
+.mc-marquee-stats { display: flex; gap: 18px; }
+.mc-marquee-stats > div { display: flex; flex-direction: column; align-items: flex-end; }
+.mc-ms-label { font-size: 0.5rem; letter-spacing: 2px; color: var(--text-muted); font-weight: 700; }
+.mc-ms-val { font-size: 1.15rem; font-weight: 900; }
+
+/* grid + cards */
+.mc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 1000px) { .mc-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .mc-grid { grid-template-columns: 1fr; } }
+.mc-card {
+    position: relative; border-radius: 18px; padding: 18px;
+    background: rgba(10, 14, 26, 0.75); border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(8px); overflow: hidden; display: flex; flex-direction: column;
+}
+.mc-card-head { display: flex; align-items: center; gap: 7px; font-size: 0.6rem; font-weight: 900; letter-spacing: 3px; margin-bottom: 12px; }
+
+/* headliner */
+.mc-headliner { min-height: 240px; cursor: pointer; grid-row: span 2; }
+.mc-headliner-img { position: absolute; inset: 0; background-size: cover; background-position: center 15%; opacity: 0.55; transition: transform 0.5s, opacity 0.3s; }
+.mc-headliner:hover .mc-headliner-img { transform: scale(1.04); opacity: 0.7; }
+.mc-headliner-fade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(5,8,16,0.95) 15%, rgba(5,8,16,0.3) 55%, transparent); }
+.mc-headliner-body { position: relative; margin-top: auto; z-index: 2; }
+.mc-headliner-name { font-family: 'Cinzel', serif; font-style: italic; font-weight: 900; font-size: 1.7rem; line-height: 1.05; text-shadow: 0 2px 14px rgba(0,0,0,0.9); }
+.mc-headliner-meta { display: flex; gap: 12px; font-size: 0.65rem; font-weight: 800; letter-spacing: 1px; margin: 8px 0 12px; color: #e2e8f0; }
+.mc-headliner-actions { display: flex; gap: 8px; }
+.mc-btn-sm { width: auto; padding: 9px 18px; font-size: 0.7rem; }
+.mc-btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,0.25); color: #fff; }
+
+/* tonight's move */
+.mc-move-chapter { font-size: 0.55rem; letter-spacing: 2px; color: var(--text-muted); font-weight: 800; }
+.mc-move-stage { font-size: 1.25rem; font-weight: 900; margin: 4px 0 2px; }
+.mc-move-enemy { font-size: 0.62rem; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 12px; }
+.mc-readiness-row { display: flex; justify-content: space-between; font-size: 0.6rem; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 5px; }
+.mc-move-events { margin-top: 12px; font-size: 0.6rem; font-weight: 800; letter-spacing: 1px; color: #facc15; }
+
+/* street rep */
+.mc-rep { border-color: rgba(250, 204, 21, 0.3); grid-row: span 2; }
+.mc-rep-top { display: flex; gap: 14px; align-items: center; }
+.mc-rep-badge {
+    width: 62px; height: 62px; border-radius: 14px; flex-shrink: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgba(250,204,21,0.22), rgba(250,204,21,0.05));
+    border: 1px solid rgba(250,204,21,0.5); box-shadow: 0 0 24px rgba(250,204,21,0.15);
+}
+.mc-rep-rank-num { font-size: 1.6rem; font-weight: 900; color: #facc15; line-height: 1; }
+.mc-rep-rank-cap { font-size: 0.45rem; letter-spacing: 3px; color: #facc15; opacity: 0.8; }
+.mc-rep-title { font-family: 'Cinzel', serif; font-style: italic; font-weight: 900; font-size: 1.25rem; color: #facc15; text-shadow: 0 0 18px rgba(250,204,21,0.35); }
+.mc-rep-venue { font-size: 0.6rem; letter-spacing: 2px; font-weight: 800; color: #fff; opacity: 0.85; margin-top: 2px; }
+.mc-rep-blurb { font-size: 0.68rem; color: var(--text-muted); margin-top: 4px; font-style: italic; }
+.mc-rep-next { display: flex; align-items: center; gap: 6px; font-size: 0.62rem; font-weight: 700; color: #a855f7; margin-top: 10px; letter-spacing: 0.5px; }
+.mc-rep-breakdown { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 14px; }
+.mc-rep-src { padding: 9px 10px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
+.mc-rep-src-pts { font-size: 0.85rem; font-weight: 900; color: #facc15; }
+.mc-rep-src-label { font-size: 0.5rem; letter-spacing: 1px; color: var(--text-muted); margin-top: 2px; }
+.mc-rep-chests { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.mc-chest-btn {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 11px 14px; border-radius: 10px; cursor: pointer;
+    font-size: 0.65rem; font-weight: 900; letter-spacing: 1px;
+    background: linear-gradient(135deg, #facc15, #eab308); color: #000; border: none;
+    animation: pulse-glow 2s infinite;
+}
+.mc-chest-btn:hover { transform: translateY(-1px); }
+
+/* back office */
+.mc-till-row { display: flex; align-items: center; gap: 12px; }
+.mc-till-label { font-size: 0.55rem; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 700; }
+.mc-till-val { font-size: 1.3rem; font-weight: 900; margin-top: 2px; }
+
+/* crew */
+.mc-crew-row { display: flex; gap: 10px; }
+.mc-crew-slot { position: relative; width: 56px; height: 56px; border-radius: 12px; overflow: hidden; cursor: pointer; border: 1px solid rgba(255,255,255,0.15); transition: transform 0.15s, box-shadow 0.15s; }
+.mc-crew-slot:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,210,255,0.25); }
+.mc-crew-slot img { width: 100%; height: 100%; object-fit: cover; }
+.mc-crew-pwr { position: absolute; bottom: 0; left: 0; right: 0; font-size: 0.45rem; font-weight: 900; text-align: center; padding: 2px 0; background: rgba(0,0,0,0.75); color: var(--primary); }
+.mc-resonance { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.mc-res-chip { font-size: 0.55rem; font-weight: 800; letter-spacing: 1px; padding: 4px 9px; border-radius: 999px; border: 1px solid; background: rgba(0,0,0,0.3); }
+
+/* city lines */
+.mc-lines { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.mc-line {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    padding: 12px; border-radius: 12px; cursor: pointer; text-align: left;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: #fff;
+    transition: all 0.15s;
+}
+.mc-line:hover { background: rgba(255,255,255,0.07); transform: translateY(-2px); }
+.mc-line-locked { opacity: 0.5; cursor: not-allowed; }
+.mc-line-locked:hover { transform: none; }
+.mc-line-label { font-size: 0.7rem; font-weight: 900; letter-spacing: 1.5px; }
+.mc-line-sub { font-size: 0.5rem; font-weight: 700; letter-spacing: 1px; }
+
+/* ticker */
+.mc-ticker { margin-top: 16px; border-radius: 12px; overflow: hidden; padding: 10px 0; border: 1px solid rgba(255,255,255,0.08); }
+.mc-ticker-inner { display: flex; gap: 34px; white-space: nowrap; animation: mc-ticker-scroll 40s linear infinite; width: max-content; }
+.mc-ticker-inner span { font-size: 0.6rem; font-weight: 800; letter-spacing: 2px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 34px; }
+.mc-ticker-dot { width: 5px; height: 5px; border-radius: 50%; background: #ff2ecb; display: inline-block; box-shadow: 0 0 8px #ff2ecb; }
+@keyframes mc-ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.mc-footer { text-align: center; font-size: 0.5rem; letter-spacing: 3px; color: var(--text-muted); opacity: 0.5; margin-top: 14px; }
+
 /* Portal Animation */
 .portal-animation {
     display: flex;
@@ -7117,6 +7375,78 @@ select.search-bar {
     border-color: #fff !important;
     box-shadow: 0 0 20px #fff;
 }
+/* ACTIVE-TURN SPOTLIGHT: the acting unit lifts, brightens and casts a ground
+   ring so the eye follows the action; a small floating chevron marks it. */
+.battle-unit.active-turn {
+    z-index: 6;
+    transform: translateZ(0) scale(1.06);
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.battle-unit.active-turn::after {
+    content: "";
+    position: absolute;
+    left: 50%; bottom: -6px;
+    width: 62%; height: 14px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.55), rgba(255,255,255,0) 70%);
+    pointer-events: none;
+    animation: turn-ring-pulse 0.9s ease-in-out infinite;
+}
+.battle-unit.active-turn::before {
+    content: "▼";
+    position: absolute;
+    top: -16px; left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 0.7rem;
+    text-shadow: 0 0 6px rgba(255,255,255,0.8);
+    animation: turn-chevron-bob 0.7s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 7;
+}
+@keyframes turn-ring-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+@keyframes turn-chevron-bob { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(4px); } }
+
+/* TURN-ORDER STRIP: a compact "who's up next" queue above the battlefield. */
+.turn-order-strip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.85), rgba(0,0,0,0.6));
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.turn-order-label {
+    font-family: Rajdhani, sans-serif;
+    font-size: 0.6rem;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+.turn-order-chip {
+    position: relative;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 2px solid var(--chip-c, #64748b);
+    box-shadow: 0 0 6px rgba(0,0,0,0.5);
+    transition: transform 0.2s ease;
+}
+.turn-order-chip.ally  { --chip-c: #38bdf8; }
+.turn-order-chip.enemy { --chip-c: #ef4444; }
+.turn-order-chip img { width: 100%; height: 100%; object-fit: cover; }
+.turn-order-chip.imminent {
+    width: 38px; height: 38px;
+    border-color: #facc15;
+    box-shadow: 0 0 12px rgba(250,204,21,0.7);
+    animation: turn-imminent-pulse 0.9s ease-in-out infinite;
+}
+@keyframes turn-imminent-pulse { 0%,100% { box-shadow: 0 0 8px rgba(250,204,21,0.5); } 50% { box-shadow: 0 0 16px rgba(250,204,21,0.9); } }
 
 .battle-unit.is-hit {
     animation: unit-impact-shake 0.25s cubic-bezier(.36,.07,.19,.97) both;
@@ -7862,6 +8192,55 @@ select.search-bar {
     box-shadow: 0 0 8px rgba(239,68,68,0.6);
 }
 
+/* GEAR FORGE: upgrading equipment feels like tempering it -- a sweeping shine on
+   the card, a pulsing forge button, and a bright flash + shake on level-up. */
+.gear-forge-card { transition: box-shadow .3s, transform .2s; }
+.gear-forge-card::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.28) 50%, transparent 70%);
+    transform: translateX(-120%); pointer-events: none;
+}
+.gear-forge-card:hover::before { animation: gear-sheen 1.1s ease; }
+@keyframes gear-sheen { to { transform: translateX(120%); } }
+.gear-forge-flash { animation: gear-forge-pop 0.7s cubic-bezier(0.2, 1.4, 0.3, 1); }
+@keyframes gear-forge-pop {
+    0%   { transform: scale(1); filter: brightness(1); }
+    30%  { transform: scale(1.06); filter: brightness(2.2) saturate(1.5); box-shadow: 0 0 40px #facc15, 0 0 80px #fff; }
+    60%  { transform: scale(0.99); filter: brightness(1.3); }
+    100% { transform: scale(1); filter: brightness(1); }
+}
+.gear-forge-btn { animation: gear-forge-btn-pulse 1.4s ease-in-out infinite; }
+@keyframes gear-forge-btn-pulse {
+    0%,100% { box-shadow: 0 3px 0 #b45309, 0 0 6px rgba(250,204,21,0.4); }
+    50%     { box-shadow: 0 3px 0 #b45309, 0 0 18px rgba(250,204,21,0.9); }
+}
+.gear-forge-btn { white-space: pre-line; line-height: 1.15; }
+
+/* CLEARER BUFFS: status pips carry a short readable label (e.g. "ATK+25%")
+   and are color-coded by kind so the board is legible at a glance. */
+.status-effect-row .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 4px;
+    border-radius: 5px;
+    font-family: Rajdhani, sans-serif;
+    line-height: 1;
+    border: 1px solid rgba(255,255,255,0.18);
+}
+.status-badge .status-label {
+    font-size: 0.52rem;
+    font-weight: 900;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+.status-badge .duration-text { font-size: 0.5rem; font-weight: 800; opacity: 0.7; }
+.status-badge.status-buff     { background: rgba(34,197,94,0.22);  color: #86efac; border-color: rgba(34,197,94,0.5); }
+.status-badge.status-shield   { background: rgba(56,189,248,0.22); color: #7dd3fc; border-color: rgba(56,189,248,0.5); }
+.status-badge.status-debuff   { background: rgba(239,68,68,0.22);  color: #fca5a5; border-color: rgba(239,68,68,0.5); }
+.status-badge.status-stun     { background: rgba(168,85,247,0.28); color: #d8b4fe; border-color: rgba(168,85,247,0.6); }
+.status-badge.status-special  { background: rgba(148,163,184,0.22); color: #e2e8f0; border-color: rgba(148,163,184,0.45); }
+
 /* ============================================================
    BATTLE ENGAGEMENT LAYER: combo chain, BREAK, perfect guard,
    elemental resonance + mobile-friendly battle screen.
@@ -8063,10 +8442,11 @@ select.search-bar {
 .battle-unit.lunge-crit .unit-avatar-wrapper {
     animation: none;
 }
-.battle-unit.is-ally.lunge .unit-avatar-wrapper { animation: lunge-up 0.42s cubic-bezier(0.22, 1.4, 0.36, 1); }
-.battle-unit.is-enemy.lunge .unit-avatar-wrapper { animation: lunge-down 0.42s cubic-bezier(0.22, 1.4, 0.36, 1); }
-.battle-unit.is-ally.lunge-crit .unit-avatar-wrapper { animation: lunge-up-crit 0.42s cubic-bezier(0.18, 1.6, 0.3, 1); }
-.battle-unit.is-enemy.lunge-crit .unit-avatar-wrapper { animation: lunge-down-crit 0.42s cubic-bezier(0.18, 1.6, 0.3, 1); }
+/* Durations here match LUNGE_MS/LUNGE_CRIT_MS in CombatSystem.js. */
+.battle-unit.is-ally.lunge .unit-avatar-wrapper { animation: lunge-up 0.5s cubic-bezier(0.22, 1.4, 0.36, 1); }
+.battle-unit.is-enemy.lunge .unit-avatar-wrapper { animation: lunge-down 0.5s cubic-bezier(0.22, 1.4, 0.36, 1); }
+.battle-unit.is-ally.lunge-crit .unit-avatar-wrapper { animation: lunge-up-crit 0.58s cubic-bezier(0.18, 1.6, 0.3, 1); }
+.battle-unit.is-enemy.lunge-crit .unit-avatar-wrapper { animation: lunge-down-crit 0.58s cubic-bezier(0.18, 1.6, 0.3, 1); }
 @keyframes lunge-up {
     0% { transform: translateY(0); }
     28% { transform: translateY(-42px) scale(1.07); filter: brightness(1.4); }
@@ -8090,6 +8470,297 @@ select.search-bar {
     22% { transform: translateY(64px) scale(1.16) rotate(3deg); filter: brightness(2); }
     50% { transform: translateY(50px) scale(1.1); }
     100% { transform: translateY(0); }
+}
+
+/* --- FIGHTING-GAME RUSHDOWN --------------------------------------------------
+   A basic attack dashes the attacker ALL THE WAY across to the target (real
+   distance measured in BattleUnit, fed via --rush-dx/--rush-dy which inherit
+   from the .battle-unit root down to the wrapper), throws a rapid flurry of
+   strikes on the spot, and dashes home. Fast characters launch an air combo.
+   Durations match RUSH_MS / RUSH_AIR_MS in CombatSystem.js. --- */
+.battle-unit.rush-combo, .battle-unit.rush-air { z-index: 40; }
+.battle-unit.rush-combo .unit-avatar-wrapper { animation: rush-combo-fly 0.78s cubic-bezier(0.5, 0, 0.3, 1) both; }
+.battle-unit.rush-air .unit-avatar-wrapper   { animation: rush-air-fly 1.02s cubic-bezier(0.5, 0, 0.3, 1) both; }
+
+/* The dashing sprite gets a flurry-of-strikes spark that rides with it at the
+   target, flickering rapidly through the flurry window. */
+.battle-unit.rush-combo .unit-avatar-wrapper::after,
+.battle-unit.rush-air .unit-avatar-wrapper::after {
+    content: ""; position: absolute; inset: -6px; border-radius: 12px; pointer-events: none;
+    background: radial-gradient(circle at 50% 45%, rgba(255,255,255,0.9), var(--cast-tint, #fff) 45%, transparent 70%);
+    mix-blend-mode: screen; opacity: 0;
+}
+.battle-unit.rush-combo .unit-avatar-wrapper::after { animation: rush-spark 0.78s linear both; }
+.battle-unit.rush-air .unit-avatar-wrapper::after   { animation: rush-spark-air 1.02s linear both; }
+
+@keyframes rush-combo-fly {
+    0%   { transform: translate(0, 0); }
+    20%  { transform: translate(var(--rush-dx), var(--rush-dy)) scale(1.08); filter: brightness(1.5); }
+    30%  { transform: translate(calc(var(--rush-dx) + 7px), var(--rush-dy)) scale(1.05) rotate(2deg); filter: brightness(1.7); }
+    39%  { transform: translate(calc(var(--rush-dx) - 7px), var(--rush-dy)) scale(1.06) rotate(-2deg); }
+    48%  { transform: translate(calc(var(--rush-dx) + 6px), var(--rush-dy)) scale(1.05) rotate(2deg); filter: brightness(1.7); }
+    57%  { transform: translate(calc(var(--rush-dx) - 6px), var(--rush-dy)) scale(1.06) rotate(-1deg); }
+    66%  { transform: translate(calc(var(--rush-dx) + 4px), var(--rush-dy)) scale(1.08); filter: brightness(1.9); }
+    74%  { transform: translate(var(--rush-dx), var(--rush-dy)) scale(1.02); }
+    100% { transform: translate(0, 0); filter: none; }
+}
+@keyframes rush-air-fly {
+    0%   { transform: translate(0, 0); }
+    16%  { transform: translate(var(--rush-dx), var(--rush-dy)) scale(1.08); filter: brightness(1.5); }
+    26%  { transform: translate(calc(var(--rush-dx) + 6px), var(--rush-dy)) rotate(2deg); filter: brightness(1.7); }
+    34%  { transform: translate(calc(var(--rush-dx) - 6px), var(--rush-dy)) rotate(-2deg); }
+    44%  { transform: translate(var(--rush-dx), calc(var(--rush-dy) - 74px)) scale(1.14) rotate(-4deg); filter: brightness(2); }
+    56%  { transform: translate(calc(var(--rush-dx) + 8px), calc(var(--rush-dy) - 104px)) scale(1.12) rotate(4deg); }
+    66%  { transform: translate(var(--rush-dx), calc(var(--rush-dy) - 48px)) scale(1.1); }
+    78%  { transform: translate(var(--rush-dx), var(--rush-dy)) scale(1.2) rotate(0deg); filter: brightness(2.4); }
+    100% { transform: translate(0, 0); filter: none; }
+}
+@keyframes rush-spark {
+    0%, 18% { opacity: 0; }
+    24% { opacity: 0.85; } 30% { opacity: 0.15; }
+    38% { opacity: 0.8; } 46% { opacity: 0.15; }
+    54% { opacity: 0.8; } 62% { opacity: 0.2; }
+    70% { opacity: 0.7; } 78%, 100% { opacity: 0; }
+}
+@keyframes rush-spark-air {
+    0%, 14% { opacity: 0; }
+    22% { opacity: 0.8; } 30% { opacity: 0.2; }
+    38% { opacity: 0.75; }
+    56% { opacity: 0.5; }
+    78% { opacity: 0.95; } 84%, 100% { opacity: 0; }
+}
+
+/* Target rattle: rapid multi-hit shake when a flurry lands, overriding the
+   single is-hit shake (declared later == wins at equal specificity). */
+.battle-unit.combo-rattle { animation: combo-rattle-kf 0.5s linear both; }
+@keyframes combo-rattle-kf {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    8%  { transform: translate3d(-6px, 1px, 0); }
+    16% { transform: translate3d(6px, -1px, 0); }
+    24% { transform: translate3d(-7px, 0, 0); }
+    32% { transform: translate3d(7px, 1px, 0); }
+    40% { transform: translate3d(-6px, -1px, 0); }
+    48% { transform: translate3d(6px, 0, 0); }
+    56% { transform: translate3d(-5px, 1px, 0); }
+    64% { transform: translate3d(5px, -1px, 0); }
+    72% { transform: translate3d(-4px, 0, 0); }
+    82% { transform: translate3d(3px, 0, 0); }
+    92% { transform: translate3d(-2px, 0, 0); }
+}
+
+/* --- PER-SIGNATURE CAST ANIMATIONS -----------------------------------------
+   Each signature can name a bespoke cast motion (meta.castAnim). Instead of the
+   generic lunge, the card visibly winds up and commits to its move -- FFRK
+   Soul-Break energy. Direction is data-driven: --cast-dir = -1 for allies (dash
+   "up"/toward the enemy line) and +1 for enemies, so one keyframe serves both
+   sides. --cast-tint is the caster's element color (set in BattleUnit) so the
+   glow matches Fire/Water/etc. Applied to .unit-avatar-wrapper so boss scale()
+   is preserved, exactly like .lunge. --- */
+.battle-unit.is-ally[class*="cast-"] .unit-avatar-wrapper { --cast-dir: -1; }
+.battle-unit.is-enemy[class*="cast-"] .unit-avatar-wrapper { --cast-dir: 1; }
+.battle-unit[class*="cast-"] .unit-avatar-wrapper { animation: none; }
+
+/* Durations here MUST match CAST_ANIM_MS in CombatSystem.js -- that map drives
+   the hit-stop lock (how long the whole battle freezes for this cast), and
+   this drives how long the CSS animation actually plays. Lengthened well past
+   "snappy" on purpose: these are meant to read as deliberate cinematic beats
+   with nothing else happening on screen while they play. */
+.battle-unit.cast-arcane .unit-avatar-wrapper  { animation: kf-cast-arcane  1.5s cubic-bezier(0.3, 1.2, 0.4, 1) both; }
+.battle-unit.cast-charge .unit-avatar-wrapper  { animation: kf-cast-charge  1.45s cubic-bezier(0.4, 1.5, 0.3, 1) both; }
+.battle-unit.cast-flurry .unit-avatar-wrapper  { animation: kf-cast-flurry  1.45s linear both; }
+.battle-unit.cast-focus .unit-avatar-wrapper   { animation: kf-cast-focus   1.5s ease-in-out both; }
+.battle-unit.cast-blink .unit-avatar-wrapper   { animation: kf-cast-blink   1.45s cubic-bezier(0.5, 0, 0.2, 1) both; }
+.battle-unit.cast-heavy .unit-avatar-wrapper   { animation: kf-cast-heavy   1.65s cubic-bezier(0.5, 1.4, 0.3, 1) both; }
+.battle-unit.cast-channel .unit-avatar-wrapper { animation: kf-cast-channel 1.65s ease-in-out both; }
+.battle-unit.cast-override .unit-avatar-wrapper { animation: kf-cast-override 1.9s cubic-bezier(0.4, 1.6, 0.3, 1) both; }
+.battle-unit.cast-slash .unit-avatar-wrapper   { animation: kf-cast-slash   1.3s cubic-bezier(0.5, 0, 0.2, 1) both; }
+.battle-unit.cast-quake .unit-avatar-wrapper   { animation: kf-cast-quake   1.5s ease-out both; }
+.battle-unit.cast-pierce .unit-avatar-wrapper  { animation: kf-cast-pierce  1.3s cubic-bezier(0.7, 0, 0.3, 1) both; }
+.battle-unit.cast-guard .unit-avatar-wrapper   { animation: kf-cast-guard   1.45s ease-in-out both; }
+.battle-unit.cast-rainbow .unit-avatar-wrapper { animation: kf-cast-rainbow 1.7s ease-in-out both; }
+.battle-unit.cast-slam .unit-avatar-wrapper    { animation: kf-cast-slam    1.6s cubic-bezier(0.5, 1.3, 0.3, 1) both; }
+.battle-unit.cast-orbit .unit-avatar-wrapper   { animation: kf-cast-orbit   1.65s ease-in-out both; }
+.battle-unit.cast-vanish .unit-avatar-wrapper  { animation: kf-cast-vanish  1.5s cubic-bezier(0.6, 0, 0.3, 1) both; }
+.battle-unit.cast-crescendo .unit-avatar-wrapper { animation: kf-cast-crescendo 1.8s cubic-bezier(0.4, 1.2, 0.3, 1) both; }
+.battle-unit.cast-thunder .unit-avatar-wrapper { animation: kf-cast-thunder 1.55s linear both; }
+
+@keyframes kf-cast-arcane {
+    0%   { transform: translateY(0) scale(1); filter: none; }
+    20%  { transform: translateY(calc(var(--cast-dir, -1) * 10px)) scale(1.06) rotate(-2deg); filter: drop-shadow(0 0 14px var(--cast-tint, #fff)) brightness(1.3); }
+    45%  { transform: translateY(calc(var(--cast-dir, -1) * 14px)) scale(1.1) rotate(2deg); filter: drop-shadow(0 0 26px var(--cast-tint, #fff)) brightness(1.5); }
+    70%  { transform: translateY(calc(var(--cast-dir, -1) * 30px)) scale(1.12); filter: drop-shadow(0 0 20px var(--cast-tint, #fff)) brightness(1.6); }
+    100% { transform: translateY(0) scale(1); filter: none; }
+}
+@keyframes kf-cast-charge {
+    0%   { transform: translateY(0) scale(1); }
+    24%  { transform: translateY(calc(var(--cast-dir, -1) * -18px)) scale(0.94) rotate(calc(var(--cast-dir, -1) * 4deg)); filter: brightness(0.85); }
+    32%  { transform: translateY(calc(var(--cast-dir, -1) * -18px)) scale(0.94); }
+    48%  { transform: translateY(calc(var(--cast-dir, -1) * 58px)) scale(1.18); filter: drop-shadow(0 0 22px var(--cast-tint, #fff)) brightness(2); }
+    62%  { transform: translateY(calc(var(--cast-dir, -1) * 44px)) scale(1.1); }
+    100% { transform: translateY(0) scale(1); }
+}
+@keyframes kf-cast-flurry {
+    0%   { transform: translateY(0); }
+    15%  { transform: translateY(calc(var(--cast-dir, -1) * 30px)) scale(1.05); filter: brightness(1.5); }
+    30%  { transform: translateY(calc(var(--cast-dir, -1) * 6px)); }
+    45%  { transform: translateY(calc(var(--cast-dir, -1) * 34px)) scale(1.06); filter: brightness(1.6) drop-shadow(0 0 12px var(--cast-tint, #fff)); }
+    60%  { transform: translateY(calc(var(--cast-dir, -1) * 8px)); }
+    75%  { transform: translateY(calc(var(--cast-dir, -1) * 30px)) scale(1.05); filter: brightness(1.5); }
+    100% { transform: translateY(0); }
+}
+@keyframes kf-cast-focus {
+    0%   { transform: scale(1); filter: none; }
+    30%  { transform: translateY(calc(var(--cast-dir, -1) * 8px)) scale(1.08); filter: drop-shadow(0 0 18px var(--cast-tint, #fff)) brightness(1.4); }
+    55%  { transform: translateY(calc(var(--cast-dir, -1) * 8px)) scale(1.12); filter: drop-shadow(0 0 30px var(--cast-tint, #fff)) brightness(1.55); }
+    100% { transform: scale(1); filter: none; }
+}
+@keyframes kf-cast-blink {
+    0%   { transform: translateY(0); opacity: 1; }
+    20%  { transform: translateY(calc(var(--cast-dir, -1) * -10px)) scale(0.96); opacity: 0.15; filter: brightness(2); }
+    35%  { transform: translateY(calc(var(--cast-dir, -1) * 60px)) scale(1.1); opacity: 0.15; }
+    45%  { opacity: 1; filter: drop-shadow(0 0 18px var(--cast-tint, #fff)) brightness(1.6); }
+    70%  { transform: translateY(calc(var(--cast-dir, -1) * 46px)) scale(1.06); }
+    100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes kf-cast-heavy {
+    0%   { transform: translateY(0) scale(1); }
+    22%  { transform: translateY(calc(var(--cast-dir, -1) * -12px)) scale(1.12) rotate(calc(var(--cast-dir, -1) * -3deg)); filter: brightness(0.9); }
+    34%  { transform: translateY(calc(var(--cast-dir, -1) * -12px)) scale(1.14); }
+    50%  { transform: translateY(calc(var(--cast-dir, -1) * 62px)) scale(1.2); filter: drop-shadow(0 0 30px var(--cast-tint, #fff)) brightness(2.2); }
+    62%  { transform: translateY(calc(var(--cast-dir, -1) * 62px)) scale(1.2); filter: drop-shadow(0 0 30px var(--cast-tint, #fff)) brightness(2.2); }
+    76%  { transform: translateY(calc(var(--cast-dir, -1) * 40px)) scale(1.05); }
+    100% { transform: translateY(0) scale(1); }
+}
+@keyframes kf-cast-channel {
+    0%   { transform: translateY(0) scale(1); filter: none; }
+    20%  { transform: translateY(-16px) scale(1.05); filter: drop-shadow(0 0 16px var(--cast-tint, #fff)) brightness(1.35); }
+    42%  { transform: translateY(-22px) scale(1.08) rotate(1.5deg); filter: drop-shadow(0 0 30px var(--cast-tint, #fff)) brightness(1.5); }
+    60%  { transform: translateY(-22px) scale(1.09) rotate(-1.5deg); filter: drop-shadow(0 0 34px var(--cast-tint, #fff)) brightness(1.55); }
+    78%  { transform: translateY(-16px) scale(1.06) rotate(1deg); }
+    100% { transform: translateY(0) scale(1); filter: none; }
+}
+@keyframes kf-cast-slash {
+    0%   { transform: translate(0,0) rotate(0); }
+    25%  { transform: translate(calc(var(--cast-dir, -1) * -14px), calc(var(--cast-dir, -1) * -6px)) rotate(calc(var(--cast-dir, -1) * -8deg)); }
+    50%  { transform: translate(calc(var(--cast-dir, -1) * 40px), calc(var(--cast-dir, -1) * 10px)) rotate(calc(var(--cast-dir, -1) * 10deg)) scale(1.08); filter: drop-shadow(0 0 18px var(--cast-tint, #fff)) brightness(1.6); }
+    70%  { transform: translate(calc(var(--cast-dir, -1) * 24px), 0) rotate(0); }
+    100% { transform: translate(0,0) rotate(0); }
+}
+@keyframes kf-cast-quake {
+    0%   { transform: translateY(0) scaleY(1); }
+    30%  { transform: translateY(calc(var(--cast-dir, -1) * -10px)) scaleY(1.08); }
+    45%  { transform: translateY(0) scaleY(0.86) scaleX(1.12); filter: drop-shadow(0 0 22px var(--cast-tint, #d97706)) brightness(1.5); }
+    55%  { transform: translateY(0) scaleY(1.04); }
+    70%  { transform: translateX(3px); }
+    80%  { transform: translateX(-3px); }
+    100% { transform: translate(0,0) scale(1); }
+}
+@keyframes kf-cast-pierce {
+    0%   { transform: translateX(0) scaleX(1); }
+    30%  { transform: translateX(calc(var(--cast-dir, -1) * -16px)) scaleX(0.9); filter: brightness(0.85); }
+    48%  { transform: translateX(calc(var(--cast-dir, -1) * 66px)) scaleX(1.25); filter: drop-shadow(0 0 20px var(--cast-tint, #fff)) brightness(2); }
+    62%  { transform: translateX(calc(var(--cast-dir, -1) * 40px)) scaleX(1); }
+    100% { transform: translateX(0) scaleX(1); }
+}
+@keyframes kf-cast-guard {
+    0%   { transform: scale(1); filter: none; }
+    35%  { transform: scale(0.92) translateY(4px); filter: drop-shadow(0 0 16px var(--cast-tint, #38bdf8)) brightness(1.3); }
+    55%  { transform: scale(1.14) translateY(-4px); filter: drop-shadow(0 0 28px var(--cast-tint, #38bdf8)) brightness(1.5); }
+    100% { transform: scale(1); filter: none; }
+}
+/* Care Bears "Rainbow Resonance": a colour-cycling glow + gentle bob. Distinct,
+   sugary VFX that reads instantly as a Care Bear cast. */
+@keyframes kf-cast-rainbow {
+    0%   { transform: scale(1) translateY(0); filter: none; }
+    25%  { transform: scale(1.1) translateY(-8px); filter: drop-shadow(0 0 18px #ff5f9e) hue-rotate(0deg) brightness(1.4); }
+    50%  { transform: scale(1.14) translateY(-10px); filter: drop-shadow(0 0 34px #ffd24a) hue-rotate(140deg) brightness(1.6); }
+    75%  { transform: scale(1.1) translateY(-6px); filter: drop-shadow(0 0 28px #4ad2ff) hue-rotate(280deg) brightness(1.5); }
+    100% { transform: scale(1) translateY(0); filter: none; }
+}
+/* Courier's max-SPECIAL "full override": a hard recoil-and-slam that reads as
+   the strongest cast in the game -- deep wind-up, a big luminous commit. */
+@keyframes kf-cast-override {
+    0%   { transform: translateY(0) scale(1); filter: none; }
+    14%  { transform: translateY(calc(var(--cast-dir, -1) * -24px)) scale(1.16) rotate(calc(var(--cast-dir, -1) * -5deg)); filter: brightness(0.8) drop-shadow(0 0 10px var(--cast-tint, #ffd54a)); }
+    24%  { transform: translateY(calc(var(--cast-dir, -1) * -24px)) scale(1.18); }
+    42%  { transform: translateY(calc(var(--cast-dir, -1) * 70px)) scale(1.28); filter: drop-shadow(0 0 40px var(--cast-tint, #ffd54a)) drop-shadow(0 0 70px #fff) brightness(2.6); }
+    58%  { transform: translateY(calc(var(--cast-dir, -1) * 70px)) scale(1.3); filter: drop-shadow(0 0 46px var(--cast-tint, #ffd54a)) drop-shadow(0 0 80px #fff) brightness(2.8); }
+    74%  { transform: translateY(calc(var(--cast-dir, -1) * 46px)) scale(1.1); filter: drop-shadow(0 0 24px var(--cast-tint, #ffd54a)) brightness(1.5); }
+    100% { transform: translateY(0) scale(1); filter: none; }
+}
+/* --- NEW cast variants (broader signature/skill coverage) --- */
+/* SLAM: a hard downward crash -- for meteor/hammer/pound-style hits. */
+@keyframes kf-cast-slam {
+    0%   { transform: translateY(0) scale(1); }
+    20%  { transform: translateY(calc(var(--cast-dir, -1) * -30px)) scale(1.1, 0.92) rotate(calc(var(--cast-dir, -1) * -4deg)); filter: brightness(0.85); }
+    34%  { transform: translateY(calc(var(--cast-dir, -1) * -30px)) scale(1.12, 0.9); }
+    50%  { transform: translateY(calc(var(--cast-dir, -1) * 66px)) scale(1.22, 0.82); filter: drop-shadow(0 0 34px var(--cast-tint, #fff)) brightness(2.1); }
+    58%  { transform: translateY(calc(var(--cast-dir, -1) * 58px)) scale(0.94, 1.14); filter: drop-shadow(0 0 26px var(--cast-tint, #fff)) brightness(1.7); }
+    70%  { transform: translateY(calc(var(--cast-dir, -1) * 40px)) scale(1.04, 0.98); }
+    100% { transform: translateY(0) scale(1); filter: none; }
+}
+/* ORBIT: circles around before committing -- rings/satellites/spiral moves. */
+@keyframes kf-cast-orbit {
+    0%   { transform: translate(0,0) scale(1); filter: none; }
+    18%  { transform: translate(calc(var(--cast-dir, -1) * 12px), -14px) scale(1.05); filter: drop-shadow(0 0 14px var(--cast-tint, #fff)) brightness(1.25); }
+    36%  { transform: translate(calc(var(--cast-dir, -1) * -6px), -22px) scale(1.08); filter: drop-shadow(0 0 22px var(--cast-tint, #fff)) brightness(1.4); }
+    54%  { transform: translate(calc(var(--cast-dir, -1) * -14px), -12px) scale(1.1); filter: drop-shadow(0 0 30px var(--cast-tint, #fff)) brightness(1.55); }
+    72%  { transform: translate(calc(var(--cast-dir, -1) * 40px), 0) scale(1.12); filter: drop-shadow(0 0 26px var(--cast-tint, #fff)) brightness(1.6); }
+    100% { transform: translate(0,0) scale(1); filter: none; }
+}
+/* VANISH: flickers near-invisible then reappears close to the target --
+   drain/leech/siphon moves that read as "closing the distance unseen". */
+@keyframes kf-cast-vanish {
+    0%   { transform: translateY(0) scale(1); opacity: 1; filter: none; }
+    16%  { opacity: 0.25; filter: brightness(2.2) blur(2px); }
+    30%  { opacity: 0.05; transform: translateY(calc(var(--cast-dir, -1) * 10px)) scale(0.9); }
+    46%  { opacity: 0.05; transform: translateY(calc(var(--cast-dir, -1) * 54px)) scale(0.9); }
+    58%  { opacity: 1; transform: translateY(calc(var(--cast-dir, -1) * 54px)) scale(1.14); filter: drop-shadow(0 0 26px var(--cast-tint, #fff)) brightness(1.7); }
+    76%  { transform: translateY(calc(var(--cast-dir, -1) * 34px)) scale(1.05); }
+    100% { transform: translateY(0) scale(1); opacity: 1; filter: none; }
+}
+/* CRESCENDO: a slow, escalating build to a single decisive strike --
+   execute/finisher/judgment moves get the longest wind-up in the game. */
+@keyframes kf-cast-crescendo {
+    0%   { transform: translateY(0) scale(1); filter: none; }
+    16%  { transform: translateY(calc(var(--cast-dir, -1) * -8px)) scale(1.04); filter: drop-shadow(0 0 10px var(--cast-tint, #fff)) brightness(1.15); }
+    34%  { transform: translateY(calc(var(--cast-dir, -1) * -14px)) scale(1.08); filter: drop-shadow(0 0 20px var(--cast-tint, #fff)) brightness(1.35); }
+    50%  { transform: translateY(calc(var(--cast-dir, -1) * -18px)) scale(1.12); filter: drop-shadow(0 0 32px var(--cast-tint, #fff)) brightness(1.6); }
+    64%  { transform: translateY(calc(var(--cast-dir, -1) * 74px)) scale(1.3); filter: drop-shadow(0 0 50px var(--cast-tint, #fff)) drop-shadow(0 0 90px #fff) brightness(2.8); }
+    80%  { transform: translateY(calc(var(--cast-dir, -1) * 46px)) scale(1.08); filter: drop-shadow(0 0 20px var(--cast-tint, #fff)) brightness(1.4); }
+    100% { transform: translateY(0) scale(1); filter: none; }
+}
+/* THUNDER: rapid stutter-flicker jolts building to a hard strike --
+   lightning/shock/volt moves. */
+@keyframes kf-cast-thunder {
+    0%   { transform: translateY(0) scale(1); filter: none; }
+    10%  { transform: translateY(calc(var(--cast-dir, -1) * -4px)) scale(1.02); filter: brightness(1.8) drop-shadow(0 0 10px var(--cast-tint, #fff)); }
+    18%  { transform: translateY(0) scale(1); filter: none; }
+    28%  { transform: translateY(calc(var(--cast-dir, -1) * -6px)) scale(1.03); filter: brightness(2) drop-shadow(0 0 16px var(--cast-tint, #fff)); }
+    36%  { transform: translateY(0) scale(1); filter: none; }
+    48%  { transform: translateY(calc(var(--cast-dir, -1) * -10px)) scale(1.06); filter: brightness(2.2) drop-shadow(0 0 22px var(--cast-tint, #fff)); }
+    62%  { transform: translateY(calc(var(--cast-dir, -1) * 64px)) scale(1.18); filter: drop-shadow(0 0 40px var(--cast-tint, #fff)) brightness(2.6); }
+    76%  { transform: translateY(calc(var(--cast-dir, -1) * 42px)) scale(1.06); }
+    100% { transform: translateY(0) scale(1); filter: none; }
+}
+
+/* --- CAMEO / GUEST SUMMON: the ally's portrait flashes into the guest's, casts,
+       then flips back (see _cameoImg in CampaignView). --- */
+.unit-avatar.cameo-morph { animation: cameo-morph-flash 0.5s ease-out; }
+@keyframes cameo-morph-flash {
+    0%   { filter: brightness(3) saturate(0.2); transform: scale(1.28); }
+    40%  { filter: brightness(1.6); }
+    100% { filter: none; transform: scale(1); }
+}
+.cameo-cutin .sig-cutin-portrait { box-shadow: 0 0 34px rgba(0, 210, 255, 0.6); }
+
+/* --- PHANTOM VEIL smoke transform (Meilin Lee) --- */
+.unit-avatar.phantom-transform { animation: phantom-smoke-in 0.7s ease-out; }
+@keyframes phantom-smoke-in {
+    0%   { filter: blur(0) brightness(1); opacity: 1; }
+    35%  { filter: blur(10px) brightness(0.4) contrast(0.6); opacity: 0.35; }
+    60%  { filter: blur(14px) brightness(0.6); opacity: 0.5; }
+    100% { filter: blur(0) brightness(1); opacity: 1; }
 }
 
 /* --- SCREEN SHAKE tiers --- */

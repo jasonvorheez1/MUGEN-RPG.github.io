@@ -117,5 +117,77 @@
    "magic atk": 25,
    "magic def": 35
   }
+ },
+ {
+  "export_id": 9010,
+  "name": "Tenderheart Bear",
+  "franchise": "Care Bears",
+  "imageUrl": "portraits/tender-heart.png",
+  "tier": "SS",
+  "element": "LIGHT",
+  "stats": { "hp": 830, "atk": 99, "def": 60, "speed": 56, "luck": 26, "magic atk": 42, "magic def": 46 }
+ },
+ {
+  "export_id": 9011,
+  "name": "Cheer Bear",
+  "franchise": "Care Bears",
+  "imageUrl": "portraits/Cheer-bear.png",
+  "tier": "S+",
+  "element": "LIGHT",
+  "stats": { "hp": 690, "atk": 46, "def": 44, "speed": 63, "luck": 32, "magic atk": 96, "magic def": 56 }
+ },
+ {
+  "export_id": 9012,
+  "name": "Share Bear",
+  "franchise": "Care Bears",
+  "imageUrl": "portraits/share.png",
+  "tier": "S",
+  "element": "WIND",
+  "stats": { "hp": 705, "atk": 93, "def": 45, "speed": 69, "luck": 23, "magic atk": 32, "magic def": 36 }
+ },
+ {
+  "export_id": 9013,
+  "name": "Good Luck Bear",
+  "franchise": "Care Bears",
+  "imageUrl": "portraits/Good-luck-bear.png",
+  "tier": "S-",
+  "element": "EARTH",
+  "stats": { "hp": 655, "atk": 82, "def": 41, "speed": 67, "luck": 62, "magic atk": 26, "magic def": 36 }
+ },
+ {
+  "export_id": 9014,
+  "name": "Funshine Bear",
+  "franchise": "Care Bears",
+  "imageUrl": "portraits/funshine-bear.png",
+  "tier": "A+",
+  "element": "FIRE",
+  "stats": { "hp": 665, "atk": 41, "def": 43, "speed": 59, "luck": 25, "magic atk": 89, "magic def": 49 }
+ },
+ {
+  "export_id": 9015,
+  "name": "Bedtime Bear",
+  "franchise": "Care Bears",
+  "imageUrl": "portraits/bedtime-bear.png",
+  "tier": "A",
+  "element": "WATER",
+  "stats": { "hp": 695, "atk": 45, "def": 51, "speed": 50, "luck": 27, "magic atk": 81, "magic def": 53 }
+ },
+ {
+  "export_id": 9016,
+  "name": "Sweet Dreams Bear",
+  "franchise": "Care Bears",
+  "imageUrl": "portraits/sweetdreams-bear.png",
+  "tier": "A-",
+  "element": "WATER",
+  "stats": { "hp": 705, "atk": 43, "def": 49, "speed": 54, "luck": 25, "magic atk": 73, "magic def": 56 }
+ },
+ {
+  "export_id": 9017,
+  "name": "Dio Brando",
+  "franchise": "Jojo's Bizarre Adventure",
+  "imageUrl": "portraits/diobrando.jpg",
+  "tier": "SS",
+  "element": "DARK",
+  "stats": { "hp": 900, "atk": 105, "def": 58, "speed": 88, "luck": 24, "magic atk": 60, "magic def": 50 }
  }
 ]

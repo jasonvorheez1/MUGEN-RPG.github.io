@@ -1746,39 +1746,29 @@
  {
   "id": "sig_joseph_joestar",
   "owner": "Joseph Joestar",
-  "name": "Hamon Overdrive",
-  "desc": "A clackers-blast Hamon surge that shatters guard and deals +60% to DARK-element foes (the undead).",
+  "name": "Clackers Overdrive",
+  "desc": "No Stand yet -- this is young Joseph, Battle Tendency-era, all Hamon and Italian trickster charm. A feinted grin, a lie about the true target, then the clackers connect exactly where he said they wouldn't. He doesn't wear an enemy down himself -- he waits for them to already be reeling from burns, poisons, or a debuff-heavy squad, then reads the opening and ends it. Alone it's a decent hit; against a target the team has already worked over, it's brutal.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 4.4,
-  "cooldown": 105,
+  "power": 3.2,
+  "cooldown": 108,
   "scalingStat": "speed",
-  "flavor": "Your next line is...",
+  "flavor": "Your next line is... \"I'll take that as a yes!\"",
   "damageType": "physical",
   "meta": {
+   "castAnim": "cast-focus",
    "break_shield": true,
-   "bonus_vs_element": {
-    "element": "DARK",
-    "mult": 1.6
-   }
+   "bonus_vs_element": { "element": "DARK", "mult": 1.6 },
+   "bonus_per_debuff": 0.22,
+   "self_effects": [
+    { "type": "buff_crit", "duration": 3, "val": 0.15, "label": "MISDIRECTION" }
+   ]
   },
   "statusEffects": [
-   {
-    "type": "static",
-    "chance": 0.7,
-    "duration": 3,
-    "val": 0.08,
-    "label": "HAMON"
-   },
-   {
-    "type": "stun",
-    "chance": 0.35,
-    "duration": 1,
-    "val": 0,
-    "label": "STUN"
-   }
+   { "type": "static", "chance": 0.7, "duration": 3, "val": 0.08, "label": "HAMON" },
+   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "STUN" }
   ]
  },
  {
@@ -3623,7 +3613,7 @@
   "id": "sig_courier_lucky38",
   "owner": "Courier",
   "name": "Lucky 38 Override",
-  "desc": "Under the hood this is just a gun shot -- until the SPECIAL build kicks in. Whichever stat the Courier has actually put points into reshapes the whole move: STR turns it into a haymaker, PER into a called shot on a weak point, END into a brace-and-return, CHA into a rallying cry, INT overcharges the chip into a full mage-style burn/power-surge combo, AGI turns him into a blur, LCK loads the chamber for a clean crit. Put no points anywhere and it's exactly what it looks like: a guy with a revolver.",
+  "desc": "Under the hood this is just a gun shot -- until the SPECIAL build kicks in. Every point of AGILITY adds another bullet to the volley, so a fast Courier unloads a storm of hits. Whichever stat he's invested in also reshapes the move AND brands the target/himself with a rising status that snowballs each turn: STR stokes OVERHEAT (climbing power), PER sharpens PRECISION (climbing crit), END builds FORTIFY (climbing defense), CHA radiates CHARM (climbing luck), INT spins up OVERCLOCK (climbing magic). Invest in two stats and the build blends into something new -- STR+AGI is a blitzing gunslinger. Max every SPECIAL stat and the chip stops holding back at all. Put no points anywhere and it's exactly what it looks like: a guy with a revolver.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
@@ -3634,30 +3624,92 @@
   "flavor": "Six bullets, more than enough to kill anything that moves.",
   "damageType": "physical",
   "meta": {
+   "hits_per_special": "agi",
    "dynamic_special": {
     "baseline": 1,
     "baseMsg": "LUCKY REVOLVER",
+    "combos": [
+     { "keys": ["str", "agi"], "threshold": 6, "archetype": "str_agi" },
+     { "keys": ["int", "cha"], "threshold": 6, "archetype": "int_cha" },
+     { "keys": ["end", "per"], "threshold": 6, "archetype": "end_per" }
+    ],
     "archetypes": {
+     "ultimate": {
+      "dmgMult": 3.2,
+      "target": "all_enemies",
+      "castAnim": "cast-override",
+      "bonus": "execute",
+      "ignore_evasion": true,
+      "self_effects": [
+       { "type": "buff_atk", "duration": 4, "val": 0.4, "label": "PLATINUM CHIP MAXED" },
+       { "type": "buff_crit", "duration": 4, "val": 0.3, "label": "PLATINUM CHIP MAXED" }
+      ],
+      "team_effects": [
+       { "type": "buff_atk", "duration": 4, "val": 0.25, "label": "LUCKY 38 OVERRIDE" },
+       { "type": "buff_crit", "duration": 4, "val": 0.2, "label": "LUCKY 38 OVERRIDE" },
+       { "type": "buff_elemdmg", "duration": 4, "val": 0.25, "label": "LUCKY 38 OVERRIDE" }
+      ],
+      "heal_pct": 0.15,
+      "burst": 30,
+      "msg": "LUCKY 38: FULL OVERRIDE"
+     },
+     "str_agi": {
+      "dmgMult": 1.7,
+      "target": "all_enemies",
+      "castAnim": "cast-blink",
+      "bonus": "lifesteal",
+      "self_effects": [
+       { "type": "buff_atk", "duration": 3, "val": 0.25, "label": "BLITZ GUNSLINGER" },
+       { "type": "buff_spd", "duration": 3, "val": 0.3, "label": "BLITZ GUNSLINGER" }
+      ],
+      "msg": "BLITZ GUNSLINGER"
+     },
+     "int_cha": {
+      "dmgMult": 1.2,
+      "damageType": "magical",
+      "castAnim": "cast-channel",
+      "team_effects": [{ "type": "buff_elemdmg", "duration": 3, "val": 0.25, "label": "ARCANE MEDIC" }],
+      "heal_pct": 0.12,
+      "msg": "ARCANE MEDIC"
+     },
+     "end_per": {
+      "dmgMult": 1.4,
+      "castAnim": "cast-focus",
+      "enemy_effects": [{ "type": "debuff_def", "duration": 3, "val": 0.35, "label": "PINNED DOWN" }],
+      "self_effects": [{ "type": "shield", "duration": 3, "val": 0.3, "label": "ENTRENCHED" }],
+      "msg": "ENTRENCHED MARKSMAN"
+     },
      "str": {
       "dmgMult": 1.5,
-      "self_effects": [{ "type": "buff_atk", "duration": 3, "val": 0.25, "label": "STRONGARM" }],
+      "castAnim": "cast-heavy",
+      "bonus": "execute",
+      "self_effects": [
+       { "type": "buff_atk", "duration": 3, "val": 0.25, "label": "STRONGARM" },
+       { "type": "overheat", "duration": 5, "val": 0.12, "ramp": 0.08, "label": "OVERHEAT" }
+      ],
       "msg": "STRONGARM SHOT"
      },
      "per": {
       "dmgMult": 1.3,
+      "castAnim": "cast-focus",
+      "bonus": "execute",
       "enemy_effects": [{ "type": "debuff_def", "duration": 3, "val": 0.3, "label": "WEAK POINT" }],
+      "self_effects": [{ "type": "precision", "duration": 5, "val": 0.08, "ramp": 0.06, "label": "PRECISION" }],
       "msg": "DEAD-EYE"
      },
      "end": {
       "dmgMult": 1.1,
+      "castAnim": "cast-focus",
       "self_effects": [
        { "type": "shield", "duration": 3, "val": 0.25, "label": "VAULT DUSTER" },
-       { "type": "buff_def", "duration": 3, "val": 0.2, "label": "DUG IN" }
+       { "type": "fortify", "duration": 5, "val": 0.1, "ramp": 0.08, "label": "FORTIFY" }
       ],
       "msg": "DUG IN"
      },
      "cha": {
       "dmgMult": 1.0,
+      "castAnim": "cast-focus",
+      "self_effects": [{ "type": "charm", "duration": 5, "val": 0.1, "ramp": 0.07, "label": "CHARM" }],
       "team_effects": [
        { "type": "buff_atk", "duration": 3, "val": 0.15, "label": "RALLY CRY" },
        { "type": "buff_crit", "duration": 3, "val": 0.12, "label": "RALLY CRY" }
@@ -3668,15 +3720,22 @@
      "int": {
       "dmgMult": 1.4,
       "damageType": "magical",
+      "target": "all_enemies",
+      "castAnim": "cast-arcane",
       "enemy_effects": [
        { "type": "burn", "duration": 3, "val": 0.09, "label": "OVERCHARGED" },
        { "type": "debuff_def", "duration": 3, "val": 0.2, "label": "CIRCUITS FRIED" }
       ],
-      "self_effects": [{ "type": "buff_elemdmg", "duration": 3, "val": 0.3, "label": "PLATINUM CHIP SURGE" }],
+      "self_effects": [
+       { "type": "buff_elemdmg", "duration": 3, "val": 0.3, "label": "PLATINUM CHIP SURGE" },
+       { "type": "overclock", "duration": 5, "val": 0.12, "ramp": 0.08, "label": "OVERCLOCK" }
+      ],
       "msg": "OVERCHARGE"
      },
      "agi": {
       "dmgMult": 1.2,
+      "target": "all_enemies",
+      "castAnim": "cast-flurry",
       "self_effects": [{ "type": "buff_spd", "duration": 3, "val": 0.35, "label": "FLEET-FOOTED" }],
       "team_effects": [{ "type": "buff_spd", "duration": 3, "val": 0.15, "label": "FLEET-FOOTED" }],
       "enemy_effects": [{ "type": "debuff_spd", "duration": 3, "val": 0.25, "label": "OUTPACED" }],
@@ -3684,6 +3743,8 @@
      },
      "lck": {
       "dmgMult": 1.25,
+      "castAnim": "cast-charge",
+      "bonus": "lifesteal",
       "self_effects": [{ "type": "buff_crit", "duration": 3, "val": 0.2, "label": "LOADED CHAMBER" }],
       "msg": "LUCKY BREAK"
      }
@@ -3712,7 +3773,7 @@
    "bonus_vs_full_hp": { "above": 0.85, "mult": 1.75 },
    "extra_hits": 1,
    "steal_next_enemy_turn": { "drain": 40 },
-   "castMusic": "Megadeth-99 Ways To Die.mid"
+   "castAnim": "cast-flurry"
   }
  },
  {
@@ -3730,6 +3791,7 @@
   "flavor": "Roads? Where we're going, we don't need roads.",
   "damageType": "magical",
   "meta": {
+   "castAnim": "cast-channel",
    "stage_cycle": [
     {
      "dmgMult": 1.2,
@@ -3747,7 +3809,6 @@
      "rewind_hp": { "turns_ago": 4, "scope": "most_wounded_ally" },
      "burst": 20,
      "team_effects": [{ "type": "buff_crit", "duration": 4, "val": 0.2, "label": "TIMELINE FIXED" }],
-     "castMusic": "Megadeth-Tornado Of Souls.mid",
      "msg": "GREAT SCOTT!"
     }
    ]
@@ -3782,10 +3843,591 @@
     {
      "dmgMult": 1.35,
      "rewind_hp": { "turns_ago": 1, "scope": "self" },
-     "castMusic": "Megadeth-Peace Sells.mid",
      "msg": "NOBODY CALLS ME CHICKEN"
     }
    ]
   }
+ },
+ {
+  "id": "sig_meilin_lee",
+  "owner": "Meilin Lee",
+  "name": "4*Town Forever",
+  "desc": "She shifts -- claws out, fur up, fully in control. In this form she is almost impossible to land a hit on, and the people beside her fight harder knowing she has their back: they take less, heal steadily, and hit a little meaner. She won't out-damage you. She'll simply outlast you -- and only a strike that genuinely can't miss ever seems to find her.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.1,
+  "cooldown": 115,
+  "scalingStat": "magic_atk",
+  "flavor": "Get it together, Mei!",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "debuff_atk", "chance": 1, "duration": 3, "val": 0.25, "label": "STARTLED" },
+   { "type": "debuff_spd", "chance": 1, "duration": 3, "val": 0.2, "label": "STARTLED" }
+  ],
+  "meta": {
+   "castAnim": "cast-focus",
+   "self_effects": [
+    { "type": "phantom_veil", "duration": 9999, "val": 0.92, "transformImg": "portraits/melin_panda.png", "label": "UNTOUCHABLE" },
+    { "type": "regen", "duration": 6, "val": 0.1, "label": "THICK HIDE" },
+    { "type": "buff_def", "duration": 6, "val": 0.35, "label": "THICK HIDE" }
+   ],
+   "team_effects": [
+    { "type": "shield", "duration": 4, "val": 0.3, "label": "PROTECTIVE INSTINCT" },
+    { "type": "regen", "duration": 4, "val": 0.08, "label": "WARM PRESENCE" },
+    { "type": "buff_atk", "duration": 4, "val": 0.2, "label": "BIG SISTER ENERGY" }
+   ]
+  }
+ },
+ {
+  "id": "sig_kakyoin",
+  "owner": "Kakyoin",
+  "name": "Emerald Splash",
+  "desc": "Hierophant Green scatters a spray of emeralds that curve mid-air and chase the target down -- there's nowhere to lean that they don't follow. Slows whatever they catch.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.6,
+  "cooldown": 105,
+  "scalingStat": "magic_atk",
+  "flavor": "Emerald Splash!",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "debuff_spd", "chance": 1, "duration": 3, "val": 0.25, "label": "PINNED" }
+  ],
+  "meta": {
+   "castAnim": "cast-flurry",
+   "ignore_evasion": true
+  }
+ },
+ {
+  "id": "sig_franziska",
+  "owner": "Franziska von Karma",
+  "name": "That Will Do",
+  "desc": "The whip cracks before you've finished moving. It does not miss; it has never missed. Whoever it lands on comes away shaken and hitting softer, and her own side stands a little straighter.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.2,
+  "cooldown": 108,
+  "scalingStat": "atk",
+  "flavor": "Foolish fool who foolishly dodges.",
+  "damageType": "physical",
+  "statusEffects": [
+   { "type": "debuff_atk", "chance": 1, "duration": 3, "val": 0.3, "label": "DISCIPLINED" }
+  ],
+  "meta": {
+   "castAnim": "cast-blink",
+   "ignore_evasion": true,
+   "team_effects": [
+    { "type": "buff_atk", "duration": 3, "val": 0.15, "label": "PERFECT COMPOSURE" }
+   ]
+  }
+ },
+ {
+  "id": "sig_zss",
+  "owner": "Zero Suit Samus",
+  "name": "Plasma Lock",
+  "desc": "The paralyzer paints a lock first, then fires. Once it's tagged you, footwork doesn't matter -- the shot corrects to wherever you went. Leaves the mark reeling.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.2,
+  "cooldown": 100,
+  "scalingStat": "speed",
+  "flavor": "Locked on.",
+  "damageType": "physical",
+  "statusEffects": [
+   { "type": "stun", "chance": 0.4, "duration": 1, "val": 0, "label": "PARALYZED" }
+  ],
+  "meta": {
+   "castAnim": "cast-charge",
+   "ignore_evasion": true,
+   "self_effects": [
+    { "type": "buff_spd", "duration": 3, "val": 0.2, "label": "COMBAT READY" }
+   ]
+  }
+ },
+ {
+  "id": "sig_tenderheart_bear",
+  "owner": "Tenderheart Bear",
+  "name": "Caring Heart",
+  "desc": "The leader of the bears throws the whole team behind a wall of pure care. Everyone gets a second chance at life this fight, and a protective ward that grows stronger the longer the fight drags on -- then he lands a huge, heartfelt hit.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.0,
+  "cooldown": 120,
+  "scalingStat": "atk",
+  "flavor": "We care about you!",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-guard",
+   "care_revive": true,
+   "self_effects": [
+    { "type": "buff_atk", "duration": 4, "val": 0.25, "label": "TENDER RESOLVE" }
+   ]
+  }
+ },
+ {
+  "id": "sig_cheer_bear",
+  "owner": "Cheer Bear",
+  "name": "Rainbow Resonance",
+  "desc": "Cheer Bear's power isn't her own -- it's every Care Bear she's ever cheered on. The more bears standing with her (and the higher they've grown), the harder her rainbow hits, and for a moment she resonates with the strongest one and borrows their shine. Grows as your bears grow.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.8,
+  "cooldown": 118,
+  "scalingStat": "magic_atk",
+  "flavor": "Cheer up! We're in this together!",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-rainbow",
+   "resonance_franchise": "Care Bears",
+   "team_effects": [
+    { "type": "buff_atk", "duration": 3, "val": 0.15, "label": "CHEERED ON" }
+   ]
+  }
+ },
+ {
+  "id": "sig_share_bear",
+  "owner": "Share Bear",
+  "name": "Share the Care",
+  "desc": "A rapid triple burst of caring energy sprayed across the whole enemy line, with a little pick-me-up shared to the team on the way out.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.2,
+  "cooldown": 105,
+  "scalingStat": "atk",
+  "flavor": "Sharing is caring!",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-flurry",
+   "hits": 3,
+   "team_effects": [
+    { "type": "buff_crit", "duration": 3, "val": 0.15, "label": "GENEROSITY" }
+   ]
+  }
+ },
+ {
+  "id": "sig_good_luck_bear",
+  "owner": "Good Luck Bear",
+  "name": "Roll of the Dice",
+  "desc": "Good Luck Bear leaves the outcome to fate -- and the luckier he is, the better fate treats him. Could be a jackpot crit, a lucky heal for the team, a curse on the enemy, or just a solid hit. You never quite know.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.2,
+  "cooldown": 110,
+  "scalingStat": "atk",
+  "flavor": "Feeling lucky?",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-charge",
+   "luck_gamble": true
+  }
+ },
+ {
+  "id": "sig_funshine_bear",
+  "owner": "Funshine Bear",
+  "name": "Sunbeam",
+  "desc": "A blazing beam of sunshine that scorches every foe with lingering sunburn -- and every ray that lands warms the whole team back to health.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.6,
+  "cooldown": 112,
+  "scalingStat": "magic_atk",
+  "flavor": "Here comes the sun!",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "burn", "chance": 1, "duration": 3, "val": 0.08, "label": "SUNBURN" }
+  ],
+  "meta": {
+   "castAnim": "cast-arcane",
+   "sunbeam": true
+  }
+ },
+ {
+  "id": "sig_bedtime_bear",
+  "owner": "Bedtime Bear",
+  "name": "Nap Time",
+  "desc": "Bedtime Bear tucks the enemy in whether they like it or not. Sleeping foes skip their turns entirely -- until a hard hit jolts them awake. Best paired with allies patient enough not to swing early.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.6,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Time for bed, sleepyhead.",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "sleep", "chance": 0.75, "duration": 2, "val": 0, "label": "ASLEEP" }
+  ],
+  "meta": {
+   "castAnim": "cast-focus",
+   "team_effects": [
+    { "type": "regen", "duration": 3, "val": 0.06, "label": "SWEET REST" }
+   ]
+  }
+ },
+ {
+  "id": "sig_sweet_dreams_bear",
+  "owner": "Sweet Dreams Bear",
+  "name": "Sweet Dreams",
+  "desc": "A gentle wave of comfort that mends the whole team, cleanses their worries, and wraps them in a soft protective shield.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "all_allies",
+  "power": 2.4,
+  "cooldown": 130,
+  "scalingStat": "magic_atk",
+  "flavor": "Rest easy.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-focus",
+   "cleanse_team": true,
+   "team_effects": [
+    { "type": "shield", "duration": 4, "val": 0.28, "label": "SWEET DREAMS" },
+    { "type": "regen", "duration": 4, "val": 0.08, "label": "SWEET DREAMS" }
+   ]
+  }
+ },
+ {
+  "id": "sig_boss_aboleth",
+  "owner": "Aboleth",
+  "name": "Mind Enslavement",
+  "desc": "A psychic tendril burrows into one mind at once, warping their will -- their attacks weaken and their thoughts slow to a crawl. When Elder Brain's presence is felt nearby, the enslavement spreads to the whole squad at once.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.4,
+  "cooldown": 115,
+  "scalingStat": "magic_atk",
+  "flavor": "Your mind is already ours.",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "debuff_atk", "chance": 0.9, "duration": 3, "val": 0.3, "label": "ENSLAVED" },
+   { "type": "debuff_spd", "chance": 0.9, "duration": 3, "val": 0.3, "label": "ENSLAVED" }
+  ],
+  "meta": {
+   "castAnim": "cast-arcane",
+   "duo_partner": "Elder Brain",
+   "duo_bonus": {
+    "dmgMult": 1.8,
+    "target": "all_enemies",
+    "castAnim": "cast-channel",
+    "msg": "★ HIVE ENSLAVEMENT ★"
+   }
+  }
+ },
+ {
+  "id": "sig_boss_elder_brain",
+  "owner": "Elder Brain",
+  "name": "Psychic Dominion",
+  "desc": "A wave of raw psychic force crashes across every mind in range, leaving them rattled and exposed. Standing near Aboleth turns the wave into a full hive-mind assault.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.4,
+  "cooldown": 122,
+  "scalingStat": "magic_atk",
+  "flavor": "We are legion. You are nothing.",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.7, "duration": 3, "val": 0.25, "label": "MIND-SHATTERED" }
+  ],
+  "meta": {
+   "castAnim": "cast-channel",
+   "duo_partner": "Aboleth",
+   "duo_bonus": {
+    "dmgMult": 1.6,
+    "castAnim": "cast-override",
+    "msg": "★ HIVE ENSLAVEMENT ★"
+   }
+  }
+ },
+ {
+  "id": "sig_boss_balhannoth",
+  "owner": "Balhannoth",
+  "name": "Voidgrasp",
+  "desc": "Spectral tendrils drag one victim into a lightless pocket dimension -- the pull cannot be dodged, and whatever it grabs feeds the Balhannoth's own strength. Flumph's light bends the void into something far worse.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.0,
+  "cooldown": 118,
+  "scalingStat": "atk",
+  "flavor": "There is no escaping the dark.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-pierce",
+   "ignore_evasion": true,
+   "duo_partner": "Flumph",
+   "duo_bonus": {
+    "dmgMult": 1.7,
+    "castAnim": "cast-override",
+    "self_effects": [{ "type": "buff_def", "duration": 3, "val": 0.25, "label": "PARADOX SHIELD" }],
+    "msg": "★ LIGHT-VOID PARADOX ★"
+   }
+  }
+ },
+ {
+  "id": "sig_boss_flumph",
+  "owner": "Flumph",
+  "name": "Gentle Drift",
+  "desc": "An oddly calming psychic hum that quietly bolsters everything nearby -- gentle, but never to be underestimated. Near Balhannoth, that same calm curdles into something unsettling.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "all_allies",
+  "power": 2.2,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "It just... floats there. Watching.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-focus",
+   "team_effects": [
+    { "type": "shield", "duration": 3, "val": 0.25, "label": "GENTLE DRIFT" },
+    { "type": "buff_elemdmg", "duration": 3, "val": 0.15, "label": "GENTLE DRIFT" }
+   ],
+   "duo_partner": "Balhannoth",
+   "duo_bonus": {
+    "castAnim": "cast-override",
+    "team_effects": [{ "type": "buff_atk", "duration": 3, "val": 0.3, "label": "PARADOX SHIELD" }],
+    "msg": "★ LIGHT-VOID PARADOX ★"
+   }
+  }
+ },
+ {
+  "id": "sig_boss_alpha_wolf",
+  "owner": "Alpha Wolf",
+  "name": "Pack Leader's Fury",
+  "desc": "Two savage strikes in one lunge, and every hit stokes his rage further -- the longer the fight runs, the harder he bites. Fighting alongside Bangaa Pirate turns the pair into a coordinated hunting blitz.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2.3,
+  "cooldown": 105,
+  "scalingStat": "atk",
+  "flavor": "*a bone-chilling howl*",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-flurry",
+   "hits": 2,
+   "self_effects": [{ "type": "overheat", "duration": 5, "val": 0.1, "ramp": 0.06, "label": "BLOODLUST" }],
+   "duo_partner": "Bangaa Pirate",
+   "duo_bonus": {
+    "dmgMult": 1.5,
+    "target": "all_enemies",
+    "castAnim": "cast-override",
+    "msg": "★ HUNTING BLITZ ★"
+   }
+  }
+ },
+ {
+  "id": "sig_boss_bangaa_pirate",
+  "owner": "Bangaa Pirate",
+  "name": "Reckless Boarding",
+  "desc": "A wild, all-or-nothing cutlass rush that punishes anything already wounded. Pairs viciously with Alpha Wolf's pack tactics.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.8,
+  "cooldown": 108,
+  "scalingStat": "atk",
+  "flavor": "Yarrr, no quarter given!",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-slash",
+   "execute_below": 0.45,
+   "execute_mult": 1.9,
+   "duo_partner": "Alpha Wolf",
+   "duo_bonus": {
+    "dmgMult": 1.5,
+    "target": "all_enemies",
+    "castAnim": "cast-override",
+    "msg": "★ HUNTING BLITZ ★"
+   }
+  }
+ },
+ {
+  "id": "sig_boss_brainpan",
+  "owner": "Brainpan",
+  "name": "Overload Plating",
+  "desc": "Cobbled-together armor plates lock down hard, growing more impenetrable with every passing turn. Standing beside Gargantua channels that stored energy into a devastating discharge.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.8,
+  "cooldown": 115,
+  "scalingStat": "def",
+  "flavor": "*grinding servos*",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-guard",
+   "self_effects": [
+    { "type": "shield", "duration": 4, "val": 0.3, "label": "OVERLOAD PLATING" },
+    { "type": "fortify", "duration": 5, "val": 0.1, "ramp": 0.07, "label": "OVERLOAD PLATING" }
+   ],
+   "duo_partner": "Gargantua",
+   "duo_bonus": {
+    "dmgMult": 2.0,
+    "target": "all_enemies",
+    "castAnim": "cast-override",
+    "msg": "★ OVERLOAD DISCHARGE ★"
+   }
+  }
+ },
+ {
+  "id": "sig_boss_gargantua",
+  "owner": "Gargantua",
+  "name": "Titanfall",
+  "desc": "A colossal, ground-shaking slam that hits like the end of the world. When Brainpan is close enough to redirect the shockwave, Titanfall stops being a single hit at all.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.6,
+  "cooldown": 128,
+  "scalingStat": "atk",
+  "flavor": "THE GROUND ITSELF TREMBLES.",
+  "damageType": "physical",
+  "statusEffects": [
+   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "STAGGERED" }
+  ],
+  "meta": {
+   "castAnim": "cast-quake",
+   "duo_partner": "Brainpan",
+   "duo_bonus": {
+    "dmgMult": 1.6,
+    "target": "all_enemies",
+    "castAnim": "cast-override",
+    "msg": "★ OVERLOAD DISCHARGE ★"
+   }
+  }
+ },
+ {
+  "id": "sig_boss_feyr",
+  "owner": "Feyr",
+  "name": "Fleeting Predation",
+  "desc": "Three lightning-quick slashes from a hunter that's already gone before the pain registers. Hunting alongside the Demogorgon opens a rift the whole squad has to answer to.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.7,
+  "cooldown": 102,
+  "scalingStat": "speed",
+  "flavor": "You never see it coming twice.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-blink",
+   "hits": 3,
+   "self_effects": [{ "type": "buff_spd", "duration": 3, "val": 0.25, "label": "FLEETING" }],
+   "duo_partner": "The Demogorgon",
+   "duo_bonus": {
+    "dmgMult": 1.5,
+    "target": "all_enemies",
+    "castAnim": "cast-override",
+    "msg": "★ RIFT HUNT ★"
+   }
+  }
+ },
+ {
+  "id": "sig_boss_demogorgon",
+  "owner": "The Demogorgon",
+  "name": "Upside Down",
+  "desc": "Reality peels back and something ancient reaches through -- the strike finds prey no matter how far they've run, and finishes the badly wounded outright. When Feyr is hunting alongside it, the rift swallows everyone.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.4,
+  "cooldown": 125,
+  "scalingStat": "atk",
+  "flavor": "*a chittering shriek from beyond*",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-heavy",
+   "ignore_evasion": true,
+   "execute_below": 0.35,
+   "execute_mult": 2.0,
+   "duo_partner": "Feyr",
+   "duo_bonus": {
+    "dmgMult": 1.5,
+    "target": "all_enemies",
+    "castAnim": "cast-override",
+    "msg": "★ RIFT HUNT ★"
+   }
+  }
+ },
+ {
+  "id": "sig_jonathan_joestar",
+  "owner": "Jonathan Joestar",
+  "name": "Ripple Overdrive",
+  "desc": "Jonathan never got a Stand -- Hamon is all will and repetition, so the more this squad has actually been swinging, the harder this lands. No flashy summon, no shortcut: just a gentleman who doesn't stop hitting things, hitting harder the longer the fight runs.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2.6,
+  "cooldown": 95,
+  "scalingStat": "atk",
+  "flavor": "I, Jonathan Joestar, will not lose!",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-heavy",
+   "scales_hit_count": { "perHit": 0.025, "cap": 2.6 },
+   "self_effects": [
+    { "type": "buff_atk", "duration": 3, "val": 0.2, "label": "OVERDRIVE" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "burn", "chance": 0.5, "duration": 3, "val": 0.07, "label": "HAMON BURN" }
+  ]
+ },
+ {
+  "id": "sig_dio_brando",
+  "owner": "Dio Brando",
+  "name": "The World: Toki wo Tomare",
+  "desc": "Time stops. Everyone but Dio -- frozen mid-motion, unable to act, unable to even see it coming. He gets his shots in while the world holds still, then it starts moving again like nothing happened. WRYYYYY.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.2,
+  "cooldown": 190,
+  "scalingStat": "atk",
+  "flavor": "ZA WARUDO!",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-override",
+   "ignore_evasion": true,
+   "world_time_stop": { "duration": 2, "selfAtkBuff": 0.6, "musicStopMs": 5000 }
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 1, "duration": 1, "val": 0, "label": "TIME STOPPED" }
+  ]
  }
 ]

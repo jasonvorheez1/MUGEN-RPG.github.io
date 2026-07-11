@@ -42,7 +42,10 @@ import {
   formatPower,
   getSkillTags,
   applyMitigation,
-  SIGNATURE_BONUS
+  SIGNATURE_BONUS,
+  SPECIAL_STATS,
+  SPECIAL_CAP,
+  getGearPassives
 } from "./utils.js";
 import { CustomSelect, TierBadge, VisualEffect } from "./components.js";
 const getBattleStats = (unit, playerElement, activeSynergies = []) => {
@@ -69,6 +72,15 @@ const getBattleStats = (unit, playerElement, activeSynergies = []) => {
     }
     if (eff.type === "buff_spd") speed *= 1 + eff.val;
     if (eff.type === "buff_crit") critRate += eff.val;
+    // --- SPECIAL-linked escalating statuses (reusable) ---------------------------
+    // Five status types themed to SPECIAL stats. Each carries a `ramp` so its value
+    // climbs every turn it persists (see the view ticks), so they start subtle and
+    // snowball. Any signature can apply them, not just Courier.
+    if (eff.type === "overheat")  { atk *= 1 + eff.val; }                    // STR: physical power, rising
+    if (eff.type === "precision") { critRate += eff.val; }                   // PER: crit chance, rising
+    if (eff.type === "fortify")   { def *= 1 + eff.val; magicDef *= 1 + eff.val; } // END: defenses, rising
+    if (eff.type === "charm")     { luck *= 1 + eff.val; critRate += eff.val * 0.5; } // CHA: luck/crit, rising
+    if (eff.type === "overclock") { magicAtk *= 1 + eff.val; }               // INT: magic power, rising
     // NEW: elemental empowerment — raises the unit's elemental (all) damage output.
     // Amps both physical and magical offense; stacks with regular ATK buffs and
     // reads as a distinct channel (its own pip + aura visual). Signatures grant
@@ -153,6 +165,236 @@ const getBattleStats = (unit, playerElement, activeSynergies = []) => {
   }
   return { hp: maxHp, atk, def, speed, magicAtk, magicDef, critRate, evasion, lifesteal, luck };
 };
+// Pick a bespoke cast animation for a skill. An explicit meta.castAnim always
+// wins; otherwise the animation is derived from the skill's own shape so every
+// skill gets varied, thematically-fitting motion for free -- not just
+// signatures. Keep the returned keys in sync with the .cast-* CSS classes in
+// style.css.
+const deriveCastAnim = (sig) => {
+  if (!sig) return null;
+  const m = sig.meta || {};
+  if (m.castAnim) return m.castAnim;
+  const stat = String(sig.scalingStat || "").toLowerCase();
+  const magic = sig.damageType === "magical" || stat.includes("magic");
+  const power = sig.power || 0;
+  const txt = `${sig.name || ""} ${sig.desc || ""}`;
+  if (m.lifesteal || m.drain || /drain|vampir|leech|siphon|feast/i.test(txt)) return "cast-vanish";
+  if (/orbit|satellite|ring|halo|swirl|spiral|circle/i.test(txt)) return "cast-orbit";
+  if (m.execute_below || m.execute_mult || /execute|finish|reckoning|judgment|doom/i.test(txt)) return "cast-crescendo";
+  if (/thunder|lightning|volt|shock|bolt|static|storm cloud/i.test(txt)) return "cast-thunder";
+  if (/slam|smash|hammer|meteor|impact|pound/i.test(txt)) return "cast-slam";
+  if (m.extra_hits || m.slot_roll || /multi|flurry|barrage|rapid/i.test(sig.desc || "")) return "cast-flurry";
+  if (stat === "speed" || /blitz|blink|flash|dash|swift|instant|teleport/i.test(sig.name || "")) return "cast-blink";
+  if (m.ignore_evasion || /pierc|snipe|seek|homing|lock|aim|arrow|bullet|shot|dead-?eye/i.test(txt)) return "cast-pierce";
+  if (/slash|blade|sword|cut|slice|katana|edge/i.test(txt)) return "cast-slash";
+  if (stat === "def" || /quake|earth|crush|ground|stone|seismic/i.test(txt)) return "cast-quake";
+  if (m.hidden_power_mult || power >= 4.6) return "cast-heavy";
+  if ((sig.type === "buff" && Array.isArray(m.self_effects)) || /guard|shield|brace|ward|bulwark|aegis/i.test(txt)) return "cast-guard";
+  if (sig.type === "heal" || sig.type === "buff" || (Array.isArray(m.team_effects) && power < 2)) return "cast-focus";
+  if (magic && sig.target === "all_enemies") return "cast-channel";
+  if (magic) return "cast-arcane";
+  return "cast-charge";
+};
+// Single source of truth for "how long does this cast read as playing" --
+// shared by BattleUnit (how long the CSS class stays applied) and every
+// battle view's hit-stop lock (how long the WHOLE simulation holds so nothing
+// else can act mid-animation). Deliberately much longer than a snappy game
+// feel would use -- these are meant to read as cinematic beats, not blips.
+// Keep keys in sync with deriveCastAnim()'s return values + style.css.
+const CAST_ANIM_MS = {
+  "cast-arcane": 1500, "cast-charge": 1450, "cast-flurry": 1450, "cast-focus": 1500,
+  "cast-blink": 1450, "cast-heavy": 1650, "cast-channel": 1650, "cast-override": 1900,
+  "cast-slash": 1300, "cast-quake": 1500, "cast-pierce": 1300, "cast-guard": 1450,
+  "cast-rainbow": 1700, "cast-slam": 1600, "cast-orbit": 1650, "cast-vanish": 1500,
+  "cast-crescendo": 1800, "cast-thunder": 1550
+};
+// Cast animations that read as "sent something at the target" rather than a
+// melee lunge or a self/team buff -- these get an actual flying projectile
+// (see ProjectileLayer) instead of just the caster's own wind-up motion.
+const RANGED_CAST_ANIMS = /* @__PURE__ */ new Set(["cast-arcane", "cast-charge", "cast-channel", "cast-thunder", "cast-orbit", "cast-crescendo", "cast-override", "cast-flurry", "cast-pierce"]);
+const DEFAULT_CAST_MS = 1500;
+const LUNGE_MS = 500;
+const LUNGE_CRIT_MS = 580;
+// FIGHTING-GAME RUSHDOWN: a basic attack now dashes the attacker across the
+// field to the target and throws a flurry, instead of a bob-in-place. Ground
+// rush and air-combo variants run longer than the old lunge, so their own
+// duration constants feed both the CSS animation length AND the battle views'
+// hit-stop lock (same sync pattern as CAST_ANIM_MS).
+const RUSH_MS = 780;
+const RUSH_AIR_MS = 1020;
+// How many flurry hits a basic attack throws, and whether it launches an air
+// combo, derived from the ATTACKER's in-battle stats -- Speed is the driver
+// (a fast character rushes down with more strikes and, past a threshold, juggles
+// the target into the air), with Luck adding a small chance to sneak a bonus
+// hit or a surprise launch. Returns { hits, air }.
+const getMeleeCombo = (stats) => {
+  const spd = stats?.speed || 0;
+  const luck = stats?.luck || 0;
+  let hits = 2 + Math.floor(spd / 55);
+  if (Math.random() < Math.min(0.35, luck / 500)) hits += 1; // lucky extra strike
+  hits = Math.max(2, Math.min(6, hits));
+  const air = spd >= 150 || Math.random() < Math.min(0.22, luck / 650);
+  return { hits, air };
+};
+// How long (ms) a cast animation plays -- null castAnim means "no bespoke
+// cast," i.e. a plain basic-attack lunge, which the caller should treat with
+// getLungeMs() instead.
+const getCastAnimMs = (castAnim) => castAnim ? CAST_ANIM_MS[castAnim] || DEFAULT_CAST_MS : null;
+const getLungeMs = (isCrit) => isCrit ? LUNGE_CRIT_MS : LUNGE_MS;
+// How long a basic-attack rushdown plays (air combos run longer). Used by both
+// BattleUnit (animation length) and every view's basic-attack hit-stop lock.
+const getBasicAttackMs = (air) => air ? RUSH_AIR_MS : RUSH_MS;
+// Small safety margin added ONLY to the game-logic hit-stop lock (never to the
+// CSS/JS visual timeout) so the lock always outlasts the animation even with
+// React's render/effect scheduling lag -- otherwise a startled unit's cast can
+// visually start a beat before the previous one has fully cleared.
+const HITSTOP_BUFFER_MS = 150;
+// Turn a raw effect into a short on-badge label + a full tooltip string so the
+// player can read the board at a glance instead of decoding tiny icons. `short`
+// is the value shown on the pip (kept to a few chars); `full` is the title text.
+const STAT_LABELS = { buff_atk: "ATK", debuff_atk: "ATK", buff_def: "DEF", debuff_def: "DEF", buff_spd: "SPD", debuff_spd: "SPD", buff_crit: "CRIT", buff_elemdmg: "ELEM" };
+const describeEffect = (e) => {
+  const t = e.type || "";
+  const pct = typeof e.val === "number" && Math.abs(e.val) < 5 ? Math.round(e.val * 100) : null;
+  const sign = t.startsWith("debuff") ? "-" : "+";
+  if (STAT_LABELS[t]) {
+    const s = `${STAT_LABELS[t]}${sign}${pct != null ? Math.abs(pct) + "%" : ""}`;
+    return { short: s, full: `${e.label ? e.label + ": " : ""}${s} (${e.duration}t)` };
+  }
+  const simple = {
+    shield: { short: "SHLD", full: "Shield" }, regen: { short: "RGN", full: "Regen" },
+    burn: { short: "BRN", full: "Burn (damage over time)" }, poison: { short: "PSN", full: "Poison (damage over time)" },
+    static: { short: "STC", full: "Static" }, stun: { short: "STUN", full: "Stunned — loses its turn" },
+    freeze: { short: "FRZ", full: "Frozen" }, silence: { short: "SIL", full: "Silenced — cannot use skills" },
+    sleep: { short: "ZZZ", full: "Asleep — skips turns until hit hard enough to wake" },
+    crushed: { short: "CRSH", full: "Crushed — takes extra damage" }, broken: { short: "BRK", full: "Broken — amplified damage" },
+    phantom_veil: { short: "VEIL", full: "Extremely evasive" }, untargetable: { short: "HIDE", full: "Untargetable" },
+    aggro: { short: "TAUNT", full: "Taunting" }, hidden_power: { short: "", full: "Building power" },
+    tactical_stance: { short: "STANCE", full: "Tactical stance" }, elemental_insight: { short: "INSGT", full: "Elemental insight" },
+    tethered: { short: "TETHR", full: "Tethered" },
+    overheat: { short: "HEAT↑", full: "Overheat — physical power rising each turn" },
+    precision: { short: "AIM↑", full: "Precision — crit chance rising each turn" },
+    fortify: { short: "GUARD↑", full: "Fortify — defenses rising each turn" },
+    charm: { short: "CHARM↑", full: "Charm — luck & crit rising each turn" },
+    overclock: { short: "OC↑", full: "Overclock — magic power rising each turn" }
+  };
+  if (simple[t]) return { short: simple[t].short, full: `${e.label ? e.label + ": " : ""}${simple[t].full} (${e.duration}t)` };
+  const generic = (e.label || t.replace(/_/g, " ")).slice(0, 6).toUpperCase();
+  return { short: generic, full: `${e.label || t} (${e.duration}t)` };
+};
+// Shared status-effect tick: DOT (burn/poison/static), regen, stun/freeze/sleep
+// incapacitation, ramp escalation, duration decrement. Mutates `unit` in place
+// and returns whether it's incapacitated this tick plus any floating popups to
+// render, so every battle mode processes statuses identically.
+const applyStatusTick = (unit) => {
+  const popups = [];
+  let incapacitated = false;
+  unit.effects = (unit.effects || []).filter((e) => {
+    if (e.type === "burn" || e.type === "poison" || e.type === "static") {
+      const dotDmg = Math.floor((unit.maxHp || 0) * (e.val || 0.05));
+      unit.hp = Math.max(0, unit.hp - dotDmg);
+      popups.push({ id: Math.random(), targetId: unit.id, amount: dotDmg, type: "miss" });
+      if (unit.hp === 0) unit.dead = true;
+    }
+    if (e.type === "regen") {
+      const healAmt = Math.floor((unit.maxHp || 0) * (e.val || 0.05));
+      unit.hp = Math.min(unit.maxHp, unit.hp + healAmt);
+      popups.push({ id: Math.random(), targetId: unit.id, amount: healAmt, type: "heal" });
+    }
+    if (e.type === "stun" || e.type === "freeze" || e.type === "sleep") incapacitated = true;
+    if (typeof e.ramp === "number") e.val = (e.val || 0) + e.ramp;
+    e.duration -= 1;
+    return e.duration > 0;
+  });
+  return { incapacitated, popups };
+};
+// Shields are secondary HP, not a perpetual damage-reduction multiplier.
+// Every shield-creation site (skills.json statusEffects, signature meta,
+// on-kill grants, tactical-stance procs, guard buttons...) only ever writes
+// `val` (originally authored/scaled as "fraction of max HP shielded" -- see
+// skill descriptions like "shield scales with DEF"). Lazily convert that into
+// a real, depleting HP pool the FIRST time the shield actually takes a hit,
+// so every creation site is covered without having to touch each one. Once a
+// pool exists it persists (re-shielding replaces the whole effect object, so
+// there's no stale-pool risk).
+const getShieldPool = (target, shield) => {
+  if (typeof shield.maxHp !== "number" || !shield.maxHp) {
+    const frac = Math.min(3, Math.max(0, shield.val || 0));
+    shield.maxHp = Math.max(1, Math.floor((target.maxHp || 0) * frac));
+    shield.remainingHp = shield.maxHp;
+  }
+  return shield;
+};
+// Apply one hit of damage to a target's shield (if any), depleting its HP
+// pool and popping it once empty. Returns the damage that gets through.
+const absorbWithShield = (target, dmg) => {
+  const idx = (target.effects || []).findIndex((e) => e.type === "shield");
+  if (idx === -1) return dmg;
+  const shield = getShieldPool(target, target.effects[idx]);
+  if (dmg >= shield.remainingHp) {
+    const leftover = dmg - shield.remainingHp;
+    target.effects.splice(idx, 1);
+    target._shieldHit = true;
+    return leftover;
+  }
+  shield.remainingHp -= dmg;
+  target._shieldHit = true;
+  return 0;
+};
+// Shared "basic attack" resolver — taken whenever a unit's gauge fills but no
+// skill is ready. Unifies target selection (taunt/expose/marked/untargetable),
+// evasion, gear elemental passives, broken amplification, shield mitigation and
+// defense mitigation so basic attacks behave identically in every battle mode.
+// `comboMult`/`markedTargetId` are optional Campaign-only extras (default to
+// inert values so Trials/Events get the same core resolution).
+const resolveBasicAttack = ({ attacker, allUnits, playerElement, comboMult = () => 1, markedTargetId = null }) => {
+  const targets = allUnits.filter((t) => t.isEnemy !== attacker.isEnemy && !t.dead && !(t.effects || []).some((e) => e.type === "untargetable"));
+  if (!targets.length) return null;
+  const taunted = targets.find((t) => (t.effects || []).some((e) => e.type === "aggro"));
+  const exposed = !attacker.isEnemy ? targets.find((t) => (t.effects || []).some((e) => e.type === "expose")) : null;
+  const marked = !attacker.isEnemy && markedTargetId ? targets.find((t) => t.id === markedTargetId) : null;
+  const target = taunted || exposed || marked || targets[Math.floor(Math.random() * targets.length)];
+  const attackerStats = getBattleStats(attacker, playerElement, attacker.activeSynergies || []);
+  const targetStats = getBattleStats(target, playerElement, target.activeSynergies || []);
+  const phantomVeil = (target.effects || []).find((e) => e.type === "phantom_veil");
+  const effectiveEvasion = phantomVeil ? phantomVeil.val : targetStats.evasion;
+  const attackerTruesight = (attacker.effects || []).some((e) => e.type === "truesight");
+  if (!attackerTruesight && Math.random() < effectiveEvasion) {
+    attacker.lastAction = { targetId: target.id, amount: "MISS", type: "miss", time: Date.now() };
+    return { targetId: target.id, amount: "MISS", missed: true };
+  }
+  let dmg = Math.floor(attackerStats.atk * (1 + attackerStats.speed / 2e3));
+  if (!attacker.isEnemy) dmg = Math.floor(dmg * comboMult());
+  const attackerElemBoost = getGearPassives(attacker).filter((p) => p.type === "elem_boost" && p.element === attacker.element).reduce((s, p) => s + p.val, 0);
+  if (attackerElemBoost) dmg = Math.floor(dmg * (1 + attackerElemBoost));
+  const targetElemResist = getGearPassives(target).filter((p) => p.type === "elem_resist" && p.element === attacker.element).reduce((s, p) => s + p.val, 0);
+  if (targetElemResist) dmg = Math.floor(dmg * (1 - Math.min(0.8, targetElemResist)));
+  const brokenEff = (target.effects || []).find((e) => e.type === "broken");
+  if (brokenEff) dmg = Math.floor(dmg * (1 + (brokenEff.val || 0.5)));
+  dmg = applyMitigation(dmg, targetStats.def, 1e3);
+  dmg = absorbWithShield(target, dmg);
+  target.hp = Math.max(0, target.hp - dmg);
+  if (target.hp === 0) {
+    if (!target.isEnemy && target._leaderRevive) {
+      target._leaderRevive = false;
+      target.hp = 1;
+    } else {
+      target.dead = true;
+    }
+  }
+  attacker.burst = Math.min(100, (attacker.burst || 0) + 10);
+  // FIGHTING-GAME RUSHDOWN: the single damage number above is delivered as a
+  // stat-driven flurry of `hits` strikes (with an optional air-combo launcher).
+  // BattleUnit reads meleeHits/meleeAir off lastAction to dash + juggle; the
+  // combo counter climbs by the whole flurry, and the target rattles per hit
+  // (target._comboHits, read by the target's own BattleUnit on the HP drop).
+  const melee = getMeleeCombo(attackerStats);
+  const now = Date.now();
+  target._comboHits = melee.hits;
+  target._comboHitsTime = now; // fresh stamp so the target only rattles on THIS flurry, not a later DOT/skill drop
+  attacker.lastAction = { targetId: target.id, amount: dmg, type: "basic", meleeHits: melee.hits, meleeAir: melee.air, time: now };
+  return { targetId: target.id, amount: dmg, missed: false, meleeHits: melee.hits, meleeAir: melee.air };
+};
 const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isLimitBreak = false, forcedTargetId = null, extraPowerMult = 1 }) => {
   const next = combatants.map((u) => {
     const cloned = { ...u };
@@ -210,7 +452,15 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
     // Which skills actually fired this cast — banners/cut-ins read this instead of
     // guessing from skillId (which hid every slot-2/signature cast from the player).
     attacker.lastSkillIds = [...skillsToUse];
+    // Cast animation: EVERY skill cast gets a bespoke wind-up/spell-cast motion
+    // now (not just signatures) -- BattleUnit reads this to play the cinematic
+    // cast instead of the shared plain lunge. Signature fires (if any) win the
+    // pick since they're the more dramatic move when a unit fires two skills.
+    const firedSkillObjs = skillsToUse.map((sid) => (skills || []).find((s) => s.id === sid)).filter(Boolean);
+    const firedSig = firedSkillObjs.find((s) => s.signature) || firedSkillObjs[0];
+    attacker.lastCastAnim = firedSig ? deriveCastAnim(firedSig) : null;
   } catch (e) {
+    attacker.lastCastAnim = null;
   }
   const stanceEff = (attacker.effects || []).find((e) => e.type === "tactical_stance");
   if (stanceEff && typeof stanceEff.val === "number" && stanceEff.val > 0) {
@@ -283,7 +533,9 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
     const skill = skills.find((s) => s.id === sid) || { id: "slash", type: "atk", power: 1 };
     const abilityLevel = (sid === attacker.skillId ? attacker.abilityLevel : attacker.abilityLevel2) || 1;
     const awaken = (sid === attacker.skillId ? attacker.abilityAwaken : attacker.abilityAwaken2) || 0;
-    const targets = pickTargets(skill, isLimitBreak);
+    // `let` so a dynamic_special archetype can re-shape the target set below
+    // (e.g. the AGI "blur" form fans the shot out to every enemy).
+    let targets = pickTargets(skill, isLimitBreak);
     const attackerStats = getBattleStats(attacker, playerElement, attacker.activeSynergies || []);
     const META = skill.meta || {};
     const sigEffectMult = skill.signature ? SIGNATURE_BONUS.EFFECT_VAL : 1;
@@ -303,6 +555,22 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
     }
     const hiddenPowerEff = attacker.effects.find((e) => e.type === "hidden_power");
     const hiddenPowerReady = !!(META.hidden_power_threshold && hiddenPowerEff && hiddenPowerEff.val >= META.hidden_power_threshold);
+    // Damage/hit modifiers used by both the per-cast payload below and the dynamic
+    // archetype resolver further down. Declared here so the earlier payload can
+    // read/adjust them (e.g. luck-gamble, resonance).
+    let dynDmgMult = 1;
+    attacker._dynArchetypeDamageType = null;
+    attacker._dynArchetypeIgnoreEvasion = false;
+    attacker._dynBonus = null;
+    attacker._resonanceElement = null;
+    // MULTI-HIT: how many times this cast strikes each target. Driven by META.hits,
+    // or dynamically by a SPECIAL stat when META.hits_per_special is set (Courier:
+    // every point of Agility = one more hit). Reusable by any signature.
+    let numHits = Math.max(1, META.hits || 1);
+    if (META.hits_per_special && attacker.special) {
+      const baseSp = (META.dynamic_special && META.dynamic_special.baseline) || 1;
+      numHits = Math.max(1, 1 + ((attacker.special[META.hits_per_special] || baseSp) - baseSp));
+    }
     // --- Per-cast effects: applied once when the skill is used (support / self-combo skills) ---
     const livingAllies = next.filter((u) => u.isEnemy === attacker.isEnemy && !u.dead);
     if (Array.isArray(META.self_effects)) META.self_effects.forEach((e) => attacker.effects.push({ ...e, val: scaleVal(e.val) }));
@@ -311,6 +579,65 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
     if (META.gain_burst) livingAllies.forEach((a) => { a.burst = Math.min(100, (a.burst || 0) + META.gain_burst); });
     if (META.dispel_enemies) {
       next.filter((u) => u.isEnemy !== attacker.isEnemy && !u.dead).forEach((e) => { e.effects = e.effects.filter((x) => !x.type.startsWith("buff") && x.type !== "shield"); });
+    }
+    // CARE METER (Tenderheart): grants the team a one-time death-save this battle
+    // plus an escalating group buff that grows each turn (see `ramp` in the view
+    // ticks). Reusable by any "protector" signature.
+    if (META.care_revive) {
+      livingAllies.forEach((a) => {
+        a._leaderRevive = true;
+        a.effects.push({ type: "buff_def", duration: 5, val: 0.15, ramp: 0.05, label: "CARING HEART" });
+      });
+    }
+    // LUCK GAMBLE (Good Luck Bear): roll one of several outcomes, odds tilted by the
+    // caster's Luck. Reusable RNG payload for any "gambler" signature.
+    if (META.luck_gamble) {
+      const luck = Math.min(0.6, (attackerStats.luck || 10) / 300);
+      const roll = Math.random();
+      if (roll < 0.18 + luck) {
+        attacker.effects.push({ type: "buff_crit", duration: 3, val: 0.5, label: "JACKPOT" });
+        dynDmgMult *= 2.2; attacker.lastAction = { ...attacker.lastAction, msg: "★JACKPOT★" };
+      } else if (roll < 0.45 + luck) {
+        livingAllies.forEach((a) => { a.hp = Math.min(a.maxHp, a.hp + Math.floor(a.maxHp * 0.18)); });
+        attacker.lastAction = { ...attacker.lastAction, msg: "LUCKY HEAL" };
+      } else if (roll < 0.7) {
+        next.filter((u) => u.isEnemy !== attacker.isEnemy && !u.dead).forEach((e) => e.effects.push({ type: "debuff_def", duration: 3, val: 0.3, label: "UNLUCKY" }));
+        attacker.lastAction = { ...attacker.lastAction, msg: "BAD LUCK" };
+      } else {
+        dynDmgMult *= 1.4;
+      }
+    }
+    // RESONANCE (Cheer Bear): her power grows with the Care Bears fighting beside
+    // her, and she briefly borrows the strongest one's element ("merge"). Reads
+    // allied bears from the battlefield; reusable via META.resonance_franchise.
+    if (META.resonance_franchise) {
+      const bears = livingAllies.filter((a) => a.id !== attacker.id && a.franchise === META.resonance_franchise);
+      if (bears.length) {
+        const strongest = bears.reduce((best, b) => ((b.level || 1) > (best.level || 1) ? b : best), bears[0]);
+        const totalLv = bears.reduce((s, b) => s + (b.level || 1), 0);
+        dynDmgMult *= 1 + Math.min(1.5, totalLv / 120);
+        attacker._resonanceElement = strongest.element;
+        attacker.effects.push({ type: "buff_elemdmg", duration: 3, val: Math.min(0.6, 0.1 + bears.length * 0.12), label: "RESONANCE" });
+        attacker.lastAction = { ...attacker.lastAction, msg: `RESONANCE ×${bears.length}` };
+      }
+    }
+    // THE WORLD — a genuine time-stop, not a flavor-only stun: every living
+    // enemy is frozen (guaranteed, bypasses evasion entirely -- there's
+    // nothing to dodge if time itself isn't moving) for META.world_time_stop
+    // turns, while the caster gets a matching self-window buff to actually
+    // use the stopped time. Deliberately limited for balance: a signature
+    // opts in with a very long cooldown in its own JSON (not enforced here),
+    // and this is the only signature type that touches _triggeredTimeStopAt
+    // -- the battle view watches for that timestamp and briefly silences the
+    // music for META.world_time_stop.musicStopMs, then restores it.
+    if (META.world_time_stop) {
+      const enemiesNow = next.filter((u) => u.isEnemy !== attacker.isEnemy && !u.dead);
+      enemiesNow.forEach((e) => { e.effects.push({ type: "stun", duration: META.world_time_stop.duration || 2, val: 0, label: "TIME STOPPED" }); });
+      attacker.effects.push({ type: "buff_atk", duration: META.world_time_stop.duration || 2, val: META.world_time_stop.selfAtkBuff || 0.6, label: "THE WORLD" });
+      attacker.effects.push({ type: "buff_crit", duration: META.world_time_stop.duration || 2, val: 0.35, label: "THE WORLD" });
+      attacker._triggeredTimeStopAt = Date.now();
+      attacker._timeStopMusicMs = META.world_time_stop.musicStopMs || 5000;
+      attacker.lastAction = { ...attacker.lastAction, msg: "THE WORLD! TOKI WO TOMARE!" };
     }
     // HANNAH — "X Marks the Spot": a real turn-economy steal, not a status effect.
     // Finds whoever is closest to acting next (highest current ATB gauge) and
@@ -327,8 +654,22 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
         victim.lastAction = { ...victim.lastAction, msg: "TURN STOLEN" };
       }
     }
-    if (META.castMusic && typeof window !== "undefined" && window.__mugenPlayUniqueTrack) {
-      window.__mugenPlayUniqueTrack(META.castMusic);
+    // DUO SKILL — a boss signature carrying META.duo_partner checks whether that
+    // named ally is alive on the same side; if so this same cast escalates into a
+    // team-up attack (META.duo_bonus can override target/animation/damage and add
+    // effects), with zero new cooldown plumbing -- it rides the boss's own
+    // existing signature cast. Reusable by any future signature, not boss-only.
+    if (META.duo_partner) {
+      const partnerAlive = next.some((u) => u.isEnemy === attacker.isEnemy && !u.dead && u.name === META.duo_partner);
+      if (partnerAlive) {
+        const duo = META.duo_bonus || {};
+        if (duo.dmgMult) dynDmgMult *= duo.dmgMult;
+        if (duo.target && duo.target !== skill.target) targets = pickTargets({ ...skill, target: duo.target }, isLimitBreak);
+        if (duo.castAnim) attacker.lastCastAnim = duo.castAnim;
+        if (Array.isArray(duo.self_effects)) duo.self_effects.forEach((e) => attacker.effects.push({ ...e, val: scaleVal(e.val) }));
+        if (Array.isArray(duo.team_effects)) livingAllies.forEach((a) => duo.team_effects.forEach((e) => a.effects.push({ ...e, val: scaleVal(e.val) })));
+        attacker.lastAction = { ...attacker.lastAction, msg: duo.msg || "★ DUO ATTACK ★" };
+      }
     }
     // TIMMY TURNER — "I Wish For..." cycles through THREE completely different
     // wishes each cast (Cosmo's chaos / Wanda's wisdom / Fairy teamwork). The
@@ -446,9 +787,6 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           }
         }
       }
-      if (stage.castMusic && typeof window !== "undefined" && window.__mugenPlayUniqueTrack) {
-        window.__mugenPlayUniqueTrack(stage.castMusic);
-      }
     }
     // DYNAMIC SPECIAL — the skill itself is defined by whichever SPECIAL stat
     // (see utils.js SPECIAL_STATS) the unit has invested in most. No investment
@@ -457,16 +795,27 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
     // archetype -- e.g. INT overcharges into a mage-style burn/magic-power kit,
     // AGI turns into a speed/slow scout kit. Ties break by a fixed priority so
     // the same build always produces the same kit (no randomness).
-    let dynDmgMult = 1;
-    attacker._dynArchetypeDamageType = null;
     if (META.dynamic_special && attacker.special) {
       const entries = Object.entries(attacker.special);
       const baseline = META.dynamic_special.baseline || 1;
       const maxVal = Math.max(baseline, ...entries.map(([, v]) => v || baseline));
-      if (maxVal > baseline) {
-        const topKeys = entries.filter(([, v]) => (v || baseline) === maxVal).map(([k]) => k);
+      // ULTIMATE: every SPECIAL stat maxed out (a genuine min-max-everything
+      // build, SPECIAL_CAP points in all 7) unlocks a reserved "ultimate"
+      // archetype -- checked before anything else so it always wins.
+      const isMaxedAll = SPECIAL_STATS.every((k) => (attacker.special[k] || baseline) >= SPECIAL_CAP);
+      // CURATED COMBOS: e.g. high STR + mid AGI = a DPS/speed hybrid. Defined in
+      // JSON as META.dynamic_special.combos: [{ keys: ["str","agi"], threshold: 6, archetype: "str_agi" }, ...].
+      // First combo where every listed stat clears its threshold wins, checked
+      // in the order authored (most specific first).
+      let comboArchetypeKey = null;
+      if (!isMaxedAll && Array.isArray(META.dynamic_special.combos)) {
+        const combo = META.dynamic_special.combos.find((c) => (c.keys || []).every((k) => (attacker.special[k] || baseline) >= (c.threshold || baseline + 1)));
+        if (combo) comboArchetypeKey = combo.archetype;
+      }
+      if (isMaxedAll || comboArchetypeKey || maxVal > baseline) {
         const priority = ["int", "agi", "str", "per", "end", "cha", "lck"];
-        const dominant = priority.find((k) => topKeys.includes(k)) || topKeys[0];
+        const topKeys = entries.filter(([, v]) => (v || baseline) === maxVal).map(([k]) => k);
+        const dominant = isMaxedAll ? "ultimate" : comboArchetypeKey || priority.find((k) => topKeys.includes(k)) || topKeys[0];
         const archetype = META.dynamic_special.archetypes?.[dominant];
         if (archetype) {
           const enemiesNow = next.filter((u) => u.isEnemy !== attacker.isEnemy && !u.dead);
@@ -477,10 +826,30 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           if (archetype.burst) livingAllies.forEach((a) => { a.burst = Math.min(100, (a.burst || 0) + archetype.burst); });
           if (archetype.dmgMult) dynDmgMult = archetype.dmgMult;
           if (archetype.damageType) attacker._dynArchetypeDamageType = archetype.damageType;
+          if (archetype.ignore_evasion) attacker._dynArchetypeIgnoreEvasion = true;
+          // The move ACTUALLY reshapes per build, not just its damage number:
+          // an archetype can re-target the cast (a blur that hits everyone, a
+          // rally that also mends the team), swap its wind-up animation so each
+          // form reads differently on screen, and carry an on-hit rider.
+          attacker._dynBonus = archetype.bonus || null;
+          if (archetype.castAnim) attacker.lastCastAnim = archetype.castAnim;
+          if (archetype.target && archetype.target !== skill.target) {
+            targets = pickTargets({ ...skill, target: archetype.target }, isLimitBreak);
+          }
           attacker.lastAction = { ...attacker.lastAction, msg: archetype.msg || dominant.toUpperCase() };
         }
       } else {
         attacker.lastAction = { ...attacker.lastAction, msg: META.dynamic_special.baseMsg || undefined };
+      }
+    }
+    // Flying projectile: only for ranged-reading casts aimed at the enemy
+    // side (heals/buffs on your own team don't fly across the field). One
+    // entry per skill cast, tagged with this cast's timestamp so the visual
+    // layer (ProjectileLayer) can tell fresh casts apart from stale ones.
+    if (RANGED_CAST_ANIMS.has(attacker.lastCastAnim) && skill.type !== "heal" && skill.type !== "buff") {
+      const projTargets = targets.filter((t) => t && t.isEnemy !== attacker.isEnemy).map((t) => t.id);
+      if (projTargets.length) {
+        attacker.lastProjectile = { targetIds: projTargets, kind: attacker.lastCastAnim, color: ELEMENTS[attacker.element]?.color || "#fff", time: Date.now() };
       }
     }
     targets.forEach((t) => {
@@ -491,7 +860,13 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
             if (eff.condition.hasStatus && !t.effects.some((e) => e.type === eff.condition.hasStatus)) return;
             if (typeof eff.condition.hpBelow === "number" && !(t.hp / t.maxHp <= eff.condition.hpBelow)) return;
           }
-          if (Math.random() < Math.min(1, (eff.chance || 0) + awaken * 0.06)) {
+          // GEAR PASSIVE -- status_resist gear cuts the landing chance of a matching
+          // hostile status (e.g. a "stun"-resist trinket vs an incoming stun). Only
+          // ever matches hostile status types (burn/poison/freeze/stun/static), so
+          // it never touches ally-targeted buffs/heals sharing this same loop.
+          const statusResist = getGearPassives(t).filter((p) => p.type === "status_resist" && p.status === eff.type).reduce((s, p) => s + p.val, 0);
+          const effChance = Math.min(1, (eff.chance || 0) + awaken * 0.06) * (1 - Math.min(0.9, statusResist));
+          if (Math.random() < effChance) {
             if (eff.type === "cleanse") {
               t.effects = t.effects.filter((e) => e.type.startsWith("buff") || e.type === "shield" || e.type === "regen" || e.type === "tactical_stance");
             } else {
@@ -519,7 +894,16 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
       }
       if (skill.type === "atk" || skill.type === "combo" || skill.type === "debuff" && (skill.power || 0) > 0) {
         const tStats = getBattleStats(t, playerElement, t.activeSynergies || []);
-        if (!isLimitBreak && !META.ignore_evasion && !hiddenPowerReady && Math.random() < (tStats.evasion || 0)) {
+        // PHANTOM VEIL: a rare self-cast effect that overrides the normal
+        // (stat-capped-at-60%) evasion roll with a near-total dodge chance for
+        // its duration. Deliberately uses the exact same bypass funnel as every
+        // other evasion check -- ignore_evasion signatures, Limit Breaks, and
+        // hidden-power-ready casts still punch through it -- so nothing new has
+        // to be discovered to counter it, it just reads as "she's really lucky."
+        const phantomVeil = t.effects.find((e) => e.type === "phantom_veil");
+        const effectiveEvasion = phantomVeil ? phantomVeil.val : (tStats.evasion || 0);
+        const attackerTruesight = (attacker.effects || []).some((e) => e.type === "truesight");
+        if (!isLimitBreak && !META.ignore_evasion && !attacker._dynArchetypeIgnoreEvasion && !hiddenPowerReady && !attackerTruesight && Math.random() < effectiveEvasion) {
           attacker.lastAction = { targetId: t.id, amount: "MISS", type: "miss", time: Date.now(), skillUser: attacker.id };
           return;
         }
@@ -552,6 +936,17 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
         if (hiddenPowerReady) skillPower *= META.hidden_power_mult || 4;
         if (META.scales_missing_hp) skillPower *= 1 + (1 - attacker.hp / attacker.maxHp) * META.scales_missing_hp;
         if (META.scales_current_hp) skillPower *= 1 + (attacker.hp / attacker.maxHp) * META.scales_current_hp;
+        // RIPPLE OVERDRIVE (reusable) — scales with the WHOLE TEAM's landed hits
+        // this battle (attacker._landedHits, tracked on every unit), not the
+        // caster's own count alone. Rewards a squad that's actually been
+        // fighting hard over one that just opens with its biggest button --
+        // "meta defining" in the sense that it's strongest built around, not
+        // just a bigger number. Any future signature can opt into this the
+        // same way (META.scales_hit_count: { perHit, cap }).
+        if (META.scales_hit_count) {
+          const teamHits = livingAllies.reduce((s, a) => s + (a._landedHits || 0), 0);
+          skillPower *= Math.min(META.scales_hit_count.cap || 3, 1 + teamHits * (META.scales_hit_count.perHit || 0.02));
+        }
         const skillIdLow = (skill.id || "").toLowerCase();
         const elementMatches = skillIdLow.includes("fire") && attacker.element === "FIRE" || skillIdLow.includes("ice") && attacker.element === "WATER" || skillIdLow.includes("bolt") && attacker.element === "WIND" || skillIdLow.includes("holy") && attacker.element === "LIGHT" || skillIdLow.includes("shadow") && attacker.element === "DARK" || skillIdLow.includes("seismic") && attacker.element === "EARTH";
         if (elementMatches) skillPower *= 1.3;
@@ -562,6 +957,14 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           attacker.lastAction = { ...attacker.lastAction, msg: "LEECHED" };
         }
         let dmg = Math.floor(offense * skillPower * (attacker.tierMod || 1) * (isLimitBreak ? 2 : 0.85));
+        // GEAR PASSIVES -- elem_boost (attacker's own-element gear) / elem_resist
+        // (target's gear resisting the attacker's element). Same catalog players
+        // and enemies/bosses/arena opponents both roll from (EQUIPMENT in
+        // constants.js), so this applies identically to every unit.
+        const attackerElemBoost = getGearPassives(attacker).filter((p) => p.type === "elem_boost" && p.element === attacker.element).reduce((s, p) => s + p.val, 0);
+        if (attackerElemBoost) dmg = Math.floor(dmg * (1 + attackerElemBoost));
+        const targetElemResist = getGearPassives(t).filter((p) => p.type === "elem_resist" && p.element === attacker.element).reduce((s, p) => s + p.val, 0);
+        if (targetElemResist) dmg = Math.floor(dmg * (1 - Math.min(0.8, targetElemResist)));
         if (ELEMENTS[attacker.element]?.strongTo === t.element) {
           dmg = Math.floor(dmg * 1.35);
           const insight = attacker.effects.find((e) => e.type === "elemental_insight");
@@ -589,6 +992,13 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
         if (META.execute_below && t.hp / t.maxHp <= META.execute_below) {
           dmg = Math.floor(dmg * (META.execute_mult || 1.8));
           attacker.lastAction = { ...attacker.lastAction, msg: "EXECUTE" };
+        }
+        // dynamic_special on-hit rider: the chosen SPECIAL form carries a small
+        // mechanical identity beyond its damage number (an execute finisher, a
+        // life-drain, etc.), applied only when that form is the active one.
+        if (attacker._dynBonus === "execute" && t.hp / t.maxHp <= 0.4) {
+          dmg = Math.floor(dmg * 1.8);
+          attacker.lastAction = { ...attacker.lastAction, msg: "CALLED SHOT" };
         }
         // Cait Sith JACKPOT bonus: on a triple-match roll, anything already low
         // gets deleted on top of the jackpot damage multiplier.
@@ -635,7 +1045,7 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           // Pierce: the shield stays up, but this particular hit ignores it entirely.
           attacker.lastAction = { ...attacker.lastAction, msg: "PIERCED" };
         } else if (shieldIdx !== -1) {
-          const shield = t.effects[shieldIdx];
+          const shield = getShieldPool(t, t.effects[shieldIdx]);
           if (META.shield_drain) {
             // Drain: rip the shield off the target and slap it on the attacker instead.
             // The hit that does this still lands at full force -- the shield never got
@@ -654,24 +1064,33 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
             t.effects.splice(shieldIdx, 1);
             dmg = Math.floor(dmg * 1.5);
             attacker.lastAction = { targetId: t.id, amount: dmg, type: "shield_break", time: Date.now(), skillUser: attacker.id };
+          } else if (dmg >= shield.remainingHp) {
+            dmg -= shield.remainingHp;
+            t.effects.splice(shieldIdx, 1);
+            t._shieldHit = true;
           } else {
-            const shieldHp = shield.remainingHp || 0;
-            if (shieldHp > 0) {
-              if (dmg >= shieldHp) {
-                dmg -= shieldHp;
-                t.effects.splice(shieldIdx, 1);
-                t._shieldHit = true;
-              } else {
-                shield.remainingHp -= dmg;
-                dmg = 0;
-                t._shieldHit = true;
-              }
-            } else {
-              dmg = Math.floor(dmg * (1 - (shield.val || 0)));
-            }
+            shield.remainingHp -= dmg;
+            dmg = 0;
+            t._shieldHit = true;
           }
         }
+        // MULTI-HIT: the finalized per-hit damage lands `numHits` times. Total is
+        // applied at once (so shields/kills resolve correctly) but the strike count
+        // is surfaced on lastAction so the UI can flash "xN".
+        if (numHits > 1) {
+          dmg = dmg * numHits;
+          attacker.lastAction = { ...attacker.lastAction, hits: numHits };
+        }
         t.hp = Math.max(0, t.hp - dmg);
+        // WAKE ON DAMAGE: sleep (and freeze) break the moment a unit is struck.
+        if (dmg > 0) t.effects = t.effects.filter((e) => e.type !== "sleep");
+        if (attacker._dynBonus === "lifesteal" && dmg > 0) {
+          attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.floor(dmg * 0.3));
+        }
+        // SUNBEAM (Funshine): each damaging hit also mends the caster's team a little.
+        if (META.sunbeam && dmg > 0) {
+          livingAllies.forEach((a) => { a.hp = Math.min(a.maxHp, a.hp + Math.floor(a.maxHp * 0.04)); });
+        }
         // Battle report tracking: per-unit damage totals + biggest single hit,
         // read by VictoryScreen for the post-battle breakdown.
         if (!attacker.isEnemy) {
@@ -806,6 +1225,10 @@ const executeCombatSkill = ({ combatants, attackerId, skills, playerElement, isL
           attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.floor(dmg * ls));
         }
         attacker.lastAction = { targetId: t.id, amount: dmg, type: skill.damageType === "magical" ? "magic" : "normal", crit: didCrit, damageType: skill.damageType || "physical", time: Date.now(), skillUser: attacker.id, resonated: elementMatches, tacticalUsed: !!attacker._tacticalBonus, msg: wishMsg || undefined };
+        // Running landed-hit counter -- tracked on every unit so any future
+        // signature can read "how much has this attacker actually connected
+        // this battle" (see META.scales_hit_count, Jonathan's Ripple Overdrive).
+        attacker._landedHits = (attacker._landedHits || 0) + 1;
         if (hiddenPowerReady) {
           hiddenPowerEff.val = 0;
           attacker.lastAction = { ...attacker.lastAction, msg: "TRUE FORM" };
@@ -841,8 +1264,75 @@ const TacticalStanceRow = ({ currentStance, onStanceChange }) => {
     columnNumber: 9
   });
 };
+// A single flying orb: spawned at the caster's screen position, animates to
+// the target's screen position via a shared CSS keyframe driven by per-
+// instance --dx/--dy custom properties (so one @keyframes rule handles any
+// distance/direction), then unmounts itself. Positions are captured ONCE at
+// spawn (not re-measured mid-flight) -- battle formations don't reflow
+// mid-animation, so this stays accurate without a rAF loop.
+const Projectile = ({ fromX, fromY, dx, dy, color, delayMs, onDone }) => {
+  useEffect(() => {
+    const t = setTimeout(onDone, delayMs + 620);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const angleDeg = Math.atan2(dy, dx) * (180 / Math.PI);
+  return /* @__PURE__ */ jsxDEV("div", { className: "projectile-wrap", style: { left: fromX, top: fromY, "--dx": `${dx}px`, "--dy": `${dy}px`, "--proj-delay": `${delayMs}ms` }, children: [
+    /* @__PURE__ */ jsxDEV("div", { className: "projectile-orb", style: { "--proj-color": color } }, void 0, false, {}),
+    /* @__PURE__ */ jsxDEV("div", { className: "projectile-trail", style: { "--proj-color": color, "--proj-angle": `${angleDeg}deg` } }, void 0, false, {})
+  ] }, void 0, true, {});
+};
+// Watches `combatants` for fresh `lastProjectile` tags (set in
+// executeCombatSkill for ranged-reading casts) and spawns a real screen-space
+// projectile flying from the caster's rendered position to each target's --
+// "fireball actually flies at the target" instead of just a cast flourish on
+// the caster. `containerRef` must point at the battle-scene element the
+// battle-unit rows live inside (position: relative), since projectile
+// coordinates are computed relative to it.
+const ProjectileLayer = ({ combatants = [], containerRef }) => {
+  const [projectiles, setProjectiles] = useState([]);
+  const seenRef = useRef({});
+  useEffect(() => {
+    // This effect re-fires on EVERY combat tick (combatants gets a new array
+    // reference every ~50ms in all three battle views), so it's critical
+    // nothing here touches the DOM -- and nothing re-renders -- unless a
+    // skill actually just fired. getBoundingClientRect() forces a synchronous
+    // layout; doing that 20x/sec for the whole battle is exactly the kind of
+    // thing that reads as "laggy." Check for fresh projectiles FIRST, on the
+    // already-in-memory combatants array, before touching the DOM at all.
+    const fresh = combatants.filter((u) => u.lastProjectile && u.lastProjectile.time && seenRef.current[u.id] !== u.lastProjectile.time);
+    if (!fresh.length) return;
+    const container = containerRef?.current;
+    if (!container) return;
+    const containerRect = container.getBoundingClientRect();
+    const spawned = [];
+    fresh.forEach((u) => {
+      const proj = u.lastProjectile;
+      seenRef.current[u.id] = proj.time;
+      const fromEl = document.getElementById(`battle-unit-${u.id}`);
+      if (!fromEl) return;
+      const fromRect = fromEl.getBoundingClientRect();
+      const fromX = fromRect.left + fromRect.width / 2 - containerRect.left;
+      const fromY = fromRect.top + fromRect.height / 2 - containerRect.top;
+      (proj.targetIds || []).forEach((tid, i) => {
+        const toEl = document.getElementById(`battle-unit-${tid}`);
+        if (!toEl) return;
+        const toRect = toEl.getBoundingClientRect();
+        const toX = toRect.left + toRect.width / 2 - containerRect.left;
+        const toY = toRect.top + toRect.height / 2 - containerRect.top;
+        spawned.push({ id: `${u.id}-${proj.time}-${tid}`, fromX, fromY, dx: toX - fromX, dy: toY - fromY, color: proj.color, delayMs: i * 70 });
+      });
+    });
+    if (spawned.length) setProjectiles((prev) => [...prev, ...spawned]);
+  }, [combatants, containerRef]);
+  const removeOne = (id) => setProjectiles((prev) => prev.filter((p) => p.id !== id));
+  return /* @__PURE__ */ jsxDEV("div", { className: "projectile-layer", children: projectiles.map((p) => /* @__PURE__ */ jsxDEV(Projectile, { ...p, onDone: () => removeOne(p.id) }, p.id, false, {})) }, void 0, false, {});
+};
 const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement, reducedFx = false }) => {
   const [isHit, setIsHit] = useState(false);
+  // Number of flurry strikes on the current hit (>1 => rapid combo-rattle).
+  const [hitBurst, setHitBurst] = useState(0);
+  const lastComboTime = useRef(0);
   const [ghostHpPercent, setGhostHpPercent] = useState(0);
   const prevHp = useRef(unit.hp);
   const hpPercent = unit.hp / unit.maxHp * 100;
@@ -896,23 +1386,71 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement, re
   // toward the opposing line and snaps back -- the core "PNGs are actually
   // fighting" read. Crits get a harder, faster lunge.
   const [lungeKind, setLungeKind] = useState(null);
+  // Measured dash vector for a rushdown basic attack -- CSS custom props the
+  // rush keyframes read to travel the REAL distance to the target and back.
+  const [rush, setRush] = useState(null);
   const prevActTime = useRef(null);
   useEffect(() => {
     const act = unit.lastAction;
     if (!act || act.time === prevActTime.current) return;
     prevActTime.current = act.time;
     if (["normal", "magic", "basic", "shield_break"].includes(act.type)) {
+      // FIGHTING-GAME RUSHDOWN: a basic attack dashes the attacker all the way
+      // across to the target and throws a stat-driven flurry (meleeHits), with
+      // fast characters launching an air combo (meleeAir). Measure the actual
+      // on-screen vector to the target NOW (post-commit, sprites at rest) so
+      // the dash lands on them instead of bobbing in place. Only runs on a
+      // real basic-attack event -- not per tick -- so no layout-thrash cost.
+      if (act.type === "basic" && !reducedFx) {
+        const fromEl = document.getElementById(`battle-unit-${unit.id}`);
+        const toEl = act.targetId != null ? document.getElementById(`battle-unit-${act.targetId}`) : null;
+        if (fromEl && toEl) {
+          const a = fromEl.getBoundingClientRect();
+          const b = toEl.getBoundingClientRect();
+          // Stop ~72% of the way so the sprites meet but don't fully overlap;
+          // clamp so a stray measurement can't fling the sprite off-screen.
+          const dx = Math.max(-520, Math.min(520, (b.left + b.width / 2 - (a.left + a.width / 2)) * 0.72));
+          const dy = Math.max(-420, Math.min(420, (b.top + b.height / 2 - (a.top + a.height / 2)) * 0.72));
+          setRush({ "--rush-dx": `${dx.toFixed(1)}px`, "--rush-dy": `${dy.toFixed(1)}px` });
+          const kind = act.meleeAir ? "rush-air" : "rush-combo";
+          setLungeKind(kind);
+          const dur = getBasicAttackMs(act.meleeAir);
+          const t = setTimeout(() => { setLungeKind(null); setRush(null); }, dur);
+          return () => clearTimeout(t);
+        }
+        // Fall through to a plain lunge if we couldn't measure a target.
+      }
+      // Skill casts play their OWN bespoke wind-up motion (lastCastAnim). Basic
+      // attacks never reuse a stale cast anim -- they lunge/rush only.
+      const castAnim = act.type !== "basic" ? unit.lastCastAnim : null;
+      if (castAnim) {
+        setLungeKind(castAnim);
+        const t = setTimeout(() => setLungeKind(null), getCastAnimMs(castAnim));
+        return () => clearTimeout(t);
+      }
       setLungeKind(act.crit ? "lunge-crit" : "lunge");
-      const t = setTimeout(() => setLungeKind(null), 420);
+      const t = setTimeout(() => setLungeKind(null), getLungeMs(act.crit));
       return () => clearTimeout(t);
     }
   }, [unit.lastAction?.time]);
   useEffect(() => {
     if (unit.hp < prevHp.current) {
+      // If this HP drop came from a rushdown basic attack, the sim stamped how
+      // many flurry strikes landed (_comboHits) with a fresh timestamp. Rattle
+      // the target rapidly for that many hits so the flurry visibly LANDS,
+      // instead of one flat flash. Gated on a fresh timestamp so a later DOT/
+      // skill drop doesn't reuse a stale flurry count.
+      let hits = 1;
+      if (unit._comboHitsTime && unit._comboHitsTime !== lastComboTime.current) {
+        lastComboTime.current = unit._comboHitsTime;
+        hits = Math.max(1, unit._comboHits || 1);
+      }
       setIsHit(true);
+      setHitBurst(hits);
       setGhostHpPercent(prevHp.current / unit.maxHp * 100);
       if (!activeGif) playGif("effectsnew/popupflash.gif");
-      const timer = setTimeout(() => setIsHit(false), 250);
+      const dur = hits > 1 ? Math.min(620, 200 + hits * 80) : 250;
+      const timer = setTimeout(() => { setIsHit(false); setHitBurst(0); }, dur);
       return () => clearTimeout(timer);
     } else if (unit.hp > prevHp.current) {
       playGif("effectsnew/popupchomp.gif");
@@ -968,11 +1506,14 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement, re
   return /* @__PURE__ */ jsxDEV(
     "div",
     {
-      className: `battle-unit ${unit.isEnemy ? "is-enemy" : "is-ally"} ${unit.dead ? "dead-dissolve" : "battle-unit-idle"} ${isActiveTurn ? "acting active-turn" : ""} ${isHit ? "is-hit" : ""} ${isMarked ? "is-marked" : ""} ${unit.isBoss ? "is-boss" : ""} ${isStaggered ? "staggered-unit" : ""} ${unit.cosmetics?.borderClass || ""} ${stance ? "stance-glow-active" : ""} ${hasShield ? "has-active-shield" : ""} ${isFrozen ? "is-frozen" : ""} ${isStunned ? "is-stunned" : ""} ${isBurned ? "is-burned" : ""} ${isStatic ? "is-static" : ""} ${isElemEmpowered ? "is-elem-empowered" : ""} ${isCrushed ? "is-crushed" : ""} ${isBroken ? "is-broken" : ""} ${isTelegraphing ? "is-telegraphing" : ""} ${reducedFx ? "" : lungeKind || ""}`,
+      id: `battle-unit-${unit.id}`,
+      className: `battle-unit ${unit.isEnemy ? "is-enemy" : "is-ally"} ${unit.dead ? "dead-dissolve" : "battle-unit-idle"} ${isActiveTurn ? "acting active-turn" : ""} ${isHit ? "is-hit" : ""} ${hitBurst > 1 ? "combo-rattle" : ""} ${isMarked ? "is-marked" : ""} ${unit.isBoss ? "is-boss" : ""} ${isStaggered ? "staggered-unit" : ""} ${unit.cosmetics?.borderClass || ""} ${stance ? "stance-glow-active" : ""} ${hasShield ? "has-active-shield" : ""} ${isFrozen ? "is-frozen" : ""} ${isStunned ? "is-stunned" : ""} ${isBurned ? "is-burned" : ""} ${isStatic ? "is-static" : ""} ${isElemEmpowered ? "is-elem-empowered" : ""} ${isCrushed ? "is-crushed" : ""} ${isBroken ? "is-broken" : ""} ${isTelegraphing ? "is-telegraphing" : ""} ${reducedFx ? "" : lungeKind || ""}`,
       onClick: () => unit.isEnemy && onMark && onMark(),
       style: {
         "--stance-color": stanceColor,
-        "--delay": `${(Math.random() * 2).toFixed(2)}s`
+        "--cast-tint": ELEMENTS[unit.element]?.color || "#fff",
+        "--delay": `${(Math.random() * 2).toFixed(2)}s`,
+        ...(rush || {})
       },
       children: [
         isMarked && /* @__PURE__ */ jsxDEV("div", { className: "target-marker animate-pulse", children: "MARK" }, void 0, false, {
@@ -1013,15 +1554,15 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement, re
             columnNumber: 24
           }),
           hasShield && shieldEffect.val > 0 && /* @__PURE__ */ jsxDEV("div", { className: "shield-strength-chip", children: [
-            "-",
-            Math.min(99, Math.round((isFinite(shieldEffect.val) ? shieldEffect.val : 0) * 100)),
-            "% DMG"
+            "SHLD ",
+            shieldEffect.remainingHp != null ? Math.max(0, Math.round(shieldEffect.remainingHp / shieldEffect.maxHp * 100)) : 100,
+            "%"
           ] }, void 0, true, {
             fileName: "<stdin>",
             lineNumber: 512,
             columnNumber: 24
           }),
-          /* @__PURE__ */ jsxDEV("img", { src: unit.img, className: "unit-avatar", style: { ...unit.cosmetics?.auraStyle, width: "100%", height: "100%" } }, void 0, false, {
+          /* @__PURE__ */ jsxDEV("img", { src: (unit.effects.find((e) => e.type === "phantom_veil") || {}).transformImg || unit._cameoImg || unit.img, className: `unit-avatar ${unit.effects.some((e) => e.type === "phantom_veil") ? "phantom-transform" : unit._cameoImg ? "cameo-morph" : ""}`, style: { ...unit.cosmetics?.auraStyle, width: "100%", height: "100%" } }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 513,
             columnNumber: 10
@@ -1102,8 +1643,10 @@ const BattleUnit = ({ unit, isMarked, onMark, floatingDamages, playerElement, re
               });
               statusClass = "status-debuff";
             }
-            return /* @__PURE__ */ jsxDEV("div", { className: `status-badge ${statusClass}`, children: [
+            const desc = describeEffect(e);
+            return /* @__PURE__ */ jsxDEV("div", { className: `status-badge ${statusClass}`, title: desc.full, children: [
               icon,
+              desc.short && /* @__PURE__ */ jsxDEV("span", { className: "status-label", children: desc.short }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
               e.count > 1 && /* @__PURE__ */ jsxDEV("span", { className: "stack-count", children: [
                 "x",
                 e.count
@@ -1583,6 +2126,8 @@ const SquadBuilderModal = ({
   unlockedIds,
   squadIds,
   setSquadIds,
+  cameoId = null,
+  setCameoId = () => {},
   onClose,
   playSound: playSound2,
   createFloatingText,
@@ -1670,6 +2215,36 @@ const SquadBuilderModal = ({
     return list;
   };
   const visibleRoster = useMemo(processRoster, [characters, unlockedIds, filter, favoritesOnly, rosterElementFilter, rosterSearch, rosterSort, skills, auraUpgrades]);
+  // Cameo/guest summon: only heroes with an UNLOCKED signature are eligible. The
+  // guest never joins the squad -- they flash in mid-battle to fire that signature.
+  const sigForChar = (c) => (skills || []).find((s) => s.signature && s.owner === c.name);
+  const cameoEligible = useMemo(() => (characters || []).filter((c) => {
+    if (!unlockedIds.map(String).includes(String(c.export_id))) return false;
+    const sig = sigForChar(c);
+    return sig && (c.signatureUnlocked || (c.abilityLevels && c.abilityLevels[sig.id]));
+  }), [characters, unlockedIds, skills]);
+  const cameoChar = cameoId ? characters.find((c) => String(c.export_id) === String(cameoId)) : null;
+  const cameoSig = cameoChar ? sigForChar(cameoChar) : null;
+  const h = React.createElement;
+  const cameoBlock = h("div", { key: "cameo-slot", className: "vanguard-slot-2007", style: { marginTop: 10, padding: 10, border: "1px dashed rgba(0,210,255,0.45)", borderRadius: 12, background: "rgba(0,210,255,0.04)" } }, [
+    h("div", { key: "hd", style: { fontSize: "0.6rem", color: "#00d2ff", fontWeight: 900, letterSpacing: 1, marginBottom: 6 } }, "★ GUEST SUMMON — flashes in to cast their signature (2 uses · 60s)"),
+    h("div", { key: "row", style: { display: "flex", alignItems: "center", gap: 10 } }, [
+      cameoChar ? h("img", { key: "img", src: cameoChar.imageUrl, style: { width: 42, height: 42, borderRadius: 6, border: "2px solid #00d2ff", flexShrink: 0 } }) : null,
+      h("div", { key: "info", style: { flex: 1, minWidth: 0 } }, [
+        h("select", {
+          key: "sel",
+          className: "search-bar",
+          style: { width: "100%", margin: 0, height: 34, fontSize: "0.8rem", background: "#111", border: "1px solid #00d2ff55" },
+          value: cameoId ? String(cameoId) : "",
+          onChange: (e) => { setCameoId(e.target.value || null); playSound2("menu_click", 0.2); }
+        }, [
+          h("option", { key: "none", value: "" }, cameoEligible.length ? "— No guest —" : "— No unlocked signatures yet —"),
+          ...cameoEligible.map((c) => { const s = sigForChar(c); return h("option", { key: c.export_id, value: String(c.export_id) }, c.name + (s ? " — " + s.name : "")); })
+        ]),
+        cameoSig ? h("div", { key: "sig", style: { fontSize: "0.6rem", color: "#94a3b8", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, "Uses YOUR squad's stats · " + cameoSig.name) : null
+      ])
+    ])
+  ]);
   const totalSquadPWR = useMemo(() => squadIds.reduce((sum, id) => {
     const c = characters.find((h) => String(h.export_id) === String(id));
     return sum + (c ? calculateSubStat(c, characters, "pwr", skills, auraUpgrades) : 0);
@@ -1907,7 +2482,8 @@ const SquadBuilderModal = ({
           fileName: "<stdin>",
           lineNumber: 896,
           columnNumber: 13
-        })
+        }),
+        cameoBlock
       ] }, void 0, true, {
         fileName: "<stdin>",
         lineNumber: 879,
@@ -2123,9 +2699,16 @@ const SquadBuilderModal = ({
 };
 export {
   BattleUnit,
+  ProjectileLayer,
   SquadBuilderModal,
   TacticalStanceRow,
   VictoryScreen,
   executeCombatSkill,
-  getBattleStats
+  getBattleStats,
+  applyStatusTick,
+  resolveBasicAttack,
+  getCastAnimMs,
+  getLungeMs,
+  getBasicAttackMs,
+  HITSTOP_BUFFER_MS
 };

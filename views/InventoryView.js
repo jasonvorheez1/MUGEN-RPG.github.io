@@ -6,7 +6,7 @@ import {
   X,
   Wrench
 } from "lucide-react";
-import { ELEMENTS } from "../constants.js";
+import { ELEMENTS, MAX_ASCENSION } from "../constants.js";
 import { CustomSelect } from "../components.js";
 import { playSound, calculateSubStat, getBondMultiplier } from "../utils.js";
 
@@ -176,6 +176,11 @@ const InventoryView = ({
     }
     if (["ascension_injector", "omega_serum"].includes(itemId) && targetChar.level < 100) {
       createFloatingText("Hero must be Lv. 100!", true);
+      playSound("error");
+      return;
+    }
+    if (["ascension_injector", "multiverse_core"].includes(itemId) && (targetChar.ascension || 0) >= MAX_ASCENSION) {
+      createFloatingText(`MAX ASCENSION (${MAX_ASCENSION}/${MAX_ASCENSION})`, true);
       playSound("error");
       return;
     }
@@ -463,7 +468,7 @@ const InventoryView = ({
             c.level = 100;
             c.xp = 0;
             c.nextXp = Math.floor(100 * Math.pow(1.15, c.level - 1));
-            c.ascension = Math.max(0, (c.ascension || 0) + 1);
+            c.ascension = Math.min(MAX_ASCENSION, Math.max(0, (c.ascension || 0) + 1));
             c.refinements = { ...c.refinements || {}, hp: (c.refinements?.hp || 0) + 5, atk: (c.refinements?.atk || 0) + 5, def: (c.refinements?.def || 0) + 5 };
             next[idx] = c;
             return next;
@@ -519,7 +524,7 @@ const InventoryView = ({
         setCharacters((prev) => {
           const next = [...prev];
           const c = { ...next[tIndex] };
-          c.ascension = (c.ascension || 0) + 1;
+          c.ascension = Math.min(MAX_ASCENSION, (c.ascension || 0) + 1);
           next[tIndex] = c;
           return next;
         });

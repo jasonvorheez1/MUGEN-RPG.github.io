@@ -108,7 +108,37 @@ export const AUDIO_URLS = {
   mugen_taunt: 'sfx_new/ta.wav',
   mugen_throw: 'sfx_new/throw0.wav',
   mugen_timeover: 'sfx_new/to.wav',
-  mugen_victory_voice: 'sfx_new/voi0.wav'
+  mugen_victory_voice: 'sfx_new/voi0.wav',
+
+  // --- ACT_ pack (sfx_new/) -- curated selection, mapped by what they
+  // actually sound like rather than their filename prefix. ---
+  act_button: 'sfx_new/ACT_BUTTONPRESS.wav',
+  act_button_alt: 'sfx_new/ACT_BUTTONPRESS_VAR1.wav',
+  act_page_open: 'sfx_new/ACT_BOOKLETOPEN1.wav',
+  act_page_close: 'sfx_new/ACT_BOOKLETCLOSE1.wav',
+  act_page_turn: 'sfx_new/ACT_TURNPAGE1.wav',
+  act_target_lock: 'sfx_new/ACT_TARGETLOCK.wav',
+  act_camera_flash: 'sfx_new/ACT_CAMERAFLASH.wav',
+  act_tornado_start: 'sfx_new/ACT_SPELLIT_TORNADO_START.wav',
+  act_tornado_end: 'sfx_new/ACT_SPELLIT_TORNADO_END.wav',
+  act_whoosh1: 'sfx_new/ACT_SPELLIT_WHOOSH_1.wav',
+  act_whoosh2: 'sfx_new/ACT_SPELLIT_WHOOSH_2.wav',
+  act_swipe1: 'sfx_new/ACT_SWIPE1.wav',
+  act_swipe2: 'sfx_new/ACT_SWIPE2.wav',
+  act_swipe3: 'sfx_new/ACT_SWIPE3.wav',
+  act_swipe4: 'sfx_new/ACT_SWIPE4.wav',
+  act_swipe_hvy1: 'sfx_new/ACT_SWIPEHVY1.wav',
+  act_swipe_hvy2: 'sfx_new/ACT_SWIPEHVY2.wav',
+  act_swipe_big: 'sfx_new/ACT_SWIPEBIG_FAST.wav',
+  act_double_swish: 'sfx_new/ACT_DOUBLESWISH_1.wav',
+  act_lunge_generic: 'sfx_new/ACT_LUNGEGENERIC.wav',
+  act_lunge_magic: 'sfx_new/ACT_LUNGEMAGIC.wav',
+  act_grapple_impact: 'sfx_new/ACT_GRAPPLE_IMPACT.wav',
+  act_flight_begin: 'sfx_new/ACT_FLIGHTBEGIN.wav',
+  act_sonic_boom: 'sfx_new/ACT_FLYSONICBOOM.wav',
+  act_steam: 'sfx_new/ACT_STEAM1.wav',
+  act_grow: 'sfx_new/ACT_GROW.wav',
+  act_ninja_swipe: 'sfx_new/ACT_NINJASWIPE1.wav'
 };
 
 export const CHARACTER_DATA_URL = "https://raw.githubusercontent.com/jasonvorheez1/websimgame1234/main/mugen-meta-export-2025-12-28.json";
@@ -173,7 +203,19 @@ export const MUSIC_TRACKS = {
     SETTINGS: ["When-I'm-64-1.mid", 'Beach Boys - California Girls.mid'],
     LOUNGE: ["Beach Boys - Wouldn't It Be Nice.mid", "Spice Girls - Say You'll Be There.mid", 'Under-The-Boardwalk-1.mid'],
     GACHA: ['DAFT PUNK.Around the world.mid', "VENGA BOYS.We're going to Ibiza K.mid", 'vengaboys-forever_as_one.mid', 'Doctor-Jones.mid'],
-    BATTLE: ['FIGHT/Atlanta_Rhythm_Section_SPOOKY_2.mid', 'FIGHT/Azure-Bossa-Nova.mid']
+    BATTLE: ['FIGHT/Atlanta_Rhythm_Section_SPOOKY_2.mid', 'FIGHT/Azure-Bossa-Nova.mid', 'unique/attack-1.mid', 'unique/attack-2-.mid'],
+    HARD_BATTLE: ['unique/Megadeth-99 Ways To Die.mid', 'unique/Megadeth-Black Curtains.mid', 'unique/Megadeth-Peace Sells.mid', 'unique/Megadeth-Tornado Of Souls.mid', 'unique/Ozzy Osborne-Mr Crowley.mid'],
+    TRIALS: ['unique/trials_menu.mid'],
+    VICTORY: ['unique/victory-fanfare-xg-.mid'],
+    // Themed event battle tracks -- events whose franchise matches one of these
+    // get their own music (see matchEventMusicTheme in utils.js); everything
+    // else keeps the generic TRIALS-pool fallback above. atlyss.mp3 isn't a
+    // .mid file so it can't run through this MIDI pool -- App.js plays it via
+    // a plain looping <audio> element instead when eventTheme === 'atlyss'.
+    EVENT_DELTARUNE: ['unique/event/deltarune.mid'],
+    EVENT_FF7: ['unique/event/ff7.mid'],
+    EVENT_VICTORY_FF7: ['unique/event/ff7_win.mid'],
+    EVENT_ABUGSLIFE: ['unique/event/abugslife.mid']
   }
 };
 
@@ -329,6 +371,108 @@ export const COSMETICS = {
   ]
 };
 
+// Hard cap on how many times a character can Ascend (post-level-100 rank-ups).
+export const MAX_ASCENSION = 5;
+
+// BOSS ROSTER: real, named bosses (portraits in boss/) used by Trials + Events
+// instead of generic reskinned enemies. Each has its own signature (see
+// signature_skills.json, owner = boss name) and is paired into a duo -- when
+// both members of a pair are alive on the same side, their signature escalates
+// into a team-up attack (CombatSystem.js META.duo_partner/duo_bonus).
+export const BOSS_ROSTER = [
+  { id: "boss_aboleth", name: "Aboleth", img: "boss/Aboleth.jpeg", element: "WATER", archetype: "tank", duoPartner: "Elder Brain", desc: "An ancient, mind-warping horror from the deep." },
+  { id: "boss_elder_brain", name: "Elder Brain", img: "boss/Elder Brain.jpeg", element: "DARK", archetype: "glass", duoPartner: "Aboleth", desc: "A pulsing hive-mind that commands lesser horrors." },
+  { id: "boss_balhannoth", name: "Balhannoth", img: "boss/Balhannoth.jpeg", element: "DARK", archetype: "elite", duoPartner: "Flumph", desc: "Drags the unwary into a lightless void." },
+  { id: "boss_flumph", name: "Flumph", img: "boss/Flumph.png", element: "LIGHT", archetype: "support", duoPartner: "Balhannoth", desc: "A gentle drifting oddity -- deceptively dangerous allied to darker things." },
+  { id: "boss_alpha_wolf", name: "Alpha Wolf", img: "boss/Alpha Wolf.webp", element: "EARTH", archetype: "elite", duoPartner: "Bangaa Pirate", desc: "Leads the pack; strikes fastest and hardest." },
+  { id: "boss_bangaa_pirate", name: "Bangaa Pirate", img: "boss/Bangaa Pirate.webp", element: "FIRE", archetype: "glass", duoPartner: "Alpha Wolf", desc: "A reckless blade-for-hire, all offense." },
+  { id: "boss_brainpan", name: "Brainpan", img: "boss/BrainpanBrainpan.webp", element: "NEUTRAL", archetype: "tank", duoPartner: "Gargantua", desc: "A cobbled-together construct, built to endure." },
+  { id: "boss_gargantua", name: "Gargantua", img: "boss/Gargantua.png", element: "EARTH", archetype: "boss", duoPartner: "Brainpan", desc: "A towering engine of destruction." },
+  { id: "boss_feyr", name: "Feyr", img: "boss/Feyr.jpeg", element: "WIND", archetype: "glass", duoPartner: "The Demogorgon", desc: "A fey predator, quick and merciless." },
+  { id: "boss_demogorgon", name: "The Demogorgon", img: "boss/The Demogorgon.jpeg", element: "DARK", archetype: "boss", duoPartner: "Feyr", desc: "A two-minded apex hunter from beyond." }
+];
+
+// EQUIPMENT: replaces the old "collect every cosmetic for stats" grind. Three
+// slots per hero (Weapon / Armor / Trinket). Each piece grants a clear, readable
+// %-bonus to a couple of stats, and levels up a short ladder (fast to max, unlike
+// cosmetics). `bonuses` are fractional (0.15 = +15%). Per-level growth adds
+// EQUIP_LEVEL_STEP of the base bonus per level over 1.
+export const EQUIP_MAX_LEVEL = 5;
+export const EQUIP_LEVEL_STEP = 0.25; // +25% of base bonus per level above 1 (lvl5 = 2x base)
+export const EQUIP_UPGRADE_COST = (level) => ({ credits: 20000 * level, materials: 200 * level }); // cheap, quick ladder
+// Rarity ordering + pull odds for the Gear Gacha (see EQUIP_GACHA_COST /
+// EQUIP_RARITY_WEIGHTS below). "Mythic" sits above Legendary and is gacha-only
+// (gachaOnly: true items have no direct cost -- the gacha is the only way in).
+export const EQUIP_RARITY_ORDER = ["Common", "Rare", "Epic", "Legendary", "Mythic"];
+export const EQUIP_RARITY_WEIGHTS = { Common: 42, Rare: 30, Epic: 18, Legendary: 8, Mythic: 2 };
+export const EQUIP_GACHA_COST = { single: 150, ten: 1350 };
+
+// Passives: gear-carried effects beyond raw stat %s, evaluated in combat
+// (CombatSystem.js) via getEquippedGearList()/resolveGearPassives(). Types:
+//  - elem_boost  { element, val }: +val% damage dealt when attacker's own
+//    element matches `element`.
+//  - elem_resist { element, val }: -val% damage taken from that element.
+//  - status_resist { status, val }: -val% chance of `status` landing on you
+//    (status matches an effect `type`, e.g. "stun", "freeze", "burn", "poison").
+// Enemies/bosses/arena opponents roll from this exact same catalog (see
+// rollEnemyGear in utils.js) so a scouted opponent's passives read identically
+// to a player's.
+export const EQUIPMENT = {
+  weapon: [
+    { id: "training_blade", name: "Training Blade", rarity: "Common", bonuses: { atk: 0.08 }, cost: { credits: 15000 } },
+    { id: "rusty_cleaver", name: "Rusty Cleaver", rarity: "Common", bonuses: { atk: 0.1, speed: -0.02 }, cost: { credits: 18000 } },
+    { id: "assault_rifle", name: "Assault Rifle", rarity: "Rare", bonuses: { atk: 0.15, speed: 0.05 }, cost: { credits: 60000 }, passives: [{ type: "elem_boost", element: "FIRE", val: 0.1 }] },
+    { id: "arc_caster", name: "Arc Caster", rarity: "Rare", bonuses: { "magic atk": 0.15, "magic def": 0.05 }, cost: { credits: 60000 }, passives: [{ type: "elem_boost", element: "WIND", val: 0.1 }] },
+    { id: "twin_daggers", name: "Twin Daggers", rarity: "Rare", bonuses: { atk: 0.12, speed: 0.1 }, cost: { credits: 65000 }, passives: [{ type: "status_resist", status: "stun", val: 0.3 }] },
+    { id: "vanguard_lance", name: "Vanguard Lance", rarity: "Epic", bonuses: { atk: 0.22, def: 0.08 }, cost: { gems: 120 }, passives: [{ type: "elem_resist", element: "EARTH", val: 0.15 }] },
+    { id: "starcaller_staff", name: "Starcaller Staff", rarity: "Epic", bonuses: { "magic atk": 0.24 }, cost: { gems: 120 }, passives: [{ type: "elem_boost", element: "LIGHT", val: 0.15 }] },
+    { id: "voidforged_claymore", name: "Voidforged Claymore", rarity: "Epic", bonuses: { atk: 0.2, luck: 0.1 }, cost: { gems: 130 }, passives: [{ type: "elem_boost", element: "DARK", val: 0.15 }] },
+    { id: "singularity_edge", name: "Singularity Edge", rarity: "Legendary", bonuses: { atk: 0.3, "magic atk": 0.3 }, cost: { gems: 400, essence: 40 }, passives: [{ type: "status_resist", status: "burn", val: 0.4 }] },
+    { id: "worldbreaker_gauntlet", name: "Worldbreaker Gauntlet", rarity: "Legendary", bonuses: { atk: 0.42, def: 0.15 }, cost: { gems: 450, essence: 45 }, passives: [{ type: "status_resist", status: "stun", val: 0.4 }] },
+    { id: "genesis_blade", name: "Genesis Blade", rarity: "Mythic", bonuses: { atk: 0.65, "magic atk": 0.35, speed: 0.15 }, gachaOnly: true, passives: [{ type: "elem_boost", element: "FIRE", val: 0.3 }] },
+    { id: "apex_predator_fang", name: "Apex Predator's Fang", rarity: "Mythic", bonuses: { atk: 0.7, luck: 0.25 }, gachaOnly: true, passives: [{ type: "status_resist", status: "freeze", val: 0.5 }] },
+    { id: "reality_splitter", name: "Reality Splitter", rarity: "Mythic", bonuses: { atk: 0.55, "magic atk": 0.55 }, gachaOnly: true, passives: [{ type: "elem_resist", element: "DARK", val: 0.3 }] },
+    { id: "rift_shard_blade", name: "Rift Shard Blade", rarity: "Legendary", bonuses: { atk: 0.35, speed: 0.15 }, eventOnly: true, passives: [{ type: "status_resist", status: "stun", val: 0.35 }] }
+  ],
+  armor: [
+    { id: "flak_vest", name: "Flak Vest", rarity: "Common", bonuses: { hp: 0.08 }, cost: { credits: 15000 } },
+    { id: "scrap_plating", name: "Scrap Plating", rarity: "Common", bonuses: { def: 0.09 }, cost: { credits: 17000 } },
+    { id: "riot_plate", name: "Riot Plate", rarity: "Rare", bonuses: { def: 0.15, hp: 0.05 }, cost: { credits: 60000 }, passives: [{ type: "elem_resist", element: "EARTH", val: 0.15 }] },
+    { id: "ward_weave", name: "Ward Weave", rarity: "Rare", bonuses: { "magic def": 0.15, hp: 0.05 }, cost: { credits: 60000 }, passives: [{ type: "status_resist", status: "poison", val: 0.3 }] },
+    { id: "hunters_hide", name: "Hunter's Hide", rarity: "Rare", bonuses: { hp: 0.1, speed: 0.08 }, cost: { credits: 65000 }, passives: [{ type: "status_resist", status: "stun", val: 0.3 }] },
+    { id: "aegis_shell", name: "Aegis Shell", rarity: "Epic", bonuses: { def: 0.18, "magic def": 0.18 }, cost: { gems: 120 }, passives: [{ type: "elem_resist", element: "FIRE", val: 0.15 }] },
+    { id: "titan_carapace", name: "Titan Carapace", rarity: "Epic", bonuses: { hp: 0.25, def: 0.1 }, cost: { gems: 120 }, passives: [{ type: "status_resist", status: "freeze", val: 0.35 }] },
+    { id: "phantom_veil_cloak", name: "Phantom Veil Cloak", rarity: "Epic", bonuses: { hp: 0.15, speed: 0.15 }, cost: { gems: 130 }, passives: [{ type: "elem_resist", element: "DARK", val: 0.15 }] },
+    { id: "eternal_bulwark", name: "Eternal Bulwark", rarity: "Legendary", bonuses: { hp: 0.3, def: 0.2, "magic def": 0.2 }, cost: { gems: 400, essence: 40 }, passives: [{ type: "elem_resist", element: "DARK", val: 0.25 }] },
+    { id: "dragonscale_aegis", name: "Dragonscale Aegis", rarity: "Legendary", bonuses: { hp: 0.45, def: 0.28 }, cost: { gems: 450, essence: 45 }, passives: [{ type: "elem_resist", element: "FIRE", val: 0.3 }] },
+    { id: "voidheart_carapace", name: "Voidheart Carapace", rarity: "Mythic", bonuses: { hp: 0.75, def: 0.4, "magic def": 0.4 }, gachaOnly: true, passives: [{ type: "elem_resist", element: "DARK", val: 0.35 }, { type: "status_resist", status: "poison", val: 0.4 }] },
+    { id: "absolute_zero_plate", name: "Absolute Zero Plate", rarity: "Mythic", bonuses: { hp: 0.6, def: 0.55 }, gachaOnly: true, passives: [{ type: "elem_resist", element: "WATER", val: 0.35 }, { type: "status_resist", status: "freeze", val: 0.5 }] },
+    { id: "primordial_husk", name: "Primordial Husk", rarity: "Mythic", bonuses: { hp: 0.9, "magic def": 0.4 }, gachaOnly: true, passives: [{ type: "elem_resist", element: "EARTH", val: 0.35 }, { type: "status_resist", status: "burn", val: 0.4 }] },
+    { id: "rift_woven_plate", name: "Rift-Woven Plate", rarity: "Legendary", bonuses: { hp: 0.4, def: 0.22 }, eventOnly: true, passives: [{ type: "elem_resist", element: "WIND", val: 0.2 }] }
+  ],
+  trinket: [
+    { id: "lucky_coin", name: "Lucky Coin", rarity: "Common", bonuses: { luck: 0.1 }, cost: { credits: 15000 } },
+    { id: "worn_pocketwatch", name: "Worn Pocketwatch", rarity: "Common", bonuses: { speed: 0.08 }, cost: { credits: 16000 } },
+    { id: "swift_boots", name: "Swift Boots", rarity: "Rare", bonuses: { speed: 0.15 }, cost: { credits: 60000 }, passives: [{ type: "status_resist", status: "freeze", val: 0.3 }] },
+    { id: "focus_lens", name: "Focus Lens", rarity: "Rare", bonuses: { "magic atk": 0.08, luck: 0.08 }, cost: { credits: 60000 }, passives: [{ type: "elem_boost", element: "LIGHT", val: 0.1 }] },
+    { id: "gamblers_die", name: "Gambler's Die", rarity: "Rare", bonuses: { luck: 0.18 }, cost: { credits: 65000 } },
+    { id: "berserker_charm", name: "Berserker Charm", rarity: "Epic", bonuses: { atk: 0.12, speed: 0.12 }, cost: { gems: 120 }, passives: [{ type: "status_resist", status: "stun", val: 0.3 }] },
+    { id: "guardian_sigil", name: "Guardian Sigil", rarity: "Epic", bonuses: { hp: 0.12, def: 0.12 }, cost: { gems: 120 }, passives: [{ type: "elem_resist", element: "DARK", val: 0.15 }] },
+    { id: "arcane_prism", name: "Arcane Prism", rarity: "Epic", bonuses: { "magic atk": 0.18, "magic def": 0.1 }, cost: { gems: 130 }, passives: [{ type: "elem_boost", element: "WIND", val: 0.15 }] },
+    { id: "omega_core", name: "Omega Core", rarity: "Legendary", bonuses: { atk: 0.15, "magic atk": 0.15, speed: 0.15, luck: 0.15 }, cost: { gems: 400, essence: 40 }, passives: [{ type: "elem_boost", element: "FIRE", val: 0.2 }] },
+    { id: "chrono_shard", name: "Chrono Shard", rarity: "Legendary", bonuses: { speed: 0.35, luck: 0.25 }, cost: { gems: 450, essence: 45 }, passives: [{ type: "status_resist", status: "stun", val: 0.4 }] },
+    { id: "singularity_heart", name: "Singularity Heart", rarity: "Mythic", bonuses: { atk: 0.3, "magic atk": 0.3, hp: 0.3, def: 0.3, speed: 0.3, luck: 0.3 }, gachaOnly: true, passives: [{ type: "elem_boost", element: "LIGHT", val: 0.25 }, { type: "status_resist", status: "stun", val: 0.35 }] },
+    { id: "godslayer_relic", name: "Godslayer Relic", rarity: "Mythic", bonuses: { atk: 0.5, "magic atk": 0.5, luck: 0.35 }, gachaOnly: true, passives: [{ type: "elem_boost", element: "DARK", val: 0.3 }] },
+    { id: "rift_bound_charm", name: "Rift-Bound Charm", rarity: "Legendary", bonuses: { luck: 0.25, speed: 0.2 }, eventOnly: true, passives: [{ type: "elem_boost", element: "LIGHT", val: 0.18 }] }
+  ]
+};
+
+// Flat lookup: itemId -> { slot, item } (used by combat/UI to resolve gear by
+// id without slot context, e.g. from a shared gear-inventory instance).
+export const EQUIPMENT_BY_ID = Object.fromEntries(
+  Object.entries(EQUIPMENT).flatMap(([slot, items]) => items.map((it) => [it.id, { slot, item: it }]))
+);
+
 export const SKILL_TYPES = [];
 export const ITEMS = {};
 
@@ -448,7 +592,7 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 3,
-    title: "Chapter 3: High Stakes",
+    title: "Night 3: High Stakes",
     desc: "A dimensional distortion in the city's luxury district.",
     image: "background_casino.png",
     areas: [
@@ -466,8 +610,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 4,
-    title: "Chapter 4: Dimensional Rift",
-    desc: "Reality is breaking. Defend the world from the void.",
+    title: "Night 4: Static on the Line",
+    desc: "The rift bleeds into the power grid. Streetlights stutter — and so does reality.",
     image: "background_gacha.png",
     areas: [
       {
@@ -494,8 +638,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 5,
-    title: "Chapter 5: The Cosmic Citadel",
-    desc: "Ascend to the peak of reality and face the divine guardians.",
+    title: "Night 5: The Penthouse",
+    desc: "An invite-only party above the clouds, hosted by things that aren't from this city.",
     image: "background_citadel.png",
     areas: [
       {
@@ -512,8 +656,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 6,
-    title: "Chapter 6: The Abyss",
-    desc: "Dive into the crushing depths where light cannot reach.",
+    title: "Night 6: Below the Waterline",
+    desc: "A flooded speakeasy beneath the harbor. The pressure is real — so are the locals.",
     image: "background_gym.png",
     areas: [
       {
@@ -530,8 +674,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 7,
-    title: "Chapter 7: Inferno Peaks",
-    desc: "A realm of perpetual fire and molten rock.",
+    title: "Night 7: The Boiler Rooms",
+    desc: "Steam tunnels and furnace decks under the city. The heat never clocks out.",
     image: "fx_burn.png",
     areas: [
       {
@@ -548,8 +692,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 8,
-    title: "Chapter 8: Absolute Zero",
-    desc: "Time stands still in this frozen wasteland.",
+    title: "Night 8: Cold Storage",
+    desc: "A meatpacking-district freezer where time itself iced over.",
     image: "fx_ice.png",
     areas: [
       {
@@ -566,8 +710,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 9,
-    title: "Chapter 9: The Primal Void",
-    desc: "A place where the concepts of space and time have yet to form.",
+    title: "Night 9: The Blackout",
+    desc: "The whole grid goes dark. Something walks the avenue between the streetlights.",
     image: "fx_portal.png",
     areas: [
       {
@@ -584,8 +728,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 10,
-    title: "Chapter 10: Eternal Mugen",
-    desc: "The final frontier. The ultimate convergence of all realities.",
+    title: "Night 10: The Encore",
+    desc: "The circuit's hall of fame. Every legend of the scene, back for one more set.",
     image: "background_citadel.png",
     areas: [
       {
@@ -602,8 +746,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 11,
-    title: "Chapter 11: Digital Frontier",
-    desc: "A world of pure code and liquid data. The matrix is bleeding.",
+    title: "Night 11: Dial-Up Dreams",
+    desc: "A world of pure code and liquid data. The city's servers are bleeding.",
     image: "background_void.png",
     areas: [
       {
@@ -620,8 +764,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 12,
-    title: "Chapter 12: Godhood Rift",
-    desc: "Where mortals dare not tread. The birth of the new Mugen.",
+    title: "Night 12: Members Only",
+    desc: "The club above every club. Mortals don't get in. You weren't asked — you're going anyway.",
     image: "background_citadel.png",
     areas: [
       {
@@ -638,8 +782,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 13,
-    title: "Chapter 13: Chromatic Depths",
-    desc: "The ocean floor hides secrets older than the city.",
+    title: "Night 13: Neon Tide",
+    desc: "The ocean floor hides basslines older than the city.",
     image: "lounge_bg_park.png",
     areas: [
       {
@@ -655,8 +799,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 14,
-    title: "Chapter 14: Umbral Sanctuary",
-    desc: "A cathedral of shadows where the moon never sets.",
+    title: "Night 14: After Hours",
+    desc: "A cathedral of shadows where the party never officially ends.",
     image: "background_void.png",
     areas: [
       {
@@ -672,8 +816,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 15,
-    title: "Chapter 15: Radiant Archives",
-    desc: "A vast library containing all knowledge of the multiverse.",
+    title: "Night 15: The Record Room",
+    desc: "A vault of vinyl holding every track — and every secret — the multiverse ever cut.",
     image: "background_citadel.png",
     areas: [
       {
@@ -689,8 +833,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 16,
-    title: "Chapter 16: Molten Core",
-    desc: "Deep within the planet, fire and earth collide.",
+    title: "Night 16: The Furnace District",
+    desc: "Deep under the foundry quarter, fire and earth run the floor.",
     image: "fx_burn.png",
     areas: [
       {
@@ -706,8 +850,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 17,
-    title: "Chapter 17: Chronos Citadel",
-    desc: "A fortress frozen in a single moment of time.",
+    title: "Night 17: The Clocktower",
+    desc: "A grand ballroom frozen at one minute to midnight.",
     image: "background_citadel.png",
     areas: [
       {
@@ -723,8 +867,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 18,
-    title: "Chapter 18: Ethereal Garden",
-    desc: "Floating islands filled with spiritual energy.",
+    title: "Night 18: The Rooftop Garden",
+    desc: "Floating terraces above the skyline, thick with spirit energy.",
     image: "lounge_bg_park.png",
     areas: [
       {
@@ -740,8 +884,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 19,
-    title: "Chapter 19: Matrix Override",
-    desc: "The very fabric of reality is being rewritten.",
+    title: "Night 19: System Crash",
+    desc: "The city's source code is being rewritten mid-song.",
     image: "background_void.png",
     areas: [
       {
@@ -757,8 +901,8 @@ export const CAMPAIGN_CONTENT = [
   },
   {
     id: 20,
-    title: "Chapter 20: Omega Singularity",
-    desc: "The end of the line. All realities merge into one.",
+    title: "Night 20: Closing Time",
+    desc: "Last call. Every reality settles its tab at once.",
     image: "background_citadel.png",
     areas: [
       {
@@ -773,6 +917,25 @@ export const CAMPAIGN_CONTENT = [
     ]
   }
 ];
+
+// ---------------------------------------------------------------------------
+// STREET REP — the account-wide reputation ladder. One rank per 15 account
+// levels (the level itself is derived in App.js masteryMetrics from hero
+// levels, bonds, roster size and campaign stages). Each rank is a venue your
+// crew operates out of + the name the city knows you by, plus a one-time
+// reward chest claimable from the home page (claims persist in
+// localStorage: mugen_rep_claimed).
+// ---------------------------------------------------------------------------
+export const REP_RANKS = [
+  { rank: 1, venue: "Street Gym", title: "NOBODY", blurb: "Nobody knows your name. Yet.", perk: "The basics: train, recruit, run the streets.", reward: null },
+  { rank: 2, venue: "Industrial Loft", title: "REGULAR", blurb: "The bouncers nod when you walk up.", perk: "Unlocks Events & Trials.", reward: { gems: 500, credits: 250000 } },
+  { rank: 3, venue: "Downtown Studio", title: "FACE ON THE SCENE", blurb: "People start dropping your name to get in places.", perk: "Unlocks Jobs (idle contracts).", reward: { gems: 1000, credits: 1000000 } },
+  { rank: 4, venue: "Upper East Dojo", title: "VIP", blurb: "There's a booth with your name on it.", perk: "Bigger vault & stamina pool (scales with level).", reward: { gems: 1500, credits: 5000000 } },
+  { rank: 5, venue: "Penthouse HQ", title: "HEADLINER", blurb: "Your crew's name is on the marquee.", perk: "+50 max stamina, permanently.", reward: { gems: 2500, credits: 20000000 } },
+  { rank: 6, venue: "Empire Spire", title: "MAIN EVENT", blurb: "Promoters bid for a night of your time.", perk: "Prestige cosmetic aura discounts (Shop).", reward: { gems: 4000, credits: 75000000 } },
+  { rank: 7, venue: "Metropolitan Sanctum", title: "CITY LEGEND", blurb: "They tell stories about you in districts you've never been to.", perk: "You've made it. The city is yours.", reward: { gems: 6000, credits: 250000000 } }
+];
+export const getRepRank = (rank) => REP_RANKS[Math.min(Math.max(1, rank), REP_RANKS.length) - 1];
 
 export const TRIALS_CONTENT = []; // Now dynamically generated in TrialsView
 

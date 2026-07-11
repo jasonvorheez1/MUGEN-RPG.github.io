@@ -7,9 +7,9 @@ import {
   Info,
   Plus
 } from "lucide-react";
-import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.js";
-import { ELEMENTS, TIER_STATS } from "../constants.js";
-import { calculateStat, playSound, calculateSubStat, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, SIGNATURE_BONUS, incrementCourierFieldBattles, getDominantSpecialKey, SPECIAL_ARCHETYPE_NAMES } from "../utils.js";
+import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow, applyStatusTick, resolveBasicAttack, getCastAnimMs, getLungeMs, getBasicAttackMs, HITSTOP_BUFFER_MS, ProjectileLayer } from "../CombatSystem.js";
+import { ELEMENTS, TIER_STATS, BOSS_ROSTER, EQUIPMENT } from "../constants.js";
+import { calculateStat, playSound, calculateSubStat, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, SIGNATURE_BONUS, incrementCourierFieldBattles, getDominantSpecialKey, SPECIAL_ARCHETYPE_NAMES, getGaugeGain, getGearPassives, rollEnemyGear, seededRandom } from "../utils.js";
 import { CampaignIntro } from "./ViewShared.js";
 
 // Arena league tiers — pure presentation, derived from rank. Gives the ladder the
@@ -91,6 +91,7 @@ const ArenaIntro = ({ squad, enemies, rank, onComplete }) => {
 };
 
 const TrialsView = ({
+  onWorldTimeStop,
   characters = [],
   unlockedIds = [],
   createFloatingText = () => {
@@ -134,6 +135,13 @@ const TrialsView = ({
   // KO cut-in: fires whenever any unit dies mid-battle for a short banner.
   const [koEvent, setKoEvent] = useState(null);
   const deadIdsRef = useRef(new Set());
+  // THE WORLD -- see CampaignView's identical ref for why this exists.
+  const timeStopHandledRef = useRef({});
+  // Cinematic hold -- see CampaignView's identical ref. Freezes the whole
+  // simulation for exactly as long as the current cast's animation plays, so
+  // nothing else can act (or even fill gauge) mid-ability.
+  const hitStopUntil = useRef(0);
+  const battleSceneRef = useRef(null);
   useEffect(() => {
     if (battleState !== "ACTIVE") { deadIdsRef.current = new Set(); return; }
     const newlyDead = combatants.filter((c) => c.dead && !deadIdsRef.current.has(c.id));
@@ -212,12 +220,31 @@ const TrialsView = ({
     baseRewards: { gems: 5e4, aura: 5e3, essence: 500, materials: 2500 },
     type: "element"
   }));
+  // BUGFIX: this used to assign each franchise trial an unrelated element by
+  // fixed index (i % elements), completely independent of what that franchise
+  // -- or the player's owned roster -- actually contains. If the player never
+  // unlocked ANY character of that arbitrary element anywhere in their whole
+  // account, the trial's dual requirement (franchise member + that element)
+  // could never be satisfied by any squad, permanently softlocking that trial.
+  // Fix: derive the element requirement from the player's OWNED members of
+  // that same franchise (the most common element among them) -- so a squad
+  // member who already satisfies the franchise requirement typically also
+  // satisfies the element one, and the requirement is dropped entirely (no
+  // element restriction) if the player hasn't unlocked anyone from the
+  // franchise yet, rather than baking in a possibly-unownable element.
+  const ownedFranchiseElement = (f) => {
+    const owned = characters.filter((c) => extractFranchise(c) === f && unlockedIds.includes(c.export_id));
+    if (!owned.length) return null;
+    const counts = {};
+    owned.forEach((c) => { counts[c.element] = (counts[c.element] || 0) + 1; });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  };
   const baseFranchiseTrials = eligibleFranchises.map((f, i) => ({
     baseId: `trial_fr_${f.replace(/\s+/g, "_")}`,
     name: `${f} Paradox`,
     desc: `The collective destiny of the ${f} universe manifested as a trial of pure strength. Only those from the same origin can enter.`,
     franchise: f,
-    element: Object.keys(ELEMENTS)[i % Object.keys(ELEMENTS).length],
+    element: ownedFranchiseElement(f) || undefined,
     baseCp: 5e8 + i * 1e8,
     baseRewards: { gems: 15e4, aura: 15e3, essence: 1500, materials: 1e4 },
     type: "franchise"
@@ -338,158 +365,71 @@ const TrialsView = ({
       return next;
     });
   };
-  const processTrialSkillLogic = (next, unitId) => {
-    const idx = next.findIndex((u2) => u2.id === unitId);
-    const u = next[idx];
-    const isLimitBreak = (u.burst || 0) >= 100;
-    if (!u || u.dead || !isLimitBreak && u.skillCd < u.maxSkillCd) return;
-    u.skillCd = 0;
-    if (isLimitBreak) u.burst = 0;
-    u.lastSkillTime = Date.now();
-    const skill = (skills || []).find((s) => s.id === u.skillId) || { id: "slash", type: "atk" };
-    const enemies = next.filter((t) => t.isEnemy !== u.isEnemy && !t.dead && !t.effects.some((e) => e.type === "untargetable"));
-    const allies = next.filter((t) => t.isEnemy === u.isEnemy && !t.dead);
-    let targets = [];
-    if (skill.target === "all_enemies") targets = enemies;
-    else if (skill.target === "all_allies") targets = allies;
-    else if (skill.target === "self") targets = [u];
-    else if (skill.target === "lowest_ally") targets = [allies.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]];
-    else {
-      const tauntedTarget = enemies.find((t) => t.effects.some((e) => e.type === "aggro"));
-      targets = [tauntedTarget || enemies[Math.floor(Math.random() * enemies.length)]];
-    }
-    targets = targets.filter(Boolean);
-    const uStats = getBattleStats(u);
-    targets.forEach((t) => {
-      if (skill.statusEffects) {
-        skill.statusEffects.forEach((eff) => {
-          if (Math.random() < eff.chance) {
-            if (eff.type === "cleanse") {
-              t.effects = t.effects.filter((e) => e.type.startsWith("buff") || e.type === "regen" || e.type === "shield" || e.type === "tactical_stance");
-            } else {
-              t.effects.push({ ...eff });
-            }
-          }
-        });
-      }
-      const burstMult = isLimitBreak ? 2.5 : 1;
-      if (skill.id === "quick_stab") u.gauge = Math.min(95, (u.gauge || 0) + 40);
-      if (skill.type === "heal" || skill.type === "buff") {
-        if (skill.type === "heal") {
-          const healOffense = Math.floor((uStats.atk || 0) * 0.5 + (uStats.magicAtk || 0) * 1.5);
-          const amt = Math.floor(healOffense * 1.5 * burstMult);
-          t.hp = Math.min(t.maxHp, t.hp + amt);
-          u.lastAction = { targetId: t.id, amount: amt, type: "heal", time: Date.now(), skillUser: u.id };
-        }
-        if (skill.meta?.charge_burst) u.burst = Math.min(100, (u.burst || 0) + skill.meta.charge_burst);
-      } else {
-        let skillPower = (skill.power || 1) * (1 + (u.abilityLevel || 1) * 0.05);
-        const tStats = getBattleStats(t);
-        if (!isLimitBreak && Math.random() < tStats.evasion) {
-          u.lastAction = { targetId: t.id, amount: "MISS", type: "miss", time: Date.now(), skillUser: u.id };
-          return;
-        }
-        const isMagic = skill.damageType === "magical" || uStats.magicAtk > uStats.atk;
-        const offense = isMagic ? uStats.magicAtk : uStats.atk;
-        let defense = isMagic ? tStats.magicDef : tStats.def;
-        if (skill.id === "snipe") defense *= 0.7;
-        if (skill.id === "pressure") defense *= 0.5;
-        if (skill.id === "execute" && t.hp / t.maxHp < 0.5) skillPower *= 2;
-        let dmg = Math.floor(offense * skillPower * (u.tierMod || 1));
-        dmg = Math.floor(dmg * (1 + uStats.speed / 2e3));
-        let type = "normal";
-        if (ELEMENTS[u.element]?.strongTo === t.element) {
-          dmg = Math.floor(dmg * 1.5);
-          type = "crit";
-        }
-        if (ELEMENTS[u.element]?.weakTo === t.element) {
-          dmg = Math.floor(dmg * 0.7);
-          type = "miss";
-        }
-        if (Math.random() < uStats.critRate || skill.meta?.guaranteed_crit) {
-          dmg = Math.floor(dmg * 1.5);
-          type = "crit";
-        }
-        let effectiveDef = defense;
-        if (skill.meta?.ignore_def) effectiveDef *= 1 - skill.meta.ignore_def;
-        if (skill.signature) effectiveDef *= 1 - SIGNATURE_BONUS.PIERCE_FLOOR;
-        dmg = applyMitigation(dmg, effectiveDef, 1e3);
-        const shieldIdx = t.effects.findIndex((e) => e.type === "shield");
-        if (shieldIdx !== -1) {
-          if (skill.meta?.break_shield) {
-            t.effects.splice(shieldIdx, 1);
-            dmg = Math.floor(dmg * 1.5);
-          } else dmg -= Math.floor(dmg * t.effects[shieldIdx].val);
-        }
-        if (skill.id === "vampire_lord" || uStats.lifesteal > 0 || skill.meta?.lifesteal > 0) {
-          const v = Math.max(skill.meta?.lifesteal || 0, skill.id === "vampire_lord" ? 0.3 : uStats.lifesteal);
-          u.hp = Math.min(u.maxHp, u.hp + Math.floor(dmg * v));
-        }
-        t.hp = Math.max(0, t.hp - dmg);
-        if (t.hp === 0) {
-          if (!t.isEnemy && t._leaderRevive) {
-            t._leaderRevive = false;
-            t.hp = 1;
-            t.lastAction = { ...t.lastAction, msg: "SAVED!" };
-          } else t.dead = true;
-        }
-        if (!t.dead) {
-          const sg = Math.floor((type === "crit" ? 15 : 8) * (skill.meta?.stagger_bonus || 1));
-          t.stagger = Math.min(t.maxStagger || 100, (t.stagger || 0) + sg);
-          if (t.stagger >= (t.maxStagger || 100)) {
-            t.effects.push({ type: "stun", duration: 1, val: 0, label: "STAGGERED" });
-            t.stagger = 0;
-          }
-        }
-        u.lastAction = { targetId: t.id, amount: dmg, type, damageType: isMagic ? "magic" : "physical", time: Date.now(), skillUser: u.id };
-      }
-    });
-  };
   const triggerSkill = (unitId) => {
     if (battleState !== "ACTIVE") return;
+    // Respect the same cinematic hold the auto-tick loop honors -- otherwise a
+    // manually-controlled ally can fire a skill mid-animation while another
+    // unit's cast is still playing.
+    if (Date.now() < hitStopUntil.current) return;
     setCombatants((prev) => {
       const u = prev.find((unit) => unit.id === unitId);
       if (!u || u.dead) return prev;
       const isLimitBreak = (u.burst || 0) >= 100;
-      return executeCombatSkill({
+      const nextState = executeCombatSkill({
         combatants: prev,
         attackerId: unitId,
         skills,
         playerElement,
         isLimitBreak
       });
+      const casterAfter = nextState.find((n) => n.id === unitId);
+      const castMs = getCastAnimMs(casterAfter?.lastCastAnim);
+      if (castMs) hitStopUntil.current = Date.now() + castMs + HITSTOP_BUFFER_MS;
+      return nextState;
     });
   };
   const startTrial = (trial) => {
-    const BOSS_IMAGES = [
-      "boss_neon_dragon.png",
-      "boss_void_executioner.png",
-      "boss_subway_serpent.png",
-      "boss_gilded_titan.png"
-    ];
     const squad = characters.filter((c) => (squadIds || []).some((id) => String(id) === String(c.export_id)));
     if (!squad || squad.length < 1) {
       return createFloatingText("Select at least 1 hero!", true);
     }
+    // Softlock safety net (matches CampaignView.startStage): only enforce a
+    // roster-dependent requirement if the player's UNLOCKED roster can actually
+    // satisfy it at all. Otherwise the gate is skipped instead of permanently
+    // blocking the trial -- mirrors the "waived" state shown in the WHO'S
+    // GETTING IN chip panel above, so the UI and the actual gate agree.
+    const unlockedRoster = characters.filter((c) => unlockedIds.includes(c.export_id));
     if (trial.franchise) {
-      const franchiseMembers = squad.filter((c) => {
+      const rosterCanFranchise = unlockedRoster.some((c) => {
         const f = extractFranchise(c);
         if (!f) return false;
         const fLow = f.toLowerCase().trim();
         const targetLow = String(trial.franchise).toLowerCase().trim();
         return fLow === targetLow || fLow.includes(targetLow);
       });
-      if (franchiseMembers.length < 1) {
-        return createFloatingText(`Requires at least 1 hero from ${trial.franchise}!`, true);
+      if (rosterCanFranchise) {
+        const franchiseMembers = squad.filter((c) => {
+          const f = extractFranchise(c);
+          if (!f) return false;
+          const fLow = f.toLowerCase().trim();
+          const targetLow = String(trial.franchise).toLowerCase().trim();
+          return fLow === targetLow || fLow.includes(targetLow);
+        });
+        if (franchiseMembers.length < 1) {
+          return createFloatingText(`Requires at least 1 hero from ${trial.franchise}!`, true);
+        }
       }
     }
     if (trial.isWildcard) {
-      const minorMembers = squad.filter((c) => {
-        const f = extractFranchise(c) || "Minor";
-        return !f || (franchiseCounts[f] || 0) < 3;
-      });
-      if (minorMembers.length < 1) {
-        return createFloatingText(`Requires at least 1 Wildcard Hero (Series with < 3 chars)!`, true);
+      const rosterCanWildcard = unlockedRoster.some((c) => { const f = extractFranchise(c) || "Minor"; return !f || (franchiseCounts[f] || 0) < 3; });
+      if (rosterCanWildcard) {
+        const minorMembers = squad.filter((c) => {
+          const f = extractFranchise(c) || "Minor";
+          return !f || (franchiseCounts[f] || 0) < 3;
+        });
+        if (minorMembers.length < 1) {
+          return createFloatingText(`Requires at least 1 Wildcard Hero (Series with < 3 chars)!`, true);
+        }
       }
     }
     if (trial.element) {
@@ -525,6 +465,7 @@ const TrialsView = ({
         magicDef: calculateStat(c.baseStats["magic def"] || 0, c.level, c, characters, "magic def"),
         speed: calculateStat(c.baseStats.speed, c.level, c, characters, "speed"),
         element: c.element,
+        franchise: c.franchise,
         level: c.level,
         skillId: c.skillId,
         skillId2: c.level >= 50 ? c.skillId2 : null,
@@ -540,6 +481,7 @@ const TrialsView = ({
         maxSkillCd2: c.skillId2 ? skills.find((s) => s.id === c.skillId2)?.cooldown || 100 : 0,
         isEnemy: false,
         special: c.special,
+        equipSlots: c.equipSlots,
         gauge: Math.random() * 50,
         burst: 0,
         effects: [
@@ -553,38 +495,59 @@ const TrialsView = ({
     });
     const difficultyScale = trial.difficulty === "easy" ? 0.75 : trial.difficulty === "hard" ? 1.25 : 1;
     const rewardScale = trial.difficulty === "easy" ? 0.6 : trial.difficulty === "hard" ? 2 : 1;
-    const bossStats = getEnemyStatsFromCP(trial.cpReq * difficultyScale, "boss");
+    // Real named bosses (BOSS_ROSTER) instead of a generic reskin -- picked
+    // deterministically from the trial id so a given trial always fights the
+    // same boss. Hard/Expert trials summon the boss's duo partner too, so their
+    // signature's team-up attack (META.duo_partner) can actually fire.
+    const bossPick = BOSS_ROSTER[Math.abs(trial.id.length + trial.id.charCodeAt(0)) % BOSS_ROSTER.length];
+    const isDuoTrial = trial.difficulty === "hard" || trial.difficulty === "expert";
+    const bossEntries = isDuoTrial ? [bossPick, BOSS_ROSTER.find((b) => b.name === bossPick.duoPartner) || bossPick] : [bossPick];
+    const cpShares = bossEntries.length === 2 ? [0.62, 0.38] : [1];
+    const findBossSig = (name) => (skills || []).find((s) => s.signature && s.owner === name);
     const eliteSkills = (skills || []).filter((s) => ["Rare", "Epic", "Legendary"].includes(s.rarity));
     const pickElite = (seed) => eliteSkills[seed % eliteSkills.length]?.id || "slash";
-    const enemy = {
-      id: "trial-boss",
-      name: trial.name.split(" ").pop(),
-      img: BOSS_IMAGES[Math.abs(trial.id.length) % BOSS_IMAGES.length],
-      ...bossStats,
-      element: trial.element,
-      level: 100,
-      // Trial enemies are endgame
-      skillId: pickElite(trial.cpReq),
-      skillId2: pickElite(trial.cpReq + 13),
-      abilityLevel: trial.difficulty === "hard" ? 12 : trial.difficulty === "easy" ? 6 : 10,
-      abilityLevel2: 8,
-      skillCd: 0,
-      skillCd2: 0,
-      // Trial bosses are relentless
-      maxSkillCd: 35,
-      maxSkillCd2: 55,
-      isEnemy: true,
-      isBoss: true,
-      stagger: 0,
-      maxStagger: 1500,
-      gauge: 90,
-      burst: 0,
-      effects: [{ type: "shield", duration: Math.max(3, Math.floor(10 * difficultyScale)), val: 0.4 * difficultyScale, label: "TITAN SHIELD" }],
-      dead: false,
-      critRate: 0.05,
-      evasion: 0.05,
-      lifesteal: 0
-    };
+    // Trial bosses roll real gear from the same EQUIPMENT catalog the player
+    // pulls from -- tier scales with difficulty so an Expert boss is
+    // meaningfully better-geared than an Easy one. Visible in the confirm
+    // screen's "SCOUT GEAR" panel before the player commits.
+    const bossGearTier = { easy: 1, medium: 2, hard: 3, expert: 4 }[trial.difficulty] ?? 2;
+    // Seeded by the trial's own id so the SCOUT GEAR preview shown on the
+    // confirm screen (see pendingTrial render below) rolls this EXACT loadout
+    // -- what you scout is what you fight, not just a flavor sample.
+    const bossGearRoll = seededRandom(trial.id + "_gear");
+    const enemies = bossEntries.map((bossDef, i) => {
+      const bossStats = getEnemyStatsFromCP(trial.cpReq * difficultyScale * cpShares[i], "boss");
+      const sig = findBossSig(bossDef.name);
+      return {
+        id: `trial-boss-${i}`,
+        name: bossDef.name,
+        img: bossDef.img,
+        ...bossStats,
+        element: bossDef.element,
+        level: 100,
+        _equippedGear: rollEnemyGear(bossGearTier, bossGearRoll),
+        skillId: pickElite(trial.cpReq + i * 7),
+        skillId2: sig ? sig.id : pickElite(trial.cpReq + 13 + i),
+        abilityLevel: trial.difficulty === "hard" ? 12 : trial.difficulty === "easy" ? 6 : 10,
+        abilityLevel2: trial.difficulty === "hard" ? 12 : trial.difficulty === "easy" ? 6 : 10,
+        skillCd: 0,
+        skillCd2: 0,
+        // Trial bosses are relentless
+        maxSkillCd: 35,
+        maxSkillCd2: 55,
+        isEnemy: true,
+        isBoss: i === 0,
+        stagger: 0,
+        maxStagger: 1500,
+        gauge: 90 - i * 20,
+        burst: 0,
+        effects: [{ type: "shield", duration: Math.max(3, Math.floor(10 * difficultyScale)), val: 0.4 * difficultyScale, label: "TITAN SHIELD" }],
+        dead: false,
+        critRate: 0.05,
+        evasion: 0.05,
+        lifesteal: 0
+      };
+    });
     setActiveTrial({ ...trial, scaledRewards: {
       gems: Math.floor((trial.rewards?.gems || 0) * rewardScale),
       aura: Math.floor((trial.rewards?.aura || 0) * rewardScale),
@@ -596,7 +559,7 @@ const TrialsView = ({
     if (leaderChar) {
       allies.forEach((a) => applyLeaderBonus(leaderChar, a, squad));
     }
-    setCombatants([enemy, ...allies]);
+    setCombatants([...enemies, ...allies]);
   };
   // Arena: a scouted 3v3 ladder, not a single hand-tuned boss. Unlike every other
   // Trial here, opponent CP is computed RELATIVE to the player's own chosen 3-hero
@@ -676,6 +639,10 @@ const TrialsView = ({
         maxHp: stats.hp,
         element: champ.element,
         level: 30 + Math.round(70 * Math.min(1, Math.max(0, rank - 1) / 99)),
+        // Arena opponents roll gear from the same catalog the player does,
+        // scaled by rank (Bronze mostly Common, Master reaching Mythic) --
+        // scoutable pre-match via the "SCOUT GEAR" panel below.
+        _equippedGear: rollEnemyGear(Math.min(4, Math.floor(rank / 25))),
         skillId,
         skillId2,
         abilityLevel,
@@ -771,6 +738,7 @@ const TrialsView = ({
         magicDef: calculateStat(c.baseStats["magic def"] || 0, c.level, c, characters, "magic def"),
         speed: calculateStat(c.baseStats.speed, c.level, c, characters, "speed"),
         element: c.element,
+        franchise: c.franchise,
         level: c.level,
         skillId: c.skillId,
         skillId2: c.level >= 50 ? c.skillId2 : null,
@@ -786,6 +754,7 @@ const TrialsView = ({
         maxSkillCd2: c.skillId2 ? skills.find((s) => s.id === c.skillId2)?.cooldown || 100 : 0,
         isEnemy: false,
         special: c.special,
+        equipSlots: c.equipSlots,
         gauge: Math.random() * 50,
         burst: 0,
         effects: [
@@ -809,6 +778,9 @@ const TrialsView = ({
     const timer = setInterval(() => {
       setCombatants((prev) => {
         if (!prev || prev.length === 0 || battleState !== "ACTIVE") return prev;
+        // HIT-STOP: freeze the simulation for a beat after heavy impacts / while
+        // a cast animation plays -- see hitStopUntil sets below.
+        if (Date.now() < hitStopUntil.current) return prev;
         const alliesAlive = prev.filter((c) => !c.isEnemy && !c.dead).length;
         const enemiesAlive = prev.filter((c) => c.isEnemy && !c.dead).length;
         if (alliesAlive === 0) {
@@ -826,31 +798,20 @@ const TrialsView = ({
         const curAuto = autoBattle;
         const curEl = playerElement;
         const curSpd = combatSpeed;
+        // Speed rebalance: shared with Campaign/Events -- see utils.js getGaugeGain.
+        const battleSpeeds = next.filter((u) => !u.dead).map((u) => getBattleStats(u, curEl, u.activeSynergies || []).speed);
         next.forEach((u) => {
           if (u.dead) return;
           const stats = getBattleStats(u, curEl, u.activeSynergies || []);
           if (u.skillCd < u.maxSkillCd) u.skillCd += 1;
           if (u.skillId2 && u.skillCd2 < u.maxSkillCd2) u.skillCd2 += 1;
-          u.gauge += Math.min(8, Math.max(0.5, stats.speed / 185 * curSpd));
+          u.gauge += getGaugeGain(stats.speed, battleSpeeds, curSpd);
           if (u.gauge >= 100) {
+            // Same-tick guard -- see CampaignView's identical check for why.
+            if (Date.now() < hitStopUntil.current) return;
             u.gauge = 0;
-            let incapacitated = false;
-            u.effects = u.effects.filter((e) => {
-              if (e.type === "burn" || e.type === "poison" || e.type === "static") {
-                const dotDmg = Math.floor(u.maxHp * (e.val || 0.05));
-                u.hp = Math.max(0, u.hp - dotDmg);
-                setFloatingDamages((fd) => [...fd, { id: Math.random(), targetId: u.id, amount: dotDmg, type: "miss" }]);
-                if (e.type === "static") u.lastAction = { targetId: u.id, msg: "GLITCH", type: "miss", time: Date.now() };
-              }
-              if (e.type === "regen") {
-                const healAmt = Math.floor(u.maxHp * (e.val || 0.05));
-                u.hp = Math.min(u.maxHp, u.hp + healAmt);
-                setFloatingDamages((fd) => [...fd, { id: Math.random(), targetId: u.id, amount: healAmt, type: "heal" }]);
-              }
-              if (e.type === "stun" || e.type === "freeze") incapacitated = true;
-              e.duration--;
-              return e.duration > 0;
-            });
+            const { incapacitated, popups } = applyStatusTick(u);
+            if (popups.length) setFloatingDamages((fd) => [...fd, ...popups]);
             if (u.hp <= 0) {
               if (!u.isEnemy && u._leaderRevive) {
                 u._leaderRevive = false;
@@ -868,31 +829,20 @@ const TrialsView = ({
               if ((u.isEnemy || curAuto) && (s1Ready || s2Ready || isBurstReady)) {
                 const nextState = executeCombatSkill({ combatants: next, attackerId: u.id, skills, playerElement: curEl, isLimitBreak: isBurstReady });
                 nextState.forEach((ns, ni) => next[ni] = ns);
+                const casterAfter = next.find((n) => n.id === u.id);
+                if (casterAfter?._triggeredTimeStopAt && timeStopHandledRef.current[u.id] !== casterAfter._triggeredTimeStopAt) {
+                  timeStopHandledRef.current[u.id] = casterAfter._triggeredTimeStopAt;
+                  if (typeof onWorldTimeStop === "function") onWorldTimeStop(casterAfter._timeStopMusicMs || 5000);
+                }
+                const castMs = getCastAnimMs(casterAfter?.lastCastAnim);
+                if (castMs) hitStopUntil.current = Date.now() + castMs + HITSTOP_BUFFER_MS;
               } else {
-                const targets = next.filter((t) => t.isEnemy !== u.isEnemy && !t.dead);
-                if (targets.length > 0) {
-                  const taunted = targets.find((e) => e.effects.some((eff) => eff.type === "aggro"));
-                  const target = taunted || targets[Math.floor(Math.random() * targets.length)];
-                  const tStats = getBattleStats(target, curEl);
-                  if (Math.random() < tStats.evasion) {
-                    u.lastAction = { targetId: target.id, amount: "MISS", type: "miss", time: Date.now() };
-                  } else {
-                    let dmg = Math.floor(stats.atk * (1 + stats.speed / 2e3));
-                    const shield = target.effects.find((e) => e.type === "shield");
-                    if (shield) dmg = Math.floor(dmg * (1 - shield.val));
-                    dmg = applyMitigation(dmg, tStats.def, 1e3);
-                    target.hp = Math.max(0, target.hp - dmg);
-                    if (!u.isEnemy) { u._battleDamage = (u._battleDamage || 0) + dmg; u._battleBestHit = Math.max(u._battleBestHit || 0, dmg); }
-                    if (target.hp === 0) {
-                      if (!target.isEnemy && target._leaderRevive) {
-                        target._leaderRevive = false;
-                        target.hp = 1;
-                        target.lastAction = { ...target.lastAction, msg: "SAVED!" };
-                      } else target.dead = true;
-                    }
-                    u.burst = Math.min(100, (u.burst || 0) + 10);
-                    u.lastAction = { targetId: target.id, amount: dmg, type: "basic", time: Date.now() };
-                    setFloatingDamages((fd) => [...fd, { id: Math.random(), targetId: target.id, amount: dmg, type: "normal" }]);
+                const result = resolveBasicAttack({ attacker: u, allUnits: next, playerElement: curEl });
+                if (result) {
+                  hitStopUntil.current = Date.now() + getBasicAttackMs(result.meleeAir) + HITSTOP_BUFFER_MS;
+                  if (!result.missed) {
+                    if (!u.isEnemy) { u._battleDamage = (u._battleDamage || 0) + result.amount; u._battleBestHit = Math.max(u._battleBestHit || 0, result.amount); }
+                    setFloatingDamages((fd) => [...fd, { id: Math.random(), targetId: result.targetId, amount: result.amount, type: "normal" }]);
                   }
                 }
               }
@@ -931,6 +881,8 @@ const TrialsView = ({
         else if (skill.type === "atk" || skill.type === "combo") {
           playSound("spin" + Math.floor(Math.random() * 3), 0.4);
           playSound("mugen_atk" + Math.floor(Math.random() * 5), 0.3);
+          const swipePool = skill.damageType === "magical" ? ["act_lunge_magic", "act_whoosh1", "act_whoosh2"] : ["act_swipe1", "act_swipe2", "act_swipe3", "act_swipe4", "act_lunge_generic"];
+          playSound(swipePool[Math.floor(Math.random() * swipePool.length)], 0.35);
         }
         if (!recentCaster.isEnemy && typeof triggerVisualEffect2 === "function") {
           triggerVisualEffect2(skill.damageType === "magical" ? "fx_magic_circle.png" : "fx_impact.png", "50%", "30%", 1.2);
@@ -1557,7 +1509,7 @@ const TrialsView = ({
     pendingTrial && /* @__PURE__ */ jsxDEV("div", { className: "hero-select-modal animate-fadeIn", style: { display: "flex", flexDirection: "column" }, children: [
       /* @__PURE__ */ jsxDEV("div", { className: "modal-header", children: [
         /* @__PURE__ */ jsxDEV("div", { children: [
-          /* @__PURE__ */ jsxDEV("h2", { style: { margin: 0, color: ELEMENTS[pendingTrial.element].color }, children: pendingTrial.name }, void 0, false, {
+          /* @__PURE__ */ jsxDEV("h2", { style: { margin: 0, color: pendingTrial.element ? ELEMENTS[pendingTrial.element].color : "#fff" }, children: pendingTrial.name }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 8022,
             columnNumber: 15
@@ -1582,6 +1534,59 @@ const TrialsView = ({
         lineNumber: 8020,
         columnNumber: 11
       }),
+      // "WHO'S GETTING IN" — surfaces every squad requirement for this trial as a
+      // chip (met/unmet/waived), mirroring the same pattern CampaignView uses for
+      // stage requirements. "Waived" means the requirement was auto-dropped
+      // because no owned hero could ever satisfy it (see the softlock fix in
+      // startTrial's franchise-trial element derivation above) -- surfacing that
+      // state here means the player can SEE why a requirement isn't listed as
+      // blocking, instead of just wondering why the trial always looked doable.
+      (pendingTrial.franchise || pendingTrial.element || pendingTrial.isWildcard) && (() => {
+        const h = React.createElement;
+        const squad = characters.filter((c) => (squadIds || []).some((id) => String(id) === String(c.export_id)));
+        const unlockedRoster = characters.filter((c) => unlockedIds.includes(c.export_id));
+        const frMatch = (c, t) => { const f = (extractFranchise(c) || "").toLowerCase().trim(); const tt = String(t).toLowerCase().trim(); return f === tt || f.includes(tt); };
+        const rosterCanFr = pendingTrial.franchise ? unlockedRoster.some((c) => frMatch(c, pendingTrial.franchise)) : true;
+        const rosterCanEl = pendingTrial.element ? unlockedRoster.some((c) => String(c.element).toUpperCase() === String(pendingTrial.element).toUpperCase()) : true;
+        const rosterCanWildcard = pendingTrial.isWildcard ? unlockedRoster.some((c) => { const f = extractFranchise(c) || "Minor"; return !f || (franchiseCounts[f] || 0) < 3; }) : true;
+        const reqs = [];
+        if (pendingTrial.franchise) reqs.push({ label: `${pendingTrial.franchise} hero`, waived: !rosterCanFr, met: squad.some((c) => frMatch(c, pendingTrial.franchise)) });
+        if (pendingTrial.element) reqs.push({ label: `${pendingTrial.element} hero`, waived: !rosterCanEl, met: squad.some((c) => String(c.element).toUpperCase() === String(pendingTrial.element).toUpperCase()) });
+        if (pendingTrial.isWildcard) reqs.push({ label: "Wildcard (minor series) hero", waived: !rosterCanWildcard, met: squad.some((c) => { const f = extractFranchise(c) || "Minor"; return !f || (franchiseCounts[f] || 0) < 3; }) });
+        return h("div", { style: { background: "rgba(233,69,96,0.08)", border: "1px solid var(--primary)", borderRadius: 12, padding: "10px 12px", marginBottom: 15, textAlign: "left" } },
+          h("div", { style: { fontSize: "0.6rem", fontWeight: 900, color: "var(--primary)", letterSpacing: 2, marginBottom: 7 } }, "WHO'S GETTING IN"),
+          h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } }, reqs.map((r, i) => {
+            const col = r.waived ? "#94a3b8" : r.met ? "#4ade80" : "#f87171";
+            return h("span", { key: i, style: { fontSize: "0.66rem", fontWeight: 800, padding: "3px 9px", borderRadius: 20, background: r.waived ? "rgba(148,163,184,0.12)" : r.met ? "rgba(74,222,128,0.13)" : "rgba(239,68,68,0.13)", color: col, border: "1px solid " + col + "44" } }, (r.waived ? "— " : r.met ? "✓ " : "✗ ") + r.label + (r.waived ? " (waived)" : ""));
+          }))
+        );
+      })(),
+      // SCOUT GEAR — reproduces the EXACT boss + gear roll startTrial() will
+      // use (same BOSS_ROSTER pick logic, same trial-id-seeded RNG) so what
+      // you scout here is what you actually fight, not a flavor sample.
+      (() => {
+        const h = React.createElement;
+        const RARITY_COLOR = { Common: "#94a3b8", Rare: "#38bdf8", Epic: "#a855f7", Legendary: "#facc15", Mythic: "#ff2ecb" };
+        const bossPick = BOSS_ROSTER[Math.abs(pendingTrial.id.length + pendingTrial.id.charCodeAt(0)) % BOSS_ROSTER.length];
+        const isDuoTrial = pendingTrial.difficulty === "hard" || pendingTrial.difficulty === "expert";
+        const bossEntries = isDuoTrial ? [bossPick, BOSS_ROSTER.find((b) => b.name === bossPick.duoPartner) || bossPick] : [bossPick];
+        const bossGearTier = { easy: 1, medium: 2, hard: 3, expert: 4 }[pendingTrial.difficulty] ?? 2;
+        const gearRoll = seededRandom(pendingTrial.id + "_gear");
+        return h("div", { style: { background: "rgba(0,0,0,0.3)", padding: 12, borderRadius: 14, marginBottom: 15 } },
+          h("div", { style: { fontSize: "0.6rem", fontWeight: 900, color: "#facc15", letterSpacing: 2, marginBottom: 8 } }, "SCOUT REPORT"),
+          h("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, bossEntries.map((boss) => {
+            const gear = rollEnemyGear(bossGearTier, gearRoll);
+            return h("div", { key: boss.name, style: { display: "flex", alignItems: "center", gap: 8 } },
+              h("img", { src: boss.img, style: { width: 32, height: 32, borderRadius: 8, objectFit: "cover", border: `1px solid ${ELEMENTS[boss.element]?.color || "#fff"}` } }),
+              h("span", { style: { fontWeight: 800, fontSize: "0.68rem", minWidth: 90 } }, boss.name),
+              h("div", { style: { display: "flex", flexWrap: "wrap", gap: 4 } }, gear.map((g) => {
+                const item = (EQUIPMENT[g.slot] || []).find((it) => it.id === g.itemId);
+                if (!item) return null;
+                const rc = RARITY_COLOR[item.rarity];
+                return h("span", { key: g.slot, title: item.name, style: { fontSize: "0.56rem", fontWeight: 800, padding: "2px 6px", borderRadius: 10, color: rc, border: `1px solid ${rc}66`, background: `${rc}18` } }, `${item.name} +${g.level}`);
+              })));
+          })));
+      })(),
       /* @__PURE__ */ jsxDEV("div", { style: { background: "rgba(0,0,0,0.3)", padding: 15, borderRadius: 16, marginBottom: 20 }, children: [
         /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }, children: [
           /* @__PURE__ */ jsxDEV("h3", { style: { margin: 0, fontSize: "0.9rem", fontWeight: 900 }, children: [
@@ -1863,7 +1868,8 @@ const TrialsView = ({
         lineNumber: 8088,
         columnNumber: 11
       }),
-      /* @__PURE__ */ jsxDEV("div", { className: "battle-scene", children: [
+      /* @__PURE__ */ jsxDEV("div", { ref: battleSceneRef, className: "battle-scene", children: [
+        /* @__PURE__ */ jsxDEV(ProjectileLayer, { combatants, containerRef: battleSceneRef }, void 0, false, {}),
         /* @__PURE__ */ jsxDEV("div", { className: "battle-background-layer", style: { backgroundImage: `url(${activeTrial?.type === "endless" ? "background_void.png" : activeTrial?.element === "FIRE" ? "fx_burn.png" : activeTrial?.element === "WATER" ? "background_battle.png" : "background_citadel.png"})` } }, void 0, false, {
           fileName: "<stdin>",
           lineNumber: 8125,
@@ -1874,6 +1880,40 @@ const TrialsView = ({
           lineNumber: 8126,
           columnNumber: 14
         }),
+        // MISSION BADGE + ambient dressing -- tinted to arena tier / void /
+        // element so endgame trials read as distinct occasions, not a reskin
+        // of the same generic battle screen.
+        (() => {
+          const isArena = activeTrial?.type === "arena";
+          const isVoid = activeTrial?.type === "endless";
+          const tier = isArena ? getArenaTier(arenaRank) : null;
+          const tint = tier ? tier.color : isVoid ? "#a855f7" : ELEMENTS[activeTrial?.element]?.color || "#a855f7";
+          const emblem = tier ? tier.emblem : isVoid ? "◈" : "✦";
+          const label = tier ? `${tier.name} LEAGUE` : isVoid ? "THE VOID" : (activeTrial?.difficulty || "TRIAL").toUpperCase();
+          const missionName = isArena ? `RANK ${arenaRank}` : (activeTrial?.name || "").toUpperCase();
+          return h(Fragment, { key: "trial-dressing" }, [
+            h("div", { key: "vig", className: "trial-vignette", style: { "--tmb-color": tint } }),
+            h("div", { key: "motes", className: "trial-ambient-layer" },
+              Array.from({ length: 14 }).map((_, i) => h("div", {
+                key: i,
+                className: "trial-mote",
+                style: {
+                  "--tmb-color": tint,
+                  "--mote-drift": `${(i % 2 === 0 ? 1 : -1) * (14 + i * 3)}px`,
+                  left: `${(i * 137) % 100}%`,
+                  animationDuration: `${6 + i % 5}s`,
+                  animationDelay: `${(i * 0.37).toFixed(2)}s`
+                }
+              }))),
+            h("div", { key: "badge", className: "trial-mission-badge trial-rank-pulse", style: { "--tmb-color": tint } }, [
+              h("div", { key: "e", className: "trial-mission-emblem" }, emblem),
+              h("div", { key: "t", className: "trial-mission-text" }, [
+                h("div", { key: "l", className: "trial-mission-label" }, label),
+                h("div", { key: "n", className: "trial-mission-name" }, missionName)
+              ])
+            ])
+          ]);
+        })(),
         combatants.filter((c) => c.isEnemy && !c.dead).slice(0, 1).map((boss) => /* @__PURE__ */ jsxDEV("div", { className: "boss-hp-container", children: [
           /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 2, padding: "0 10px" }, children: [
             /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.2rem", fontWeight: 900, color: "#fff", textShadow: "0 0 10px #000", fontFamily: "MugenTitle" }, children: boss.name }, void 0, false, {
@@ -1902,7 +1942,8 @@ const TrialsView = ({
             fileName: "<stdin>",
             lineNumber: 8135,
             columnNumber: 19
-          })
+          }),
+          boss.maxStagger ? /* @__PURE__ */ jsxDEV("div", { className: "boss-stagger-bar", children: /* @__PURE__ */ jsxDEV("div", { className: "stagger-fill", style: { width: `${(boss.stagger || 0) / boss.maxStagger * 100}%`, background: "#facc15" } }, void 0, false, {}) }, void 0, false, {}) : null
         ] }, `boss-hp-${boss.id}`, true, {
           fileName: "<stdin>",
           lineNumber: 8130,

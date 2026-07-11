@@ -12,8 +12,9 @@ import {
   ChevronLeft,
   Clover
 } from "lucide-react";
-import { ELEMENTS, LEADER_SKILLS, COSMETICS, TIER_ORDER } from "../constants.js";
-import { calculateStat, getBondRankName, getBondPath, playSound, calculateSubStat, formatPower, SPECIAL_STATS, SPECIAL_LABELS, SPECIAL_DESCRIPTIONS, SPECIAL_BASE, SPECIAL_CAP, getDefaultSpecial, getSpecialLevelInfo, getSpecialSpentPoints, FIELD_XP_PER_POINT, SPECIAL_ARCHETYPE_NAMES, getDominantSpecialKey } from "../utils.js";
+import { ELEMENTS, LEADER_SKILLS, COSMETICS, TIER_ORDER, MAX_ASCENSION, EQUIPMENT, EQUIP_MAX_LEVEL, EQUIP_UPGRADE_COST } from "../constants.js";
+import { makeGearInstanceId, getOptimalLoadout } from "../utils.js";
+import { calculateStat, getBondRankName, getBondPath, playSound, calculateSubStat, formatPower, SPECIAL_STATS, SPECIAL_LABELS, SPECIAL_DESCRIPTIONS, SPECIAL_BASE, SPECIAL_CAP, getDefaultSpecial, getSpecialLevelInfo, getSpecialSpentPoints, FIELD_XP_PER_POINT, SPECIAL_ARCHETYPE_NAMES, getDominantSpecialKey, getEquipBonusForStat } from "../utils.js";
 import { AbilitiesView } from "./AbilitiesView.js";
 
 const CharacterDetailView = ({
@@ -60,7 +61,9 @@ const CharacterDetailView = ({
   essence = 0,
   setEssence,
   totalPWR = 0,
-  items = {}
+  items = {},
+  gearInventory = [],
+  setGearInventory
 }) => {
   // XP granted per leveling consumable (mirrors InventoryView.useItem so items
   // can be spent straight from the character screen — no trip to the Stash).
@@ -154,6 +157,10 @@ const CharacterDetailView = ({
   const performAscension = () => {
     if (!char || char.level < 100) return;
     const currentAsc = char.ascension || 0;
+    if (currentAsc >= MAX_ASCENSION) {
+      createFloatingText(`MAX ASCENSION (${MAX_ASCENSION}/${MAX_ASCENSION})`, true);
+      return;
+    }
     const costCredits = 25e6 * (currentAsc + 1);
     const costEssence = 1e4 * (currentAsc + 1);
     if (credits < costCredits) {
@@ -311,7 +318,7 @@ Cost: $${costCredits.toLocaleString()} & ${costEssence} Essence`)) {
             h("div", { style: { fontSize: "1.5rem", fontWeight: 900, lineHeight: 1, fontFamily: "Rajdhani, sans-serif" } }, char.level)
           ),
           h("div", null,
-            (char.ascension || 0) > 0 ? h("div", { style: { fontSize: "0.7rem", fontWeight: 900, color: "#facc15" } }, "★ ASCENSION " + char.ascension) : null,
+            (char.ascension || 0) > 0 ? h("div", { style: { fontSize: "0.7rem", fontWeight: 900, color: "#facc15" } }, "★ ASCENSION " + char.ascension + "/" + MAX_ASCENSION + ((char.ascension || 0) >= MAX_ASCENSION ? " ✦ MAX" : "")) : null,
             h("div", { style: { fontSize: "0.65rem", color: "var(--text-muted)", fontWeight: 700 } }, isMaxed ? "MAX LEVEL — ready to Ascend" : "Next: LV " + (char.level + 1))
           )
         ),
@@ -338,12 +345,19 @@ Cost: $${costCredits.toLocaleString()} & ${costEssence} Essence`)) {
       est.staminaMultiplier >= 2 ? h("div", { style: { textAlign: "center", fontSize: "0.6rem", color: "#4ade80", fontWeight: 800, marginBottom: 10 } }, "⚡ FRESH BONUS ACTIVE — train now for " + est.staminaMultiplier.toFixed(1) + "× XP!") : null,
       // Primary action
       isMaxed
-        ? h("button", { className: "big-train-btn", style: { background: "linear-gradient(135deg, #facc15, #eab308)", boxShadow: "0 4px 0 #b45309", width: "100%" }, onClick: performAscension },
+        ? ((char.ascension || 0) >= MAX_ASCENSION
+          ? h("button", { className: "big-train-btn", style: { background: "linear-gradient(135deg, #64748b, #334155)", boxShadow: "0 4px 0 #1e293b", width: "100%", cursor: "default" }, disabled: true },
+              h(Sparkles, { size: 22 }),
+              h("div", { style: { display: "flex", flexDirection: "column", lineHeight: 1 } },
+                h("span", null, "MAX ASCENSION"),
+                h("span", { style: { fontSize: "0.6rem", opacity: 0.85 } }, MAX_ASCENSION + "/" + MAX_ASCENSION + " ✦")
+              ))
+          : h("button", { className: "big-train-btn", style: { background: "linear-gradient(135deg, #facc15, #eab308)", boxShadow: "0 4px 0 #b45309", width: "100%" }, onClick: performAscension },
             h(Sparkles, { size: 22 }),
             h("div", { style: { display: "flex", flexDirection: "column", lineHeight: 1 } },
               h("span", null, "ASCEND"),
-              h("span", { style: { fontSize: "0.6rem", opacity: 0.8 } }, "RANK " + ((char.ascension || 0) + 1))
-            ))
+              h("span", { style: { fontSize: "0.6rem", opacity: 0.8 } }, "RANK " + ((char.ascension || 0) + 1) + " / " + MAX_ASCENSION)
+            )))
         : h("button", { className: "big-train-btn", style: { width: "100%" }, onClick: (e) => handleTrain(false, e), disabled: !canTrain },
             h(Sword, { size: 22 }), " ", h("span", null, "TRAIN")),
       // Secondary actions
@@ -596,18 +610,13 @@ ${costEss > 0 ? `- ${costEss} Essence
         ...c.unlockedCosmetics,
         [typeKey]: [...c.unlockedCosmetics?.[typeKey] || [], item.id]
       };
-      if (type === "border") {
-        c.refinements = { ...c.refinements || {} };
-        c.refinements.hp = (c.refinements.hp || 0) + 1;
-        c.refinements.atk = (c.refinements.atk || 0) + 1;
-        c.refinements.def = (c.refinements.def || 0) + 1;
-        c.bondPath = c.bondPath || getBondPath(c.bondLevel, c.relationship);
-      }
+      // Cosmetics are purely visual now -- no stat side-effects. (Borders used to
+      // silently grant permanent refinements; that stat leak is removed.)
       next[idx] = c;
       return next;
     });
     playSound("unlock");
-    createFloatingText(type === "border" ? "BORDER UNLOCKED \u2022 STATS UPDATED" : "UNLOCKED!", false, type === "border" ? "#facc15" : "#4ade80");
+    createFloatingText("UNLOCKED!", false, "#4ade80");
   };
   const handleEquipCosmetic = (type, itemId) => {
     setCharacters((prev) => {
@@ -619,6 +628,175 @@ ${costEss > 0 ? `- ${costEss} Essence
       return next;
     });
     playSound("equip");
+  };
+  // --- SHARED GEAR INVENTORY (account-wide, not per-character) -------------
+  // Gear is one physical instance { instanceId, slot, itemId, level } living
+  // in gearInventory (App.js state). A character only holds a reference per
+  // slot (char.equipSlots). Equipping an instance someone else is wearing
+  // MOVES it -- that's what makes it "shared like a real RPG" instead of an
+  // infinite buy-a-copy-per-hero grind.
+  const [equipSlot, setEquipSlot] = useState("weapon");
+  const [equipFlash, setEquipFlash] = useState(0);
+  const gearInv = gearInventory || [];
+  const canAfford = (cost) => (!cost.credits || credits >= cost.credits) && (!cost.gems || gems >= cost.gems) && (!cost.materials || materials >= cost.materials) && (!cost.essence || essence >= cost.essence);
+  const spendCost = (cost) => {
+    if (!canAfford(cost)) {
+      const need = cost.credits && credits < cost.credits ? `$${cost.credits.toLocaleString()}` : cost.gems && gems < cost.gems ? `${cost.gems} Gems` : cost.materials && materials < cost.materials ? `${cost.materials} Materials` : `${cost.essence} Essence`;
+      createFloatingText(`Need ${need}`, true);
+      return false;
+    }
+    if (cost.credits) setCredits((c) => c - cost.credits);
+    if (cost.gems) setGems((g) => g - cost.gems);
+    if (cost.materials) setMaterials((m) => m - cost.materials);
+    if (cost.essence) setEssence((e) => e - cost.essence);
+    return true;
+  };
+  const mutateChar = (fn) => setCharacters((prev) => {
+    const next = [...prev];
+    const idx = next.findIndex((c2) => c2.export_id === char.export_id);
+    if (idx === -1) return prev;
+    const c = { ...next[idx] };
+    fn(c);
+    next[idx] = c;
+    return next;
+  });
+  // Equip an existing instance to THIS character's slot, auto-unequipping it
+  // from whoever else currently wears it (the "share it like a real RPG" move).
+  const equipInstance = (slot, instanceId) => {
+    setCharacters((prev) => prev.map((c) => {
+      if (c.export_id === char.export_id) {
+        return { ...c, equipSlots: { ...(c.equipSlots || {}), [slot]: instanceId } };
+      }
+      if (instanceId && c.equipSlots && c.equipSlots[slot] === instanceId) {
+        return { ...c, equipSlots: { ...c.equipSlots, [slot]: null } };
+      }
+      return c;
+    }));
+    playSound("equip");
+  };
+  const handleUpgradeGear = (slot) => {
+    const instanceId = (char.equipSlots || {})[slot];
+    const inst = gearInv.find((g) => g.instanceId === instanceId);
+    if (!inst) return;
+    const lvl = inst.level || 1;
+    if (lvl >= EQUIP_MAX_LEVEL) { createFloatingText("Gear at max level", true); return; }
+    if (!spendCost(EQUIP_UPGRADE_COST(lvl))) return;
+    setGearInventory((prev) => prev.map((g) => g.instanceId === instanceId ? { ...g, level: lvl + 1 } : g));
+    playSound("levelUp");
+    setEquipFlash(Date.now());
+    createFloatingText(`+${lvl + 1} FORGED!`, false, "#4ade80");
+    if (typeof triggerVisualEffect2 === "function") triggerVisualEffect2("fx_powerup.png", "50%", "55%", 1.4);
+  };
+  const handleUnequipGear = (slot) => {
+    mutateChar((c) => { c.equipSlots = { ...c.equipSlots || {}, [slot]: null }; });
+    playSound("ui_select", 0.2);
+  };
+  // QoL: "OPTIMIZE GEAR" -- FF-style auto-equip-best. Only ever picks from gear
+  // that's unequipped or already on THIS hero (never silently steals a piece
+  // another character is currently wearing).
+  const handleOptimizeGear = () => {
+    const wornByOthers = new Set(
+      (characters || [])
+        .filter((c) => c.export_id !== char.export_id)
+        .flatMap((c) => Object.values(c.equipSlots || {}).filter(Boolean))
+    );
+    const best = getOptimalLoadout(char, gearInv, wornByOthers);
+    const changed = ["weapon", "armor", "trinket"].some((slot) => (char.equipSlots || {})[slot] !== best[slot]);
+    if (!changed) { createFloatingText("Already optimal!", false, "#94a3b8"); return; }
+    mutateChar((c) => { c.equipSlots = best; });
+    playSound("equip");
+    createFloatingText("★ GEAR OPTIMIZED ★", false, "#4ade80");
+  };
+  const handleUnequipAll = () => {
+    mutateChar((c) => { c.equipSlots = { weapon: null, armor: null, trinket: null }; });
+    playSound("ui_select", 0.2);
+    createFloatingText("All gear removed", false, "#94a3b8");
+  };
+  const renderEquipmentTab = () => {
+    const h = React.createElement;
+    const RARITY_COLOR = { Common: "#94a3b8", Rare: "#38bdf8", Epic: "#a855f7", Legendary: "#facc15", Mythic: "#ff2ecb" };
+    const STAT_LABEL = { atk: "ATK", "magic atk": "M.ATK", def: "DEF", "magic def": "M.DEF", hp: "HP", speed: "SPD", luck: "LUCK" };
+    const PASSIVE_LABEL = (p) => p.type === "elem_boost" ? `+${Math.round(p.val * 100)}% ${p.element} DMG dealt`
+      : p.type === "elem_resist" ? `-${Math.round(p.val * 100)}% ${p.element} DMG taken`
+      : p.type === "status_resist" ? `-${Math.round(p.val * 100)}% ${p.status.toUpperCase()} chance`
+      : "";
+    const equipSlots = char.equipSlots || {};
+    const bonusText = (item, level) => Object.entries(item.bonuses).map(([k, v]) => {
+      const pct = Math.round(v * (1 + ((level || 1) - 1) * 0.25) * 100);
+      return `${STAT_LABEL[k] || k.toUpperCase()} ${pct >= 0 ? "+" : ""}${pct}%`;
+    }).join("  ");
+    const passiveText = (item, level) => !Array.isArray(item.passives) ? "" : item.passives.map((p) => {
+      const scale = 1 + ((level || 1) - 1) * 0.25;
+      return PASSIVE_LABEL({ ...p, val: p.val * scale });
+    }).join("  ");
+    return h("div", { className: "animate-fadeIn", style: { padding: "10px 0" } },
+      h("div", { style: { textAlign: "center", marginBottom: 12, fontSize: "0.65rem", color: "#38bdf8", fontWeight: 800 } }, "SHARED GEAR — LEVEL IT UP, MOVE IT BETWEEN HEROES ANY TIME"),
+      // QoL: one-click "best gear for this hero" (FF-style optimizer), scored
+      // by growth archetype (an Aggressive attacker wants ATK gear, a
+      // Defensive tank wants HP/DEF, etc.) -- never touches gear another
+      // character currently has equipped.
+      h("div", { style: { display: "flex", gap: 8, marginBottom: 10 } },
+        h("button", { onClick: handleOptimizeGear, style: { flex: 1, padding: "9px", borderRadius: 10, fontWeight: 900, fontSize: "0.65rem", border: "none", background: "linear-gradient(135deg,#4ade80,#16a34a)", color: "#052e12", cursor: "pointer" } }, "⚡ OPTIMIZE GEAR"),
+        h("button", { onClick: handleUnequipAll, style: { padding: "9px 14px", borderRadius: 10, fontWeight: 800, fontSize: "0.62rem", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#cbd5e1", cursor: "pointer" } }, "UNEQUIP ALL")),
+      h("div", { style: { display: "flex", gap: 8, marginBottom: 14 } }, ["weapon", "armor", "trinket"].map((slot) => {
+        const inst = gearInv.find((g) => g.instanceId === equipSlots[slot]);
+        const item = inst ? (EQUIPMENT[slot] || []).find((it) => it.id === inst.itemId) : null;
+        return h("button", { key: slot, onClick: () => { setEquipSlot(slot); playSound("ui_hover", 0.1); }, style: { flex: 1, padding: "8px 6px", borderRadius: 10, fontWeight: 800, fontSize: "0.65rem", border: equipSlot === slot ? "2px solid #38bdf8" : "1px solid rgba(255,255,255,0.15)", background: equipSlot === slot ? "rgba(56,189,248,0.15)" : "rgba(255,255,255,0.04)", color: "#fff", textTransform: "uppercase" } },
+          h("div", null, slot),
+          h("div", { style: { fontSize: "0.55rem", opacity: 0.75, marginTop: 2, color: item ? "#4ade80" : "#64748b" } }, item ? `${item.name} +${inst.level || 1}` : "empty"));
+      })),
+      (() => {
+        const inst = gearInv.find((g) => g.instanceId === equipSlots[equipSlot]);
+        if (!inst) return null;
+        const item = (EQUIPMENT[equipSlot] || []).find((it) => it.id === inst.itemId);
+        if (!item) return null;
+        const maxed = (inst.level || 1) >= EQUIP_MAX_LEVEL;
+        const upCost = EQUIP_UPGRADE_COST(inst.level || 1);
+        const rc = RARITY_COLOR[item.rarity];
+        const flashOn = Date.now() - equipFlash < 1000;
+        const pips = h("div", { style: { display: "flex", gap: 4, marginTop: 6 } }, Array.from({ length: EQUIP_MAX_LEVEL }).map((_, i) =>
+          h("div", { key: i, style: { width: 14, height: 6, borderRadius: 3, background: i < (inst.level || 1) ? rc : "rgba(255,255,255,0.12)", boxShadow: i < (inst.level || 1) ? `0 0 6px ${rc}` : "none", transition: "all .3s" } })));
+        const pText = passiveText(item, inst.level);
+        return h("div", {
+          className: flashOn ? "gear-forge-card gear-forge-flash" : "gear-forge-card",
+          style: { display: "flex", gap: 8, marginBottom: 12, padding: 12, borderRadius: 12, background: `linear-gradient(135deg, ${rc}22, rgba(0,0,0,0.35))`, border: `2px solid ${rc}`, boxShadow: `0 0 18px ${rc}55, inset 0 0 24px ${rc}11`, alignItems: "center", flexWrap: "wrap", position: "relative", overflow: "hidden" }
+        },
+          h("div", { style: { flex: 1, minWidth: 140 } },
+            h("div", { style: { fontWeight: 900, color: rc, fontSize: "0.9rem", textShadow: `0 0 8px ${rc}88` } }, `${item.name}`),
+            h("div", { style: { fontSize: "0.6rem", fontWeight: 900, letterSpacing: 1, color: rc, opacity: 0.9 } }, `${item.rarity.toUpperCase()} · LEVEL ${inst.level || 1}/${EQUIP_MAX_LEVEL}`),
+            pips,
+            h("div", { style: { fontSize: "0.66rem", color: "#4ade80", fontWeight: 800, marginTop: 6 } }, bonusText(item, inst.level)),
+            pText ? h("div", { style: { fontSize: "0.62rem", color: "#facc15", fontWeight: 800, marginTop: 3 } }, "✦ " + pText) : null),
+          h("button", { onClick: () => handleUpgradeGear(equipSlot), disabled: maxed, className: maxed ? "" : "gear-forge-btn", style: { padding: "10px 14px", borderRadius: 10, fontWeight: 900, fontSize: "0.66rem", border: "none", background: maxed ? "#334155" : "linear-gradient(135deg,#facc15,#f59e0b)", color: maxed ? "#94a3b8" : "#1a1a1a", cursor: maxed ? "default" : "pointer", boxShadow: maxed ? "none" : "0 3px 0 #b45309" } }, maxed ? "★ MAX +5 ★" : `⚒ FORGE +${(inst.level || 1) + 1}\n${(upCost.credits / 1000)}k`),
+          h("button", { onClick: () => handleUnequipGear(equipSlot), style: { padding: "8px 10px", borderRadius: 8, fontWeight: 800, fontSize: "0.62rem", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#cbd5e1", cursor: "pointer" } }, "REMOVE"));
+      })(),
+      // MY GEAR: every owned instance of this slot, whether unequipped or worn
+      // by another hero -- click EQUIP to move it here instantly.
+      (() => {
+        const owned = gearInv.filter((g) => g.slot === equipSlot && g.instanceId !== equipSlots[equipSlot]);
+        if (!owned.length) return null;
+        // QoL: mark which unowned-here instance the optimizer would actually
+        // pick, so the choice is visible even without pressing the button.
+        const wornByOthers = new Set((characters || []).filter((c) => c.export_id !== char.export_id).flatMap((c) => Object.values(c.equipSlots || {}).filter(Boolean)));
+        const bestForSlot = getOptimalLoadout(char, gearInv, new Set(wornByOthers))[equipSlot];
+        return h("div", { style: { marginBottom: 14 } },
+          h("div", { style: { fontSize: "0.6rem", fontWeight: 900, color: "#94a3b8", letterSpacing: 1, marginBottom: 6 } }, `MY GEAR (${owned.length})`),
+          h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } }, owned.map((inst) => {
+            const item = (EQUIPMENT[equipSlot] || []).find((it) => it.id === inst.itemId);
+            if (!item) return null;
+            const wornBy = (characters || []).find((c) => c.equipSlots && c.equipSlots[equipSlot] === inst.instanceId && c.export_id !== char.export_id);
+            const isBest = inst.instanceId === bestForSlot && !wornBy;
+            const rc = RARITY_COLOR[item.rarity];
+            return h("button", { key: inst.instanceId, onClick: () => equipInstance(equipSlot, inst.instanceId), style: { display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 20, border: `1px solid ${isBest ? "#4ade80" : rc + "88"}`, background: isBest ? "rgba(74,222,128,0.15)" : `${rc}18`, color: isBest ? "#4ade80" : rc, fontWeight: 800, fontSize: "0.62rem", cursor: "pointer" } },
+              isBest ? "★ " : "",
+              `${item.name} +${inst.level || 1}`,
+              wornBy ? h("span", { style: { fontSize: "0.54rem", opacity: 0.8, color: "#fca5a5" } }, `(worn: ${wornBy.name})`) : null);
+          })));
+      })(),
+      // Buying/gacha for NEW gear lives in the Recruit hub's Gear tab now --
+      // this screen is purely for equipping/leveling/moving what you already
+      // own. If you don't own anything for this slot at all, point there.
+      !gearInv.some((g) => g.slot === equipSlot) ? h("div", { style: { textAlign: "center", padding: "16px 10px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.15)", fontSize: "0.65rem", color: "#94a3b8", fontWeight: 700 } }, `No ${equipSlot} gear owned yet — pull for some in RECRUIT → Gear.`) : null);
   };
   const isMobile2 = window.innerWidth <= 768;
   return /* @__PURE__ */ jsxDEV("div", { className: "hero-dashboard-overhaul animate-fadeIn", children: [
@@ -738,7 +916,9 @@ ${costEss > 0 ? `- ${costEss} Essence
           }),
           char.ascension > 0 && /* @__PURE__ */ jsxDEV("div", { className: "badge-pill", style: { borderColor: "#facc15", color: "#facc15", fontWeight: 900 }, children: [
             "ASCENSION ",
-            char.ascension
+            char.ascension,
+            "/",
+            MAX_ASCENSION
           ] }, void 0, true, {
             fileName: "<stdin>",
             lineNumber: 786,
@@ -1217,6 +1397,10 @@ ${costEss > 0 ? `- ${costEss} Essence
           lineNumber: 897,
           columnNumber: 13
         }),
+        /* @__PURE__ */ jsxDEV("button", { className: `deck-tab ${activeTab === "gear" ? "active" : ""}`, style: { color: "#38bdf8" }, onClick: () => {
+          setActiveTab("gear");
+          playSound("ui_select", 0.2);
+        }, children: "GEAR" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
         /* @__PURE__ */ jsxDEV("button", { className: `deck-tab ${activeTab === "visuals" ? "active" : ""}`, onClick: () => {
           setActiveTab("visuals");
           playSound("ui_select", 0.2);
@@ -1244,6 +1428,7 @@ ${costEss > 0 ? `- ${costEss} Essence
       }),
       /* @__PURE__ */ jsxDEV("div", { className: "deck-content custom-scroll", children: [
         activeTab === "training" && renderTrainingTab(),
+        activeTab === "gear" && renderEquipmentTab(),
         activeTab === "special" && isSpecialEligible && renderSpecialTab(),
         activeTab === "abilities" && /* @__PURE__ */ jsxDEV(AbilitiesView, { char, characters, credits, setCredits, gems, setGems, essence, setEssence, setCharacters, selectedCharIndex: characters.indexOf(char), createFloatingText, skills, auraUpgrades }, void 0, false, {
           fileName: "<stdin>",
@@ -1251,7 +1436,7 @@ ${costEss > 0 ? `- ${costEss} Essence
           columnNumber: 17
         }),
         activeTab === "visuals" && /* @__PURE__ */ jsxDEV("div", { className: "animate-fadeIn", style: { padding: "10px 0" }, children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { textAlign: "center", marginBottom: 12, fontSize: "0.65rem", color: "#4ade80", fontWeight: 800 }, children: cosmeticTab === "border" ? "COLLECTION BONUS: +1.5% ALL STATS PER UNLOCKED BORDER" : "CUSTOMIZE YOUR HERO APPEARANCE" }, void 0, false, {
+          /* @__PURE__ */ jsxDEV("div", { style: { textAlign: "center", marginBottom: 12, fontSize: "0.65rem", color: "#4ade80", fontWeight: 800 }, children: "COSMETICS ARE PURELY VISUAL — STATS COME FROM GEAR NOW" }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 964,
             columnNumber: 21
@@ -1326,7 +1511,7 @@ ${costEss > 0 ? `- ${costEss} Essence
                     lineNumber: 1005,
                     columnNumber: 37
                   }),
-                  /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#f472b6", marginBottom: 4 }, children: item.desc }, void 0, false, {
+                  /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#f472b6", marginBottom: 4 }, children: /\d%\s*(all\s*)?stats/i.test(item.desc || "") ? "Visual only — no stat bonus" : item.desc }, void 0, false, {
                     fileName: "<stdin>",
                     lineNumber: 1006,
                     columnNumber: 37

@@ -1,4 +1,254 @@
-import { AUDIO_URLS, PATH_ADJECTIVES, PATH_TITLES, TIER_STATS, SKILL_TYPES, SKILL_RARITY_CONFIG, LEADER_SKILLS, COSMETICS } from './constants.js';
+import { AUDIO_URLS, PATH_ADJECTIVES, PATH_TITLES, TIER_STATS, SKILL_TYPES, SKILL_RARITY_CONFIG, LEADER_SKILLS, COSMETICS, EQUIPMENT, EQUIP_LEVEL_STEP, EQUIP_MAX_LEVEL } from './constants.js';
+
+// ---------------------------------------------------------------------------
+// EVENTS: multiple concurrent live events, computed once here and consumed
+// identically by EventsView (to build the events themselves) and GachaView
+// (to add rate-up banners) -- a single source of truth so "events affect
+// gacha banners" falls out for free instead of needing prop-drilled state.
+// ---------------------------------------------------------------------------
+// A small pool of differentiator mechanics, applied at battle-build time.
+// Franchises with a dedicated .mid track get that track; everything else (and
+// the mechanic roll) is picked deterministically per event so it's stable for
+// the whole cycle but genuinely varies event to event.
+export const EVENT_GIMMICKS = [
+  { id: 'double_gauge', name: 'Overclocked Rift', desc: 'Every unit\'s turn gauge fills 40% faster -- a fast, twitchy fight.', tag: 'FAST-PACED', color: '#facc15' },
+  { id: 'elemental_storm', name: 'Elemental Storm', desc: 'A random elemental team buff pulses over the whole squad every wave.', tag: 'CHAOTIC', color: '#a855f7' },
+  { id: 'mirror_match', name: 'Mirror Rift', desc: 'Enemies echo your own squad\'s average stats back at you.', tag: 'MIRROR MATCH', color: '#60a5fa' },
+  { id: 'boss_gauntlet', name: 'Elite Gauntlet', desc: 'No fodder here -- every enemy is boss-tier from the first fight.', tag: 'ELITE ONLY', color: '#ef4444' },
+  { id: 'glass_cannon', name: 'Fragile Rift', desc: 'Everyone hits 50% harder and has 30% less HP. Fast, lethal fights.', tag: 'GLASS CANNON', color: '#f97316' },
+  { id: 'regen_field', name: 'Regen Field', desc: 'Both sides passively regenerate HP each turn -- attrition wins it.', tag: 'SUSTAIN', color: '#4ade80' }
+];
+export const getGimmick = (id) => EVENT_GIMMICKS.find((g) => g.id === id) || EVENT_GIMMICKS[0];
+
+// Matches a franchise name to one of the real tracks in music/unique/event/.
+export const matchEventMusicTheme = (franchiseName) => {
+  const f = String(franchiseName || '').toLowerCase();
+  if (f.includes('deltarune')) return 'deltarune';
+  if (f.includes('final fantasy vii') || f.includes('final fantasy 7') || f.includes('ff vii')) return 'ff7';
+  if (f.includes("bug's life")) return 'abugslife';
+  if (f.includes('atlyss')) return 'atlyss';
+  return null;
+};
+
+const hashStr = (str) => { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h); };
+
+// Returns every event that's live RIGHT NOW -- one to three concurrently,
+// each on its own rotation cycle, each with a locked-in franchise/gimmick for
+// that cycle. Pure function of `characters` + the current date, so any view
+// that calls this gets the exact same answer with zero prop plumbing.
+export const getActiveEvents = (characters = []) => {
+  const counts = {};
+  characters.forEach((c) => { const f = c.franchise || 'Unknown'; if (f !== 'Unknown') counts[f] = (counts[f] || 0) + 1; });
+  const majors = Object.keys(counts).filter((f) => counts[f] >= 3).sort();
+  if (!majors.length) return [];
+  const now = new Date();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 864e5);
+  const weekOfYear = Math.floor(dayOfYear / 7);
+  const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+  const slots = [];
+  const spotlightFr = majors[dayOfYear % majors.length];
+  slots.push({
+    id: 'spotlight', label: 'DAILY SPOTLIGHT', cycle: 'daily', franchise: spotlightFr,
+    theme: matchEventMusicTheme(spotlightFr), gimmick: getGimmick(EVENT_GIMMICKS[hashStr(spotlightFr + dayOfYear) % EVENT_GIMMICKS.length].id).id,
+    color: '#facc15', desc: `Today's rotating rift spotlights ${spotlightFr}. Resets daily.`
+  });
+  // Pick each slot's franchise skipping ones already live this cycle, so the
+  // three marquees never all advertise the same series.
+  const taken = new Set([spotlightFr]);
+  const pickDistinct = (startIdx) => {
+    for (let i = 0; i < majors.length; i++) {
+      const fr = majors[(startIdx + i) % majors.length];
+      if (!taken.has(fr)) { taken.add(fr); return fr; }
+    }
+    return majors[startIdx % majors.length];
+  };
+  if (majors.length > 1) {
+    const crisisFr = pickDistinct((weekOfYear + 1) % majors.length);
+    slots.push({
+      id: 'crisis', label: 'WEEKLY CRISIS', cycle: 'weekly', franchise: crisisFr,
+      theme: matchEventMusicTheme(crisisFr), gimmick: 'boss_gauntlet',
+      color: '#ef4444', desc: `A ${crisisFr} incursion, boss-tier from the start. Resets weekly.`
+    });
+  }
+  // The third marquee is always live: a 3-day "surge" rotation, with weekends
+  // upgrading it to boosted rewards instead of gating its existence.
+  if (majors.length > 2) {
+    const surgeFr = pickDistinct((Math.floor(dayOfYear / 3) + 3) % majors.length);
+    slots.push({
+      id: 'wildcard', label: isWeekend ? 'WEEKEND SURGE' : 'SURGE RIFT', cycle: isWeekend ? 'weekend' : '3-day', franchise: surgeFr,
+      theme: matchEventMusicTheme(surgeFr), gimmick: getGimmick(EVENT_GIMMICKS[hashStr(surgeFr + 'srg' + Math.floor(dayOfYear / 3)) % EVENT_GIMMICKS.length].id).id,
+      color: '#a855f7', desc: isWeekend ? `A weekend ${surgeFr} surge with boosted rewards.` : `A ${surgeFr} surge rift. Rotates every 3 days.`, bonus: isWeekend
+    });
+  }
+  return slots.map((s) => ({ ...s, uid: `${s.id}_${s.franchise}`.replace(/\s+/g, '_').toLowerCase() }));
+};
+
+// ---------------------------------------------------------------------------
+// SHARED GEAR INVENTORY
+// ---------------------------------------------------------------------------
+// Gear is account-wide, not per-character: one physical instance
+// { instanceId, slot, itemId, level } lives in the top-level `gearInventory`
+// array (App.js state, persisted as mugen_gear_inventory). A character only
+// holds a REFERENCE to an instance per slot: char.equipSlots = { weapon:
+// instanceId|null, armor: ..., trinket: ... }. Equipping an instance already
+// worn by someone else moves it (the whole point of "share gear like an RPG"
+// -- there's only one of each physical item, not an infinite buy-per-hero
+// supply). Levelling an instance persists regardless of who's wearing it.
+//
+// Utils functions are pure and don't receive app state directly, so (matching
+// the existing liveAuraUpgrades pattern below) App.js pushes the live
+// gearInventory array in here via setLiveGearInventory() whenever it changes.
+export let liveGearInventory = [];
+export const setLiveGearInventory = (val) => { liveGearInventory = Array.isArray(val) ? val : []; };
+export const makeGearInstanceId = () => `gi_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+export const getEquipItem = (slot, id) => (EQUIPMENT[slot] || []).find((it) => it.id === id) || null;
+
+// Resolve a character's equipped gear into full { slot, instanceId, itemId,
+// level, item } records (item = the EQUIPMENT catalog entry, with bonuses +
+// passives). Enemies/bosses use a simpler embedded shape (unit._equippedGear
+// = [{ slot, itemId, level }], no shared instance/inventory) since they never
+// need to be "shared" -- getEquippedGearList also accepts that shape directly.
+export const getEquippedGearList = (char) => {
+  if (!char) return [];
+  if (Array.isArray(char._equippedGear)) {
+    return char._equippedGear.map((g) => {
+      const item = getEquipItem(g.slot, g.itemId);
+      return item ? { slot: g.slot, instanceId: null, itemId: g.itemId, level: g.level || 1, item } : null;
+    }).filter(Boolean);
+  }
+  const slots = char.equipSlots;
+  if (!slots) return [];
+  return ['weapon', 'armor', 'trinket'].map((slot) => {
+    const instanceId = slots[slot];
+    if (!instanceId) return null;
+    const inst = liveGearInventory.find((g) => g.instanceId === instanceId);
+    if (!inst) return null;
+    const item = getEquipItem(slot, inst.itemId);
+    if (!item) return null;
+    return { slot, instanceId, itemId: inst.itemId, level: inst.level || 1, item };
+  }).filter(Boolean);
+};
+
+// Resolve a character's total equipment %-bonus for one (normalized) stat.
+export const getEquipBonusForStat = (char, normalizedStat) => {
+  let pct = 0;
+  getEquippedGearList(char).forEach(({ item, level }) => {
+    if (!item.bonuses) return;
+    const base = item.bonuses[normalizedStat];
+    if (!base) return;
+    const lvl = Math.max(1, Math.min(EQUIP_MAX_LEVEL, level || 1));
+    pct += base * (1 + (lvl - 1) * EQUIP_LEVEL_STEP);
+  });
+  return pct;
+};
+
+// Flat list of every passive currently active on a character (or enemy unit),
+// e.g. [{ type: "elem_boost", element: "FIRE", val: 0.1 }, ...] -- read by
+// CombatSystem.js at damage/status-resolution time.
+export const getGearPassives = (char) => getEquippedGearList(char).flatMap(({ item, level }) => {
+  if (!Array.isArray(item.passives)) return [];
+  const lvl = Math.max(1, Math.min(EQUIP_MAX_LEVEL, level || 1));
+  const scale = 1 + (lvl - 1) * EQUIP_LEVEL_STEP;
+  return item.passives.map((p) => ({ ...p, val: p.val * scale }));
+});
+
+// Deterministic PRNG keyed by a string seed (mulberry32-ish). Used so a
+// pre-battle "scout" preview can roll the EXACT same gear/outcome the actual
+// battle will roll, just by reusing the same seed string in both places --
+// no need to pre-compute and stash battle data just to preview it.
+export const seededRandom = (seedStr) => {
+  let h = 1779033703 ^ String(seedStr).length;
+  for (let i = 0; i < String(seedStr).length; i++) {
+    h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return () => {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
+};
+
+// Roll a gear loadout for an enemy/boss/arena opponent, from the SAME
+// EQUIPMENT catalog players pull from -- so a scouted opponent's gear card
+// reads identically to a player's. Embedded directly on the unit
+// (unit._equippedGear = [{slot,itemId,level}]) rather than through the shared
+// instance/inventory system, since enemies never trade gear with anyone.
+// `powerTier` (0-4) biases which rarities can drop and how leveled they are,
+// so a Trials/Expert-tier opponent is meaningfully better-geared than a
+// generic Campaign mook.
+export const rollEnemyGear = (powerTier = 1, seed = Math.random) => {
+  const rarityByTier = [
+    ["Common"],
+    ["Common", "Rare"],
+    ["Rare", "Epic"],
+    ["Epic", "Legendary"],
+    ["Legendary", "Mythic"]
+  ][Math.max(0, Math.min(4, powerTier))];
+  const levelByTier = [1, 1, 2, 3, 4][Math.max(0, Math.min(4, powerTier))];
+  return ['weapon', 'armor', 'trinket'].map((slot) => {
+    const pool = (EQUIPMENT[slot] || []).filter((it) => rarityByTier.includes(it.rarity));
+    if (!pool.length) return null;
+    const item = pool[Math.floor(seed() * pool.length)];
+    return { slot, itemId: item.id, level: Math.max(1, Math.min(EQUIP_MAX_LEVEL, levelByTier)) };
+  }).filter(Boolean);
+};
+
+// ---------------------------------------------------------------------------
+// GEAR OPTIMIZER ("Optimize Gear" QoL, FF-style auto-equip-best)
+// ---------------------------------------------------------------------------
+// Stat weights per growth archetype -- an Aggressive attacker values ATK gear
+// far more than a Defensive tank does, so "best" gear is relative to the
+// character, not a single universal ranking.
+const GROWTH_STAT_WEIGHTS = {
+  Aggressive: { atk: 1.4, 'magic atk': 1.2, speed: 0.9, hp: 0.6, def: 0.6, 'magic def': 0.5, luck: 0.7 },
+  Defensive: { hp: 1.4, def: 1.4, 'magic def': 1.2, atk: 0.6, 'magic atk': 0.5, speed: 0.5, luck: 0.6 },
+  Balanced: { atk: 1, 'magic atk': 1, hp: 1, def: 1, 'magic def': 1, speed: 1, luck: 1 },
+  Swift: { speed: 1.5, luck: 1.2, atk: 0.9, 'magic atk': 0.8, hp: 0.6, def: 0.6, 'magic def': 0.5 }
+};
+export const scoreGearItem = (item, level, growthType) => {
+  const weights = GROWTH_STAT_WEIGHTS[growthType] || GROWTH_STAT_WEIGHTS.Balanced;
+  const scale = 1 + Math.max(0, (level || 1) - 1) * EQUIP_LEVEL_STEP;
+  let score = 0;
+  Object.entries(item.bonuses || {}).forEach(([k, v]) => { score += (weights[k] || 0.7) * v * scale; });
+  (item.passives || []).forEach((p) => { score += 0.5 * (p.val || 0) * scale; });
+  return score;
+};
+// Picks the best OWNED, available instance for each slot on `char`. `claimed`
+// is a Set of instanceIds NOT eligible for this pick (mutated in place, so a
+// single Set threaded across several calls lets a roster-wide "optimize all"
+// batch run without two heroes fighting over the same physical piece of gear).
+// Deliberately does NOT special-case "this is already my current pick" --
+// stale/duplicate equipSlots data (e.g. from an old bug or manual edit) could
+// otherwise let two different characters both "keep" the same claimed
+// instance. If nothing better is available, the fallback keeps the
+// character's current gear UNLESS that exact instance was already claimed by
+// someone earlier in this same pass, in which case it's cleared instead of
+// silently leaving two characters pointing at one physical item.
+export const getOptimalLoadout = (char, gearInventory = [], claimed = new Set()) => {
+  const growthType = char.growthType || 'Balanced';
+  const currentSlots = char.equipSlots || {};
+  const result = {};
+  ['weapon', 'armor', 'trinket'].forEach((slot) => {
+    const candidates = gearInventory.filter((g) => g.slot === slot && !claimed.has(g.instanceId));
+    if (!candidates.length) {
+      result[slot] = claimed.has(currentSlots[slot]) ? null : (currentSlots[slot] || null);
+      return;
+    }
+    let best = null, bestScore = -Infinity;
+    candidates.forEach((inst) => {
+      const item = getEquipItem(slot, inst.itemId);
+      if (!item) return;
+      const score = scoreGearItem(item, inst.level, growthType);
+      if (score > bestScore) { bestScore = score; best = inst; }
+    });
+    result[slot] = best ? best.instanceId : (currentSlots[slot] || null);
+    if (best) claimed.add(best.instanceId);
+  });
+  return result;
+};
 
 // ---------------------------------------------------------------------------
 // S.P.E.C.I.A.L. BUILD SYSTEM (currently exclusive to Courier)
@@ -367,55 +617,59 @@ export const calculateStat = (base, level, char, characters = [], statType = 'hp
 
 
 
-  // 11. Cosmetic Collection Bonuses (All Unlocked)
-  // All unlocked cosmetics provide their stat bonuses, not just equipped ones
-  let cosmeticCollectionMult = 1.0;
-  
-  // Apply all unlocked aura bonuses
-  const unlockedAuras = char.unlockedCosmetics?.auras || ['none'];
-  unlockedAuras.forEach(auraId => {
-    const auraObj = COSMETICS.AURAS.find(c => c.id === auraId);
-    if (auraObj && auraObj.multiplier > 1.0) {
-      cosmeticCollectionMult *= auraObj.multiplier;
-    }
-  });
-
-  // Apply all unlocked border bonuses
-  const unlockedBorders = char.unlockedCosmetics?.borders || ['default'];
-  unlockedBorders.forEach(borderId => {
-    const borderObj = COSMETICS.BORDERS.find(c => c.id === borderId);
-    if (borderObj && borderObj.multiplier > 1.0) {
-      cosmeticCollectionMult *= borderObj.multiplier;
-    }
-  });
-
-  // Apply all unlocked title bonuses
-  const unlockedTitles = char.unlockedCosmetics?.titles || ['none'];
-  unlockedTitles.forEach(titleId => {
-    const titleObj = COSMETICS.TITLES.find(c => c.id === titleId);
-    if (titleObj && titleObj.multiplier > 1.0) {
-      cosmeticCollectionMult *= titleObj.multiplier;
-    }
-  });
+  // 11. Equipment: the replacement for the old cosmetic-collection stat grind.
+  // Cosmetics are now purely visual; Weapon/Armor/Trinket gear is the readable,
+  // fast-to-max stat lever. Returns a fractional %-bonus for this stat.
+  const equipPct = getEquipBonusForStat(char, normalizedStat);
 
   // 12. SPECIAL build (Courier-exclusive): no-op multiplier of 1 for any
   // character without a `.special` allocation.
   const specialMult = getSpecialStatMult(char, normalizedStat);
+
+  // SIMPLE, LEGIBLE MODEL: a clean base times an ADDITIVE sum of percent bonuses,
+  // instead of a 12-way product. Every source reads as a plain "+X%" the player
+  // can see and counter (debuffs subtract from the same pool). Cosmetic-collection
+  // stacking is gone entirely.
+  //   final = base * growth * growthType * tier * (1 + Σ percent-bonuses)
+  const percentSum =
+    (bondBonus - 1) +
+    (ascensionBonus - 1) +
+    (franchiseBonus - 1) +
+    (globalAuraMult - 1) +
+    (duplicateBonus - 1) +
+    (singularityBonus - 1) +
+    (specialMult - 1) +
+    equipPct;
 
   return Math.floor(
     currentBase *
     growthFactor *
     typeMult *
     tierBonus *
-    globalAuraMult *
-    bondBonus *
-    franchiseBonus *
-    ascensionBonus *
-    duplicateBonus *
-    cosmeticCollectionMult *
-    singularityBonus *
-    specialMult
+    (1 + Math.max(-0.9, percentSum))
   );
+};
+
+// SPEED REBALANCE: raw speed grows exponentially with level (see growthFactor
+// below, ~level^1.45) and can reach 70,000+ by level 100 on a top tier -- but
+// every consumer of raw speed (gauge-gain caps, the evasion/crit speed terms)
+// was tuned for values in the hundreds. Past roughly level 20 every build blew
+// through those fixed caps identically, making speed stop differentiating
+// characters for the rest of the game. getSpeedScore() log-compresses speed so
+// it grows close to linearly instead, keeping every downstream formula in a
+// sane, comparable range at any level. getGaugeGain() then measures a unit's
+// turn-frequency RELATIVE to the average speed score of everyone currently in
+// the fight (not against a fixed absolute number), so speed always meaningfully
+// separates turn order regardless of what level/scale the battle is at -- there
+// is no fixed threshold left to "outgrow."
+export const getSpeedScore = (speed) => Math.log2(1 + Math.max(0, speed || 0));
+
+export const getGaugeGain = (unitSpeed, allSpeeds = [], combatSpeedMult = 1) => {
+  const score = getSpeedScore(unitSpeed);
+  const scores = (allSpeeds || []).map(getSpeedScore).filter((s) => s > 0);
+  const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : score || 1;
+  const ratio = avg > 0 ? score / avg : 1;
+  return Math.min(10, Math.max(1, 4 * ratio * (combatSpeedMult || 1)));
 };
 
 // Cache for expensive stat calculations
@@ -448,7 +702,12 @@ export const calculateSubStat = (char, characters, type, skills = [], auraUpgrad
       // SPECIAL Perception: flat crit rate per point above baseline, independent
       // of the luck curve above -- gives PER its own clear identity in a build.
       const perCrit = char.special ? ((char.special.per ?? 1) - 1) * SPECIAL_PER_CRIT_PER_POINT : 0;
-      result = Number(Math.min(100, 5 + luckCrit + perCrit + (speed / 3000) + (level / 50)).toFixed(1));
+      // Speed's contribution uses the log-compressed score (see getSpeedScore)
+      // instead of raw speed -- raw speed/3000 could add 20+ points by endgame
+      // on its own, swamping luck's crit curve. The scored version stays modest
+      // (roughly 3-10 points across the whole level range) so luck keeps its
+      // identity as the main crit-rate stat.
+      result = Number(Math.min(100, 5 + luckCrit + perCrit + (getSpeedScore(speed) * 0.6) + (level / 50)).toFixed(1));
       break;
     case 'crit_dmg':
       result = Number((150 + (atk / 400) + ((char.ascension || 0) * 25)).toFixed(1));
@@ -457,7 +716,11 @@ export const calculateSubStat = (char, characters, type, skills = [], auraUpgrad
       // Diminishing returns: Base 2% + (Luck contribution, max ~35% at infinite luck)
       // Formula: (Luck / (Luck + 2500)) * 35
       const luckDodge = (luck / (luck + 2500)) * 35;
-      result = Number(Math.min(60, 2 + luckDodge + (speed / 2500)).toFixed(1));
+      // Same rescale as crit_rate above: raw speed/2500 could exceed the 60%
+      // cap on its own by endgame, making evasion identical (maxed) for every
+      // high-level unit regardless of build. The scored version keeps speed a
+      // real but secondary contributor, with luck still dominant.
+      result = Number(Math.min(60, 2 + luckDodge + (getSpeedScore(speed) * 0.8)).toFixed(1));
       break;
     case 'pwr': {
       // Rebalanced power scaling (v5.0): readable numbers that grow with investment.
@@ -496,12 +759,12 @@ export const calculateSubStat = (char, characters, type, skills = [], auraUpgrad
       const awakenSum = Object.values(char.abilityAwaken || {}).reduce((s, r) => s + (r || 0), 0);
       const abilityMult = 1 + (abilitySum * 0.02) + (awakenSum * 0.05) + ((rarityPower - 1) * 0.15) + (rarityPower2 ? (rarityPower2 - 1) * 0.1 : 0);
 
-      // Cosmetic collection depth.
-      const auras = (char.unlockedCosmetics?.auras || ['none']).length;
-      const borders = (char.unlockedCosmetics?.borders || ['default']).length;
-      const cosmeticMult = 1 + ((auras - 1) * 0.02) + ((borders - 1) * 0.03);
+      // Equipment depth (replaces cosmetic-collection power). Averages the ATK/HP
+      // gear %-bonus so PWR reflects gear investment without double-counting slots.
+      const eqPct = (getEquipBonusForStat(char, 'atk') + getEquipBonusForStat(char, 'hp') + getEquipBonusForStat(char, 'def')) / 3;
+      const equipMult = 1 + eqPct;
 
-      result = Math.floor(statBudget * levelMult * bondMult * ascMult * abilityMult * cosmeticMult);
+      result = Math.floor(statBudget * levelMult * bondMult * ascMult * abilityMult * equipMult);
       break;
     }
     case 'magic_atk':

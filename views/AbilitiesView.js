@@ -5,7 +5,7 @@ import {
   Info
 } from "lucide-react";
 import { ELEMENTS, SKILL_RARITY_CONFIG } from "../constants.js";
-import { getAbilityColor, playSound, getLeaderSkill, getSkillTags, calculateStat, SIGNATURE_BONUS } from "../utils.js";
+import { getAbilityColor, playSound, getLeaderSkill, getSkillTags, calculateStat, SIGNATURE_BONUS, SPECIAL_STATS, SPECIAL_CAP } from "../utils.js";
 
 const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacters, selectedCharIndex, createFloatingText, minimalMode = false, gems, setGems, essence, setEssence, skills, auraUpgrades = {} }) => {
   if (!char) return null;
@@ -66,6 +66,58 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
     const effTags = (signature.statusEffects || []).map((e) => e.label).filter(Boolean);
     const metaTags = [];
     const m = signature.meta || {};
+    // Live dynamic-special readout: for ANY signature built on the dynamic_special
+    // engine (not just Courier), show which archetype the CURRENT SPECIAL build
+    // actually resolves to right now, mirroring the exact priority order the
+    // combat resolver uses (CombatSystem.js): maxed-all-10 ultimate > curated
+    // dual-stat combos > single dominant stat > baseline.
+    const dynamicArchetypeText = (() => {
+      const ds = m.dynamic_special;
+      if (!ds || !char.special) return null;
+      const baseline = ds.baseline || 1;
+      const special = char.special;
+      const isMaxedAll = SPECIAL_STATS.every((k) => (special[k] || baseline) >= SPECIAL_CAP);
+      let key = null;
+      if (isMaxedAll) key = "ultimate";
+      else if (Array.isArray(ds.combos)) {
+        const combo = ds.combos.find((c) => (c.keys || []).every((k) => (special[k] || baseline) >= (c.threshold || baseline + 1)));
+        if (combo) key = combo.archetype;
+      }
+      if (!key) {
+        const entries = Object.entries(special);
+        const maxVal = Math.max(baseline, ...entries.map(([, v]) => v || baseline));
+        if (maxVal > baseline) {
+          const priority = ["int", "agi", "str", "per", "end", "cha", "lck"];
+          const topKeys = entries.filter(([, v]) => (v || baseline) === maxVal).map(([k]) => k);
+          key = priority.find((k) => topKeys.includes(k)) || topKeys[0];
+        }
+      }
+      const archetype = key ? ds.archetypes?.[key] : null;
+      if (!archetype) return ds.baseMsg ? `Current form: ${ds.baseMsg} (no SPECIAL points invested yet)` : null;
+      const dm = archetype.dmgMult ? `×${archetype.dmgMult} power` : null;
+      return `Current form: ${archetype.msg || key.toUpperCase()}${dm ? ` (${dm})` : ""}`;
+    })();
+    // RESONANCE PANEL (Cheer Bear-specific): her power comes from the other Care
+    // Bears in the roster, not from her own stats. List every other owned bear,
+    // their level, and their live contribution to her resonance -- mirrors the
+    // exact formula CombatSystem.js uses (META.resonance_franchise).
+    const resonancePanel = (() => {
+      if (!m.resonance_franchise) return null;
+      const franchiseBears = (characters || []).filter((c) => c.name !== char.name && c.franchise === m.resonance_franchise && (c.level || 1) > 1);
+      const totalLv = franchiseBears.reduce((s, b) => s + (b.level || 1), 0);
+      const dmgBonus = Math.min(150, Math.round(Math.min(1.5, totalLv / 120) * 100));
+      const strongest = franchiseBears.length ? franchiseBears.reduce((best, b) => ((b.level || 1) > (best.level || 1) ? b : best), franchiseBears[0]) : null;
+      return h("div", { style: { marginBottom: 12, padding: "10px 12px", borderRadius: 10, background: "rgba(255,105,180,0.08)", border: "1px solid rgba(255,105,180,0.3)" } },
+        h("div", { style: { fontSize: "0.66rem", fontWeight: 900, color: "#ff69b4", letterSpacing: 0.5, marginBottom: 6 } }, `RESONANCE — +${dmgBonus}% DAMAGE FROM ${franchiseBears.length} BEAR${franchiseBears.length === 1 ? "" : "S"}`),
+        franchiseBears.length === 0
+          ? h("div", { style: { fontSize: "0.62rem", color: "#94a3b8" } }, "No other Care Bears leveled yet — level one up to power her resonance.")
+          : h("div", { style: { display: "flex", flexDirection: "column", gap: 4 } }, franchiseBears
+              .slice().sort((a, b) => (b.level || 1) - (a.level || 1))
+              .map((b) => h("div", { key: b.export_id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.62rem", padding: "3px 6px", borderRadius: 6, background: strongest && b.export_id === strongest.export_id ? "rgba(255,215,0,0.12)" : "transparent" } },
+                h("span", { style: { fontWeight: 700, color: strongest && b.export_id === strongest.export_id ? "#ffd700" : "#e5e7eb" } }, (strongest && b.export_id === strongest.export_id ? "★ " : "") + b.name),
+                h("span", { style: { color: "#94a3b8", fontWeight: 700 } }, `LV.${b.level || 1}  ·  +${Math.round((totalLv ? (b.level || 1) / totalLv : 0) * dmgBonus)}%`)))),
+        strongest ? h("div", { style: { fontSize: "0.58rem", color: "#ff69b4", fontStyle: "italic", marginTop: 6 } }, `★ ${strongest.name} resonates strongest — her element briefly merges in on cast.`) : null);
+    })();
     if (m.guaranteed_crit) metaTags.push("ALWAYS CRIT");
     if (m.ignore_def) metaTags.push("PIERCE " + Math.round(m.ignore_def * 100) + "% DEF");
     if (m.ignore_evasion) metaTags.push("CAN'T MISS");
@@ -111,6 +163,8 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
         h("div", { style: { fontSize: "1.35rem", fontWeight: 900, color: "#fff", textShadow: "0 0 12px rgba(255,215,0,0.6)", marginTop: 2 } }, signature.name),
         signature.flavor ? h("div", { style: { fontSize: "0.7rem", fontStyle: "italic", color: gold, opacity: 0.85, marginBottom: 6 } }, '"' + signature.flavor + '"') : null,
         h("p", { style: { fontSize: "0.78rem", color: "#e5e7eb", lineHeight: 1.4, margin: "6px 0 10px" } }, signature.desc),
+        dynamicArchetypeText ? h("div", { style: { fontSize: "0.7rem", fontWeight: 800, color: "#00d2ff", marginBottom: 10, padding: "6px 10px", background: "rgba(0,210,255,0.08)", borderRadius: 8, borderLeft: "3px solid #00d2ff" } }, dynamicArchetypeText) : null,
+        resonancePanel,
         // stat chips
         h("div", { style: { display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 } },
           chip(signature.type === "heal" ? "HEAL ×" + signature.power : signature.type === "buff" ? "SUPPORT" : "PWR ×" + signature.power, "rgba(74,222,128,0.15)", "#4ade80"),

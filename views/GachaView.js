@@ -6,7 +6,7 @@ import {
   Gem,
   Database
 } from "lucide-react";
-import { playSound } from "../utils.js";
+import { playSound, getActiveEvents } from "../utils.js";
 
 // Duplicate-hero refund: a fraction of that single pull's cost is handed back
 // as currency, and the existing per-dupe stat bonus is buffed. Softens the
@@ -105,6 +105,12 @@ const GachaView = ({
   const inflationCapMult = 1.8;
   const dynamicCashCost = Math.floor(BASE_CASH_PULL_COST * Math.min(inflationCapMult, Math.pow(1.045, currentOwned)));
   const dynamicGemCost = Math.floor(BASE_GEM_PULL_COST * Math.min(inflationCapMult, Math.pow(1.02, currentOwned)));
+  // Live Events (see getActiveEvents in utils.js) directly drive the
+  // "Focus" banner AND spawn one extra rate-up banner per additional
+  // concurrent event -- this is the one place "events affect the gacha
+  // banners" is implemented, and it's a pure function of the same data
+  // EventsView reads, so the two screens can never disagree about what's live.
+  const liveEvents = React.useMemo(() => getActiveEvents(characters), [characters, (/* @__PURE__ */ new Date()).toDateString()]);
   const banners = React.useMemo(() => {
     const dayIndex = (/* @__PURE__ */ new Date()).getDay();
     const franchiseCounts = characters.reduce((m, c) => {
@@ -114,7 +120,7 @@ const GachaView = ({
     }, {});
     let allFranchises = Array.from(new Set(characters.map((c) => c.franchise).filter(Boolean)));
     const majorFranchises = allFranchises.filter((f) => (franchiseCounts[f] || 0) >= 3);
-    const dailyFranchise = majorFranchises.length > 0 ? majorFranchises[dayIndex % majorFranchises.length] : "Multiverse";
+    const dailyFranchise = liveEvents[0]?.franchise || (majorFranchises.length > 0 ? majorFranchises[dayIndex % majorFranchises.length] : "Multiverse");
     const elements = ["FIRE", "WATER", "WIND", "LIGHT", "DARK", "EARTH"];
     const dailyElement = elements[dayIndex % elements.length];
     if (activeTab === "items") {
@@ -139,7 +145,7 @@ const GachaView = ({
         }
       ];
     }
-    return [
+    const base = [
       {
         id: "standard",
         name: "Street Legends",
@@ -153,12 +159,12 @@ const GachaView = ({
       {
         id: "franchise",
         name: `${dailyFranchise} Focus`,
-        desc: `High-frequency rift tuned for ${dailyFranchise}.`,
+        desc: liveEvents[0] ? `${liveEvents[0].label} is live -- rate-up tuned for ${dailyFranchise}.` : `High-frequency rift tuned for ${dailyFranchise}.`,
         image: "gacha_banner.png",
         filter: { type: "franchise", value: dailyFranchise },
         currency: "gems",
         cost: dynamicGemCost,
-        tag: "PREMIUM FOCUS"
+        tag: liveEvents[0] ? "EVENT RATE-UP" : "PREMIUM FOCUS"
       },
       {
         id: "elemental",
@@ -171,7 +177,21 @@ const GachaView = ({
         tag: "ELEMENTAL RIFT"
       }
     ];
-  }, [characters, activeTab, (/* @__PURE__ */ new Date()).toDateString(), dynamicCashCost, dynamicGemCost]);
+    // Every event beyond the first live one gets its OWN extra rate-up banner
+    // -- this is what makes running multiple concurrent events actually show
+    // up here instead of only the single daily franchise mattering.
+    const eventBanners = liveEvents.slice(1).map((evt) => ({
+      id: `event_${evt.uid}`,
+      name: `${evt.franchise} ${evt.label.split(' ')[0]}`,
+      desc: `${evt.label} is live -- rate-up tuned for ${evt.franchise}.`,
+      image: "background_citadel.png",
+      filter: { type: "franchise", value: evt.franchise },
+      currency: "gems",
+      cost: dynamicGemCost,
+      tag: "EVENT RATE-UP"
+    }));
+    return [...base, ...eventBanners];
+  }, [characters, activeTab, (/* @__PURE__ */ new Date()).toDateString(), dynamicCashCost, dynamicGemCost, liveEvents]);
   useEffect(() => {
     setActiveBannerIdx(0);
   }, [activeTab]);

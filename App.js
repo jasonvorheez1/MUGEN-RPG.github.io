@@ -23,8 +23,8 @@ import {
   Activity,
   Monitor
 } from "lucide-react";
-import { CHARACTER_DATA_URL, SKILL_TYPES, TIER_STATS, SKILL_RARITY_CONFIG, LEADER_SKILLS, ELEMENTS, MUSIC_TRACKS } from "./constants.js";
-import { playSound, getBondRankName, calculateSubStat, generateAI, getBondPath, getBondMultiplier, setLiveAuraUpgrades, preloadCommonSounds, formatPower } from "./utils.js";
+import { CHARACTER_DATA_URL, SKILL_TYPES, TIER_STATS, SKILL_RARITY_CONFIG, LEADER_SKILLS, ELEMENTS, MUSIC_TRACKS, getRepRank } from "./constants.js";
+import { playSound, getBondRankName, calculateSubStat, generateAI, getBondPath, getBondMultiplier, setLiveAuraUpgrades, preloadCommonSounds, formatPower, setLiveGearInventory, makeGearInstanceId } from "./utils.js";
 import { Particle, FloatingText, BackgroundLayer, VisualEffect } from "./components.js";
 import { HomeView } from "./views/HomeView.js";
 import { CharacterDetailView } from "./views/CharacterDetailView.js";
@@ -41,7 +41,7 @@ import { TrialsView } from "./views/TrialsView.js";
 import { BondView } from "./views/BondView.js";
 import { EventsView } from "./views/EventsView.js";
 import { SquadBuilderModal } from "./CombatSystem.js";
-import { playMidi, stopMidi, setMidiVolume } from "./midiEngine.js";
+import { playMidi, stopMidi, setMidiVolume, resumeAudioContext } from "./midiEngine.js";
 const App = () => {
   const [characters, setCharacters] = useState([]);
   const [skills, setSkills] = useState([]);
@@ -111,6 +111,11 @@ const App = () => {
   };
   const [inventory, setInventory] = useState(() => safeJSONParse("mugen_inventory", {}));
   const [shards, setShards] = useState(() => safeJSONParse("mugen_shards", {}));
+  // Shared gear inventory: one physical instance { instanceId, slot, itemId,
+  // level } per owned piece of gear, account-wide (not per-character). A
+  // character only holds a reference per slot (char.equipSlots), so gear can
+  // be moved between characters like a real RPG instead of buying N copies.
+  const [gearInventory, setGearInventory] = useState(() => safeJSONParse("mugen_gear_inventory", []));
   const [vaultCredits, setVaultCredits] = useState(() => {
     const v = localStorage.getItem("mugen_vault_credits");
     const val = v !== null ? parseInt(v, 10) : 0;
@@ -141,6 +146,9 @@ const App = () => {
   const [unlockedIds, setUnlockedIds] = useState(() => safeJSONParse("mugen_unlocked_ids", []));
   const [unlockedFeatures, setUnlockedFeatures] = useState(() => safeJSONParse("mugen_unlocked_features", ["home", "roster", "train", "campaign", "inventory", "gacha", "shop"]));
   const [squadIds, setSquadIds] = useState(() => safeJSONParse("mugen_squad_ids", []));
+  // Cameo "guest" summon: an extra hero (export_id) who is NOT in the squad but
+  // flashes in to fire their unlocked signature (FFRK Roaming Warrior style).
+  const [cameoId, setCameoId] = useState(() => safeJSONParse("mugen_cameo_id", null));
   const [auraUpgrades, setAuraUpgrades] = useState(() => safeJSONParse("mugen_aura_upgrades", {
     atk: 0,
     hp: 0,
@@ -210,10 +218,40 @@ const App = () => {
   const [battleMusicActive, setBattleMusicActive] = useState(false);
   const [isVictoryMusic, setIsVictoryMusic] = useState(false);
   const [isHardBattle, setIsHardBattle] = useState(false);
+  // Set by EventsView right before starting/winning a Deltarune or FF7 event
+  // battle ("deltarune" | "ff7" | null) so the music-selection effect can pull
+  // from the dedicated unique/event/ tracks instead of the generic pool.
+  const [eventTheme, setEventTheme] = useState(null);
   const ytPlayer = useRef(null);
+  // atlyss.mp3 (music/unique/event/) is a real audio file, not a .mid --
+  // played through a plain looping <audio> element instead of either the
+  // MIDI synth or the YouTube pool (see the short-circuit in the main music
+  // effect above and the dedicated effect below).
+  const atlyssAudioRef = useRef(null);
   const [currentTrack, setCurrentTrack] = useState(null);
   const [musicProvider, setMusicProvider] = useState("youtube");
   const [isYTReady, setIsYTReady] = useState(false);
+  // Browsers block audio (MIDI AudioContext + YouTube autoplay) until the first
+  // real user gesture. Returning players skip the launcher tap that used to
+  // provide it, so unlock on the first click/keypress anywhere instead, and
+  // re-run the music effect once unlocked so a silently-started track is heard.
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  useEffect(() => {
+    const unlock = () => {
+      resumeAudioContext();
+      try {
+        const p = ytPlayer.current;
+        if (p && typeof p.playVideo === "function") p.playVideo();
+      } catch (e) {}
+      setAudioUnlocked(true);
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
   const featuredMenuHero = useMemo(() => {
     if (!unlockedIds.length || !characters.length) return null;
     const favoritesList = characters.filter((c) => favorites.includes(c.export_id));
@@ -257,6 +295,29 @@ const App = () => {
       color: customColor || (isError ? "#ff4444" : "#e94560")
     }]);
     setTimeout(() => setFloatingTexts((prev) => prev.filter((t) => t.id !== id)), 800);
+  };
+  // THE WORLD — Dio's time-stop signature signals here (see CombatSystem.js
+  // META.world_time_stop / the battle views' onWorldTimeStop wiring) to
+  // briefly silence whatever's playing, MIDI or YouTube, then restore it at
+  // its normal volume. A camera-flash + reality-tear cue marks the freeze and
+  // the moment time resumes.
+  const onWorldTimeStop = (ms = 5000) => {
+    setMidiVolume(0);
+    try { if (ytPlayer.current && typeof ytPlayer.current.mute === "function") ytPlayer.current.mute(); } catch (e) {}
+    playSound("act_camera_flash", settings.audio.master * settings.audio.sfx);
+    playSound("act_tornado_start", settings.audio.master * settings.audio.sfx * 0.7);
+    setTimeout(() => {
+      const musicMult = typeof settings.audio.music === "number" ? settings.audio.music : 1;
+      setMidiVolume(Math.max(0, settings.audio.master * musicMult));
+      try {
+        if (ytPlayer.current && typeof ytPlayer.current.setVolume === "function") {
+          const vol = Math.max(0, Math.min(100, Math.round(settings.audio.master * musicMult * 100)));
+          ytPlayer.current.setVolume(vol);
+          if (vol > 0) ytPlayer.current.unMute();
+        }
+      } catch (e) {}
+      playSound("act_tornado_end", settings.audio.master * settings.audio.sfx * 0.7);
+    }, ms);
   };
   const triggerVisualEffect = (src, x, y, scale = 1) => {
     const id = Math.random();
@@ -537,6 +598,7 @@ const App = () => {
         mugen_stamina: Math.floor(stamina).toString(),
         mugen_inventory: inventory,
         mugen_shards: shards,
+        mugen_gear_inventory: gearInventory,
         mugen_campaign_progress: campaignProgress.toString(),
         mugen_campaign_ranks: campaignRanks,
         mugen_milestones: claimedMilestones,
@@ -547,6 +609,7 @@ const App = () => {
         mugen_unlocked_ids: unlockedIds,
         mugen_unlocked_features: unlockedFeatures,
         mugen_squad_ids: squadIds,
+        mugen_cameo_id: cameoId,
         mugen_aura_upgrades: auraUpgrades,
         mugen_favorites: favorites,
         mugen_settings: settings,
@@ -628,6 +691,7 @@ const App = () => {
           if (cloudSave.mugen_materials || cloudSave.mugen_scrap) setMaterials(parseInt(cloudSave.mugen_materials || cloudSave.mugen_scrap, 10));
           if (cloudSave.mugen_stamina) setStamina(parseFloat(cloudSave.mugen_stamina));
           if (cloudSave.mugen_inventory) setInventory(cloudSave.mugen_inventory);
+          if (cloudSave.mugen_gear_inventory) setGearInventory(cloudSave.mugen_gear_inventory);
           if (cloudSave.mugen_shards) setShards(cloudSave.mugen_shards);
           if (cloudSave.mugen_unlocked_ids) setUnlockedIds(cloudSave.mugen_unlocked_ids);
           if (cloudSave.mugen_unlocked_features) setUnlockedFeatures(cloudSave.mugen_unlocked_features);
@@ -662,6 +726,22 @@ const App = () => {
         try { if (resSig && resSig.ok) signatureData = await resSig.json(); } catch (e) { signatureData = []; }
         let customCharData = [];
         try { if (resCustomChars && resCustomChars.ok) customCharData = await resCustomChars.json(); } catch (e) { customCharData = []; }
+        // The remote roster export ships a handful of misspelled names. Correct
+        // them at load time — and apply the SAME map to signature owners, since
+        // signatures bind by exact name match (sigForChar in CombatSystem.js).
+        const NAME_FIXES = {
+          "Ron Weasly": "Ron Weasley",
+          "Sarah Conner": "Sarah Connor",
+          "The Collecter": "The Collector",
+          "Porkey Pig": "Porky Pig",
+          "ANais Watterson": "Anais Watterson",
+          "Fox Mccloud": "Fox McCloud",
+          "Ember Mclain": "Ember McLain",
+          "Omniman": "Omni-Man",
+          "Pac Man": "Pac-Man",
+          "Fix it Felix": "Fix-It Felix"
+        };
+        signatureData = signatureData.map((s) => NAME_FIXES[s.owner] ? { ...s, owner: NAME_FIXES[s.owner] } : s);
         setSkills([...skillsData, ...signatureData]);
         setItems(itemsData);
         // Re-host fix: character art lives on the websim blob CDN (slow/unreliable).
@@ -729,6 +809,7 @@ const App = () => {
           const baseLuck = Math.max(5, Math.floor((c.stats?.luck || 10) * (1 + (tierMult - 1) * 0.08)));
           return {
             ...c,
+            name: NAME_FIXES[c.name] || c.name,
             element: c.element || assignedElement,
             skillId: assignedSkillId,
             // Primary skill slot
@@ -909,6 +990,34 @@ Data: { ${promptLines} }`;
           }
         });
         finalCharacters.forEach((c) => { c.imageUrl = remapPortrait(c.imageUrl); });
+        // ONE-TIME MIGRATION: gear used to be embedded per-character
+        // (c.equipment = { weapon: {id, level}, ... }). It's now a shared,
+        // account-wide inventory (gearInventory) that characters merely
+        // reference by instance id (c.equipSlots), so gear can be moved
+        // between heroes instead of buying a separate copy per hero. Any
+        // legacy embedded gear found on a loaded save is converted into real
+        // instances here, once, then the old embedded field is dropped.
+        const migratedInstances = [];
+        finalCharacters.forEach((c) => {
+          if (c.equipment && !c.equipSlots) {
+            const slots = { weapon: null, armor: null, trinket: null };
+            ['weapon', 'armor', 'trinket'].forEach((slot) => {
+              const legacy = c.equipment[slot];
+              if (legacy && legacy.id) {
+                const instanceId = makeGearInstanceId();
+                migratedInstances.push({ instanceId, slot, itemId: legacy.id, level: legacy.level || 1 });
+                slots[slot] = instanceId;
+              }
+            });
+            c.equipSlots = slots;
+          } else if (!c.equipSlots) {
+            c.equipSlots = { weapon: null, armor: null, trinket: null };
+          }
+          delete c.equipment;
+        });
+        if (migratedInstances.length) {
+          setGearInventory((prev) => [...prev, ...migratedInstances]);
+        }
         setCharacters(finalCharacters);
         setLoading(false);
       } catch (e) {
@@ -931,7 +1040,7 @@ Data: { ${promptLines} }`;
           return f + 1;
         });
       }
-    }, 700);
+    }, 1100);
     return () => clearInterval(timer);
   }, [hasStarted, appState]);
   useEffect(() => {
@@ -964,17 +1073,6 @@ Data: { ${promptLines} }`;
     } catch (e) {
     }
   }, [setCharacters]);
-  useEffect(() => {
-    try {
-      window.__mugenPlayUniqueTrack = (file) => {
-        playMidi("music/unique/" + file).catch((e) => console.warn("Unique track playback failed", e));
-      };
-      return () => {
-        delete window.__mugenPlayUniqueTrack;
-      };
-    } catch (e) {
-    }
-  }, []);
   useEffect(() => {
     try {
       window.claimVictory = window.claimVictory || function() {
@@ -1115,6 +1213,9 @@ Data: { ${promptLines} }`;
     setLiveAuraUpgrades(auraUpgrades);
   }, [auraUpgrades]);
   useEffect(() => {
+    setLiveGearInventory(gearInventory);
+  }, [gearInventory]);
+  useEffect(() => {
     if (characters.length) {
       const pwr = characters.filter((c) => unlockedIds.includes(c.export_id)).reduce((s, c) => s + calculateSubStat(c, characters, "pwr", skills, auraUpgrades), 0);
       setTotalPWR(pwr);
@@ -1185,8 +1286,17 @@ Data: { ${promptLines} }`;
     // the launcher entirely (mugen_intro_seen), so hasStarted stays false forever
     // for them. Only require it while actually sitting on that pre-tap screen;
     // once appState has moved past "launcher" the gate no longer applies.
-    console.warn("MUSIC_DEBUG", { isYTReady, hasStarted, appState, view });
     if (!isYTReady || (appState === "launcher" && !hasStarted)) return;
+    // atlyss.mp3 isn't a .mid file, so it can't run through the MIDI pool or
+    // the YouTube pool below -- it's played via a plain looping <audio>
+    // element (see the dedicated atlyss effect right after this one). Bail
+    // out of the normal track-selection logic entirely while it's active so
+    // the two engines never fight over the same "now playing" slot.
+    if (view === "events" && battleMusicActive && eventTheme === "atlyss") {
+      stopMidi();
+      try { if (ytPlayer.current && typeof ytPlayer.current.pauseVideo === "function") ytPlayer.current.pauseVideo(); } catch (e) {}
+      return;
+    }
     const getCampaignChapterId = () => {
       try {
         for (const chap of CAMPAIGN_CONTENT) {
@@ -1207,8 +1317,15 @@ Data: { ${promptLines} }`;
     if (appState === "launcher") category = "LAUNCHER";
     else if (appState === "menu") category = "MENU";
     else if (appState === "playing") {
-      if (isVictoryMusic) category = "VICTORY";
-      else if (battleMusicActive) {
+      // Themed event tracks: only Deltarune/FF7 events have dedicated music
+      // (music/unique/event/) — everything else keeps the existing TRIALS-pool
+      // fallback below. FF7 additionally gets its own distinct victory fanfare
+      // instead of the one shared global VICTORY pool.
+      if (isVictoryMusic && eventTheme === "ff7") category = "EVENT_VICTORY_FF7";
+      else if (isVictoryMusic) category = "VICTORY";
+      else if (battleMusicActive && view === "events" && eventTheme) {
+        category = "EVENT_" + eventTheme.toUpperCase();
+      } else if (battleMusicActive) {
         category = isHardBattle ? "HARD_BATTLE" : "BATTLE";
       } else if (view === "shop") category = "SHOP";
       else if (view === "events") category = "TRIALS";
@@ -1316,7 +1433,24 @@ Data: { ${promptLines} }`;
         try { ytPlayer.current && typeof ytPlayer.current.playVideo === "function" && ytPlayer.current.playVideo(); } catch (e) {}
       }
     }
-  }, [view, battleMusicActive, isVictoryMusic, settings.audio.master, settings.audio.music, appState, isYTReady, hasStarted, campaignProgress]);
+  }, [view, battleMusicActive, isVictoryMusic, eventTheme, settings.audio.master, settings.audio.music, appState, isYTReady, hasStarted, campaignProgress, audioUnlocked]);
+  // atlyss.mp3 playback -- a real audio file the MIDI synth and YouTube pool
+  // can't touch, so it gets its own tiny effect instead of forcing it through
+  // either engine.
+  useEffect(() => {
+    const shouldPlay = view === "events" && battleMusicActive && eventTheme === "atlyss";
+    if (!atlyssAudioRef.current) {
+      atlyssAudioRef.current = new Audio("music/unique/event/atlyss.mp3");
+      atlyssAudioRef.current.loop = true;
+    }
+    const musicMult = typeof settings.audio.music === "number" ? settings.audio.music : 1;
+    atlyssAudioRef.current.volume = Math.max(0, Math.min(1, settings.audio.master * musicMult));
+    if (shouldPlay) {
+      atlyssAudioRef.current.play().catch(() => {});
+    } else {
+      atlyssAudioRef.current.pause();
+    }
+  }, [view, battleMusicActive, eventTheme, settings.audio.master, settings.audio.music]);
   if (loading) return /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", flexDirection: "column", height: "100vh", alignItems: "center", justifyContent: "center", background: "#000", overflow: "hidden", fontFamily: "Rajdhani, sans-serif" }, children: [
     /* @__PURE__ */ jsxDEV("div", { className: "loading-hex-grid" }, void 0, false, {
       fileName: "<stdin>",
@@ -1477,7 +1611,7 @@ Data: { ${promptLines} }`;
             lineNumber: 1357,
             columnNumber: 16
           }),
-          /* @__PURE__ */ jsxDEV("div", { className: "data-bits-flicker", children: "A FIGHTING SPIRIT NEVER FADES" }, void 0, false, {
+          /* @__PURE__ */ jsxDEV("div", { className: "data-bits-flicker", children: "OPEN 'TIL SUNRISE" }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 1358,
             columnNumber: 16
@@ -1503,48 +1637,28 @@ Data: { ${promptLines} }`;
             lineNumber: 1365,
             columnNumber: 16
           }),
-          /* @__PURE__ */ jsxDEV("div", { className: "anime-speed-lines" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 1366,
-            columnNumber: 16
-          }),
           introFrame < 4 && (() => {
+            // Night-out opening: four quick postcards of getting into the club,
+            // shot like a 2008 city-nightlife title sequence instead of a shonen
+            // training montage. Each beat is a neon marquee word + a low-key
+            // subtitle, over rain-soaked bokeh.
             const beats = [
-              { key: "FIRE", color: "#ff4444", caption: "YOUR STORY BEGINS", shot: "wide" },
-              { key: "WATER", color: "#00d2ff", caption: "RISE UP", shot: "closeup" },
-              { key: "WIND", color: "#4ade80", caption: "FACE YOUR DESTINY", shot: "vs" },
-              { key: "LIGHT", color: "#facc15", caption: "ENTER THE ARENA", shot: "leap" }
+              { color: "#00d2ff", stamp: "MANHATTAN — 11:58 PM", sign: "2008", caption: "RAIN ON THE AVENUE. BASS IN THE DISTANCE." },
+              { color: "#ff2ecb", stamp: "WORD ON THE STREET", sign: "THE SPOT", caption: "EVERYBODY WHO'S ANYBODY IS ALREADY INSIDE." },
+              { color: "#facc15", stamp: "AT THE VELVET ROPE", sign: "GUEST LIST", caption: "THE BOUNCER CHECKS TWICE... AND STEPS ASIDE.", bouncer: true },
+              { color: "#4ade80", stamp: "DOORS OPEN", sign: "TONIGHT", caption: "THE FLOOR IS YOURS." }
             ];
             const beat = beats[introFrame % 4];
-            const sil = (extraStyle, key) => /* @__PURE__ */ jsxDEV(
-              "img",
-              { src: "intro_char_shadow.png", alt: "", style: { filter: `drop-shadow(0 0 40px ${beat.color})`, ...extraStyle } },
-              key,
-              false,
-              {}
-            );
-            let stage;
-            if (beat.shot === "wide") {
-              stage = /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: "anime-hero-slide 0.7s ease-out" }, children: sil({ width: "42%", opacity: 0.55, transform: "scale(1)" }) }, void 0, false, {});
-            } else if (beat.shot === "closeup") {
-              stage = /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", inset: 0, overflow: "hidden", display: "flex", alignItems: "flex-end", justifyContent: "center" }, children: sil({ width: "75%", opacity: 0.75, transform: "translateY(15%) scale(1.6)" }) }, void 0, false, {});
-            } else if (beat.shot === "vs") {
-              stage = /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4%" }, children: [
-                sil({ width: "32%", opacity: 0.6, transform: "scaleX(-1)" }, "l"),
-                /* @__PURE__ */ jsxDEV("div", { style: { width: 2, height: "60%", background: beat.color, boxShadow: `0 0 30px ${beat.color}`, opacity: 0.8 } }, void 0, false, {}),
-                sil({ width: "32%", opacity: 0.6, transform: "none" }, "r")
-              ] }, void 0, true, {});
-            } else {
-              stage = /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", justifyContent: "center", overflow: "hidden" }, children: sil({ width: "95%", opacity: 0.8, transform: "translateY(10%) scale(1.15) rotate(-2deg)" }) }, void 0, false, {});
-            }
             return /* @__PURE__ */ jsxDEV("div", { className: "intro-cut", children: [
-              /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", inset: 0, background: `radial-gradient(circle, ${beat.color}22, #000 75%)`, transition: "background 0.3s" } }, void 0, false, {}),
+              /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", inset: 0, background: `radial-gradient(ellipse at 50% 65%, ${beat.color}1e, #000 78%)`, transition: "background 0.3s" } }, void 0, false, {}),
+              /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", inset: 0, backgroundImage: "url(nightlife_bokeh.png)", backgroundSize: "cover", backgroundPosition: introFrame % 2 === 0 ? "30% center" : "70% center", opacity: 0.22, mixBlendMode: "screen", filter: "saturate(1.3)", transform: `scale(${1.05 + introFrame * 0.03})`, transition: "transform 1s linear" } }, void 0, false, {}),
               introFrame > 0 && /* @__PURE__ */ jsxDEV("div", { className: "intro-slash", style: { background: beat.color, boxShadow: `0 0 60px ${beat.color}` } }, void 0, false, {}),
-              stage,
-              /* @__PURE__ */ jsxDEV("div", { className: "anime-speed-lines", style: { opacity: beat.shot === "leap" ? 0.5 : 0.2 } }, void 0, false, {}),
+              beat.bouncer && /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", justifyContent: "flex-end", overflow: "hidden", paddingRight: "6%" }, children: /* @__PURE__ */ jsxDEV("img", { src: "intro_char_shadow.png", alt: "", style: { width: "38%", opacity: 0.5, transform: "scaleX(-1) translateY(12%)", filter: `drop-shadow(0 0 40px ${beat.color})` } }, void 0, false, {}) }, void 0, false, {}),
               /* @__PURE__ */ jsxDEV("div", { className: `intro-flicker-overlay ${introFrame > 0 ? "intro-flicker-active" : ""}`, style: { background: beat.color } }, void 0, false, {}),
-              /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", top: "18%", color: beat.color, fontWeight: 900, fontSize: "0.65rem", letterSpacing: 14, opacity: 0.85, textShadow: `0 0 20px ${beat.color}` }, children: beat.key }, void 0, false, {}),
-              /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", color: "#fff", fontWeight: 900, fontSize: "0.9rem", letterSpacing: 10, bottom: "20%", textShadow: "0 2px 10px rgba(0,0,0,0.8)" }, children: beat.caption }, void 0, false, {})
+              /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", top: "22%", color: "#94a3b8", fontWeight: 700, fontSize: "0.6rem", letterSpacing: 8, opacity: 0.9 }, children: beat.stamp }, void 0, false, {}),
+              /* @__PURE__ */ jsxDEV("div", { className: "intro-neon-word", style: { color: beat.color, textShadow: `0 0 12px ${beat.color}, 0 0 45px ${beat.color}, 0 0 90px ${beat.color}66` }, children: beat.sign }, void 0, false, {}),
+              /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", color: "#e2e8f0", fontWeight: 600, fontSize: "0.7rem", letterSpacing: 5, bottom: "22%", padding: "0 20px", textAlign: "center", textShadow: "0 2px 10px rgba(0,0,0,0.8)", opacity: 0.85 }, children: beat.caption }, void 0, false, {}),
+              /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", bottom: "16%", display: "flex", gap: 8 }, children: [0, 1, 2, 3].map((i) => /* @__PURE__ */ jsxDEV("div", { style: { width: i === introFrame ? 22 : 8, height: 3, borderRadius: 2, background: i === introFrame ? beat.color : "rgba(255,255,255,0.25)", transition: "all 0.3s", boxShadow: i === introFrame ? `0 0 8px ${beat.color}` : "none" } }, i, false, {})) }, void 0, false, {})
             ] }, introFrame + "-cut", true, {});
           })(),
           introFrame >= 4 && /* @__PURE__ */ jsxDEV("div", { className: "intro-cut animate-fadeIn", style: { background: "#000" }, children: [
@@ -1553,8 +1667,9 @@ Data: { ${promptLines} }`;
               lineNumber: 1380,
               columnNumber: 21
             }),
+            /* @__PURE__ */ jsxDEV("div", { style: { position: "absolute", inset: 0, backgroundImage: "url(nightlife_bokeh.png)", backgroundSize: "cover", opacity: 0.18, mixBlendMode: "screen" } }, void 0, false, {}),
             /* @__PURE__ */ jsxDEV("div", { className: "intro-slash", style: { animationDuration: "0.25s" } }, void 0, false, {}),
-            /* @__PURE__ */ jsxDEV("div", { ref: logoRef, className: "intro-logo-reveal", style: {
+            /* @__PURE__ */ jsxDEV("div", { ref: logoRef, className: "intro-logo-reveal neon-sign-ignite", style: {
               textShadow: "0 0 50px var(--primary), 0 0 100px var(--primary)",
               letterSpacing: 20
             }, children: "MUGEN" }, void 0, false, {
@@ -1562,7 +1677,7 @@ Data: { ${promptLines} }`;
               lineNumber: 1381,
               columnNumber: 21
             }),
-            /* @__PURE__ */ jsxDEV("div", { className: "absolute bottom-[30%] text-white font-bold text-sm tracking-[6px] opacity-70 animate-pulse", children: "EVERY HERO. ONE CITY. NO LIMITS." }, void 0, false, {}),
+            /* @__PURE__ */ jsxDEV("div", { className: "absolute bottom-[30%] text-white font-bold text-sm tracking-[6px] opacity-70 animate-pulse", children: "EVERY HERO. ONE CITY. ONE NIGHT." }, void 0, false, {}),
             /* @__PURE__ */ jsxDEV("div", { className: "intro-flash", style: { animationDuration: "0.4s" } }, void 0, false, {
               fileName: "<stdin>",
               lineNumber: 1386,
@@ -1588,12 +1703,12 @@ Data: { ${promptLines} }`;
           backdropFilter: "none",
           zIndex: 200
         }, children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1rem", fontWeight: 900, letterSpacing: 8, marginBottom: 10, color: "#4ade80" }, children: "THE STAGE IS SET" }, void 0, false, {
+          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1rem", fontWeight: 900, letterSpacing: 8, marginBottom: 10, color: "#4ade80" }, children: "YOU'RE IN" }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 1397,
             columnNumber: 17
           }),
-          /* @__PURE__ */ jsxDEV("div", { className: "press-start", style: { color: "var(--primary)", fontSize: "1.4rem" }, children: "TAP TO ENTER THE CITY" }, void 0, false, {
+          /* @__PURE__ */ jsxDEV("div", { className: "press-start", style: { color: "var(--primary)", fontSize: "1.4rem" }, children: "TAP TO STEP INSIDE" }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 1398,
             columnNumber: 17
@@ -1974,11 +2089,6 @@ Data: { ${promptLines} }`;
     columnNumber: 5
   });
   return /* @__PURE__ */ jsxDEV("div", { className: `app-layout ${isHype ? "frenzy-active" : ""} ${settings?.graphics?.theme === "nightlife" ? "theme-nightlife" : ""}`, children: [
-    /* @__PURE__ */ jsxDEV("div", { id: "bg-music-player", style: { position: "absolute", opacity: 0, pointerEvents: "none" } }, void 0, false, {
-      fileName: "<stdin>",
-      lineNumber: 1521,
-      columnNumber: 7
-    }),
     /* @__PURE__ */ jsxDEV(BackgroundLayer, { view }, void 0, false, {
       fileName: "<stdin>",
       lineNumber: 1522,
@@ -2014,7 +2124,7 @@ Data: { ${promptLines} }`;
       /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "home" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("home"); playSound("menu_click", 0.2); }, children: [
         /* @__PURE__ */ jsxDEV(Home, { size: 20 }, void 0, false, {}),
         " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "The Spot" }, void 0, false, {})
+        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "The District" }, void 0, false, {})
       ] }, void 0, true, {}),
       /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${["train", "abilities", "social"].includes(view) ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("train"); playSound("menu_click", 0.2); }, children: [
         characters[selectedCharIndex] ? /* @__PURE__ */ jsxDEV("img", { src: characters[selectedCharIndex].imageUrl, className: "nav-char-icon", alt: "" }, void 0, false, {}) : /* @__PURE__ */ jsxDEV(Sword, { size: 20 }, void 0, false, {}),
@@ -2498,12 +2608,12 @@ Data: { ${promptLines} }`;
         lineNumber: 1696,
         columnNumber: 29
       }),
-      (view === "train" || view === "abilities" || view === "social") && /* @__PURE__ */ jsxDEV(CharacterDetailView, { selectedCharIndex, char: characters[selectedCharIndex], characters, setSelectedCharIndex, handleTrain, isShaking, activeDialogue, isTypingDialogue, setIsTypingDialogue, setCharacters, triggerDialogue, setView, stamina, maxStamina, appearanceTags, heroVibes, autoTrainLevel, setAutoTrainLevel, credits, setCredits, gems, setGems, aura, setAura, auraUpgrades, setStamina, createFloatingText, unlockedIds, combo, hypeMeter, isHype, totalAccountLevel, heroMoods, setHeroMoods, triggerVisualEffect, inventory, removeFromInventory, skills, materials, setMaterials, essence, setEssence, totalPWR, items }, void 0, false, {
+      (view === "train" || view === "abilities" || view === "social") && /* @__PURE__ */ jsxDEV(CharacterDetailView, { selectedCharIndex, char: characters[selectedCharIndex], characters, setSelectedCharIndex, handleTrain, isShaking, activeDialogue, isTypingDialogue, setIsTypingDialogue, setCharacters, triggerDialogue, setView, stamina, maxStamina, appearanceTags, heroVibes, autoTrainLevel, setAutoTrainLevel, credits, setCredits, gems, setGems, aura, setAura, auraUpgrades, setStamina, createFloatingText, unlockedIds, combo, hypeMeter, isHype, totalAccountLevel, heroMoods, setHeroMoods, triggerVisualEffect, inventory, removeFromInventory, skills, materials, setMaterials, essence, setEssence, totalPWR, items, gearInventory, setGearInventory }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1697,
         columnNumber: 77
       }),
-      view === "roster" && /* @__PURE__ */ jsxDEV(RosterView, { characters, setSelectedCharIndex, setView, unlockedIds, shards, setShards, setUnlockedIds, credits, setCredits, playSound, skills, auraUpgrades, favorites, setFavorites }, void 0, false, {
+      view === "roster" && /* @__PURE__ */ jsxDEV(RosterView, { characters, setSelectedCharIndex, setView, unlockedIds, shards, setShards, setUnlockedIds, credits, setCredits, playSound, skills, auraUpgrades, favorites, setFavorites, setCharacters, inventory, items, removeFromInventory, createFloatingText, triggerVisualEffect, gearInventory, setGearInventory }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1698,
         columnNumber: 31
@@ -2513,12 +2623,12 @@ Data: { ${promptLines} }`;
         lineNumber: 1699,
         columnNumber: 31
       }),
-      view === "campaign" && /* @__PURE__ */ jsxDEV(CampaignView, { characters, selectedCharIndex, unlockedIds, credits, setCredits, gems, setGems, aura, setAura, stamina, setStamina, maxStamina, createFloatingText, campaignProgress, setCampaignProgress, setShards, squadIds, setSquadIds, triggerVisualEffect, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, skills, materials, setMaterials, essence, setEssence, items, addToInventory, setCharacters, setShowSquadBuilder, campaignRanks, setCampaignRanks, auraUpgrades, settings }, void 0, false, {
+      view === "campaign" && /* @__PURE__ */ jsxDEV(CampaignView, { characters, selectedCharIndex, unlockedIds, credits, setCredits, gems, setGems, aura, setAura, stamina, setStamina, maxStamina, createFloatingText, campaignProgress, setCampaignProgress, setShards, squadIds, setSquadIds, triggerVisualEffect, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, skills, materials, setMaterials, essence, setEssence, items, addToInventory, setCharacters, setShowSquadBuilder, campaignRanks, setCampaignRanks, auraUpgrades, settings, cameoId, onWorldTimeStop }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1700,
         columnNumber: 33
       }),
-      view === "events" && /* @__PURE__ */ jsxDEV(EventsView, { characters, unlockedIds, squadIds, setSquadIds, setShowSquadBuilder, credits, setCredits, gems, setGems, aura, setAura, stamina, setStamina, createFloatingText, triggerVisualEffect, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, skills, materials, setMaterials, essence, setEssence, addToInventory, auraUpgrades, eventTokens, setEventTokens, setUnlockedIds, totalAccountLevel, setCharacters, eventPurchases, setEventPurchases }, void 0, false, {
+      view === "events" && /* @__PURE__ */ jsxDEV(EventsView, { characters, unlockedIds, squadIds, setSquadIds, setShowSquadBuilder, credits, setCredits, gems, setGems, aura, setAura, stamina, setStamina, createFloatingText, triggerVisualEffect, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, skills, materials, setMaterials, essence, setEssence, addToInventory, auraUpgrades, eventTokens, setEventTokens, setUnlockedIds, totalAccountLevel, setCharacters, eventPurchases, setEventPurchases, setEventTheme, onWorldTimeStop, gearInventory, setGearInventory }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1701,
         columnNumber: 31
@@ -2528,12 +2638,12 @@ Data: { ${promptLines} }`;
         lineNumber: 1702,
         columnNumber: 34
       }),
-      view === "gacha" && /* @__PURE__ */ jsxDEV(RecruitView, { gems, setGems, characters, unlockedIds, setUnlockedIds, setCharacters, createFloatingText, playSound, credits, setCredits, items, addToInventory, stamina, setStamina, maxStamina, aura, setAura, materials, setMaterials, shards, setShards }, void 0, false, {
+      view === "gacha" && /* @__PURE__ */ jsxDEV(RecruitView, { gems, setGems, characters, unlockedIds, setUnlockedIds, setCharacters, createFloatingText, playSound, credits, setCredits, items, addToInventory, stamina, setStamina, maxStamina, aura, setAura, materials, setMaterials, shards, setShards, essence, setEssence, gearInventory, setGearInventory, triggerVisualEffect }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1703,
         columnNumber: 30
       }),
-      view === "trials" && /* @__PURE__ */ jsxDEV(TrialsView, { characters, unlockedIds, createFloatingText, squadIds, setSquadIds, setShowSquadBuilder, clearedTrials, setClearedTrials, setGems, setAura, stamina, setStamina, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, triggerVisualEffect, endlessFloor, setEndlessFloor, arenaRank, setArenaRank, setCredits, setMaterials, setEssence, skills, auraUpgrades, setCharacters }, void 0, false, {
+      view === "trials" && /* @__PURE__ */ jsxDEV(TrialsView, { characters, unlockedIds, createFloatingText, squadIds, setSquadIds, setShowSquadBuilder, clearedTrials, setClearedTrials, setGems, setAura, stamina, setStamina, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, triggerVisualEffect, endlessFloor, setEndlessFloor, arenaRank, setArenaRank, setCredits, setMaterials, setEssence, skills, auraUpgrades, setCharacters, onWorldTimeStop }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1704,
         columnNumber: 31
@@ -2670,9 +2780,9 @@ Data: { ${promptLines} }`;
     })),
     rankUpUnlocks && /* @__PURE__ */ jsxDEV("div", { className: "rankup-overlay", onClick: () => setRankUpUnlocks(null), children: /* @__PURE__ */ jsxDEV("div", { className: "rankup-card", onClick: (e) => e.stopPropagation(), children: [
       /* @__PURE__ */ jsxDEV("div", { className: "rankup-badge" }, void 0, false, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: "rankup-title", children: "STREET GYM RANK UP!" }, void 0, false, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: "rankup-rank", children: ["RANK ", rankUpUnlocks.rank] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: "rankup-sub", children: "New spots just opened up around the city:" }, void 0, false, {}),
+      /* @__PURE__ */ jsxDEV("div", { className: "rankup-title", children: "STREET REP UP!" }, void 0, false, {}),
+      /* @__PURE__ */ jsxDEV("div", { className: "rankup-rank", children: ["RANK ", rankUpUnlocks.rank, " — ", getRepRank(rankUpUnlocks.rank).title] }, void 0, true, {}),
+      /* @__PURE__ */ jsxDEV("div", { className: "rankup-sub", children: ["Your crew moves up to the ", getRepRank(rankUpUnlocks.rank).venue, ". New spots just opened up — and there's a rep chest waiting on the home page."] }, void 0, true, {}),
       /* @__PURE__ */ jsxDEV("div", { className: "rankup-feature-list", children: rankUpUnlocks.features.map((f) => /* @__PURE__ */ jsxDEV("div", { className: "rankup-feature-chip", children: ({ events: "Events", shop: "Shop", gacha: "Recruit", trials: "Trials", missions: "Jobs" })[f] || f }, f, false, {})) }, void 0, false, {}),
       /* @__PURE__ */ jsxDEV("button", { className: "menu-btn glitch-btn", style: { width: "100%", marginTop: 18 }, onClick: () => setRankUpUnlocks(null), children: "LET'S GO" }, void 0, false, {})
     ] }, void 0, true, {}) }, void 0, false, {}),
@@ -2683,6 +2793,8 @@ Data: { ${promptLines} }`;
         unlockedIds,
         squadIds,
         setSquadIds,
+        cameoId,
+        setCameoId,
         onClose: () => setShowSquadBuilder(false),
         playSound,
         createFloatingText,

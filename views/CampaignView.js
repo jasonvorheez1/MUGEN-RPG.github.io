@@ -9,12 +9,13 @@ import {
   Map as MapIcon,
   Plus
 } from "lucide-react";
-import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow } from "../CombatSystem.js";
+import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow, applyStatusTick, resolveBasicAttack, getCastAnimMs, getLungeMs, getBasicAttackMs, HITSTOP_BUFFER_MS, ProjectileLayer } from "../CombatSystem.js";
 import { CAMPAIGN_CONTENT, ELEMENTS, LEADER_SKILLS, COSMETICS } from "../constants.js";
-import { calculateStat, playSound, calculateSubStat, getTierEfficiency, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, incrementCourierFieldBattles, getDominantSpecialKey, SPECIAL_ARCHETYPE_NAMES } from "../utils.js";
+import { calculateStat, playSound, calculateSubStat, getTierEfficiency, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, incrementCourierFieldBattles, getDominantSpecialKey, SPECIAL_ARCHETYPE_NAMES, getGaugeGain, getGearPassives, rollEnemyGear } from "../utils.js";
 import { isMobile, CampaignIntro } from "./ViewShared.js";
 
 const CampaignView = ({
+  onWorldTimeStop,
   characters,
   unlockedIds,
   credits,
@@ -44,8 +45,22 @@ const CampaignView = ({
   campaignRanks = {},
   setCampaignRanks,
   auraUpgrades = {},
-  settings
+  settings,
+  cameoId = null
 }) => {
+  // Cameo/guest summon: resolve the selected guest's signature once. Null unless
+  // a guest with an actually-unlocked signature is chosen in the squad builder.
+  const cameoData = useMemo(() => {
+    if (!cameoId) return null;
+    const c = (characters || []).find((x) => String(x.export_id) === String(cameoId));
+    if (!c) return null;
+    const sig = (skills || []).find((s) => s.signature && s.owner === c.name);
+    if (!sig) return null;
+    if (!(c.signatureUnlocked || (c.abilityLevels && c.abilityLevels[sig.id]))) return null;
+    return { sigId: sig.id, img: c.imageUrl, name: c.name, element: c.element, sigName: sig.name };
+  }, [cameoId, characters, skills]);
+  const cameoRef = useRef({ usesLeft: 2, lastUsed: 0 });
+  const [cameoCutin, setCameoCutin] = useState(null);
   // Accessibility: reuse the existing Settings > Graphics > "Screen Shake"
   // toggle to also gate the newer hit-stop/parry-flash/lunge battle juice --
   // one switch for anyone who finds it distracting or is photosensitive.
@@ -96,6 +111,7 @@ const CampaignView = ({
   // hit-stop: the whole battle freezes for a beat on heavy impacts. It's the
   // oldest fighting-game trick there is, and it's what makes hits feel HEAVY.
   const hitStopUntil = useRef(0);
+  const battleSceneRef = useRef(null);
   const [sceneShake, setSceneShake] = useState(null);
   const shakeTimer = useRef(null);
   const triggerShake = (kind, ms) => {
@@ -401,6 +417,7 @@ const CampaignView = ({
         magicDef: calculateStat(c.baseStats["magic def"] || 0, c.level, c, characters, "magic def"),
         speed: calculateStat(c.baseStats.speed, c.level, c, characters, "speed"),
         element: c.element,
+        franchise: c.franchise,
         level: c.level,
         skillId: c.skillId,
         skillId2: c.level >= 50 ? c.skillId2 : null,
@@ -412,6 +429,7 @@ const CampaignView = ({
         maxSkillCd: s1?.cooldown || 100,
         isEnemy: false,
         special: c.special,
+        equipSlots: c.equipSlots,
         gauge: Math.random() * 30,
         burst: 0,
         activeSynergies,
@@ -483,6 +501,10 @@ const CampaignView = ({
         ...stats,
         element: stage.element,
         level: enemyLevel,
+        // Enemies roll gear from the same catalog the player pulls from --
+        // bosses gear up faster than fodder, and later chapters gear up
+        // everyone. Scoutable pre-battle via the stage confirm screen.
+        _equippedGear: rollEnemyGear(isBoss ? Math.min(4, 1 + Math.floor(stage.id / 6)) : Math.min(3, Math.floor(stage.id / 10))),
         skillId,
         skillId2,
         abilityLevel: isBoss ? Math.min(10, Math.floor(stage.id / 2) + 1) : 1,
@@ -550,7 +572,7 @@ const CampaignView = ({
           setParryFlash(true);
           setTimeout(() => setParryFlash(false), 350);
         }
-        hitStopUntil.current = Date.now() + 200;
+        hitStopUntil.current = Math.max(hitStopUntil.current, Date.now() + 200);
         playSound("mugen_guard", 0.7);
         playSound("crit_hit", 0.4);
       } else {
@@ -565,6 +587,11 @@ const CampaignView = ({
   };
   const triggerSkill = (unitId) => {
     if (battleState !== "ACTIVE") return;
+    // Respect the same cinematic hold the auto-tick loop honors -- otherwise a
+    // manually-controlled ally (AUTO OFF) can fire a skill mid-animation while
+    // an enemy's cast is still playing, producing exactly the overlapping
+    // actions this lock exists to prevent.
+    if (Date.now() < hitStopUntil.current) return;
     setCombatants((prev) => {
       const u = prev.find((unit) => unit.id === unitId);
       if (!u || u.dead) return prev;
@@ -578,15 +605,81 @@ const CampaignView = ({
         forcedTargetId: markedTargetId,
         extraPowerMult: comboMult()
       });
+      const casterAfter = nextState.find((n) => n.id === unitId);
+      const castMs = getCastAnimMs(casterAfter?.lastCastAnim);
+      if (castMs) hitStopUntil.current = Math.max(hitStopUntil.current, Date.now() + castMs + HITSTOP_BUFFER_MS);
       bumpCombo(2);
       applyResonance(nextState, u);
       return nextState;
     });
   };
+  // CAMEO / GUEST SUMMON (player-triggered): the summoner briefly TURNS INTO the
+  // guest, casts the guest's signature using the SUMMONER's own stats, then turns
+  // back. 2 uses per battle, ~60s between uses. Picked by highest current gauge
+  // (whoever's closest to acting) rather than tying it to any specific ally.
+  const triggerCameo = () => {
+    if (battleState !== "ACTIVE" || !cameoData) return;
+    if (Date.now() < hitStopUntil.current) return;
+    if (cameoRef.current.usesLeft <= 0) { createFloatingText("No guest summons left this battle", true); return; }
+    const cooldownLeft = 60000 - (Date.now() - cameoRef.current.lastUsed);
+    if (cooldownLeft > 0) { createFloatingText(`Guest recharging (${Math.ceil(cooldownLeft / 1000)}s)`, true); return; }
+    setCombatants((prev) => {
+      const next = [...prev];
+      const allies = next.filter((u) => !u.isEnemy && !u.dead);
+      if (!allies.length) return prev;
+      const idx = next.findIndex((u) => u.id === allies.reduce((best, u) => (u.gauge || 0) > (best.gauge || 0) ? u : best, allies[0]).id);
+      const caster = next[idx];
+      const orig = { skillId2: caster.skillId2, skillCd2: caster.skillCd2, maxSkillCd2: caster.maxSkillCd2, abilityLevel2: caster.abilityLevel2, skillCd: caster.skillCd, maxSkillCd: caster.maxSkillCd };
+      // Force ONLY the guest signature to fire (slot 1 held not-ready, slot 2 = guest sig, ready).
+      caster.skillId2 = cameoData.sigId;
+      caster.maxSkillCd2 = 0;
+      caster.skillCd2 = 0;
+      caster.abilityLevel2 = caster.abilityLevel2 || 1;
+      caster.maxSkillCd = 999999;
+      caster.skillCd = 0;
+      const ns = executeCombatSkill({ combatants: next, attackerId: caster.id, skills, playerElement, isLimitBreak: false });
+      ns.forEach((s, i) => next[i] = s);
+      const after = next[idx];
+      // Restore the summoner's own kit; keep the guest portrait for the cast beat.
+      after.skillId2 = orig.skillId2;
+      after.skillCd2 = orig.skillCd2;
+      after.maxSkillCd2 = orig.maxSkillCd2;
+      after.abilityLevel2 = orig.abilityLevel2;
+      after.skillCd = orig.skillCd;
+      after.maxSkillCd = orig.maxSkillCd;
+      after._cameoImg = cameoData.img;
+      after._cameoRevertAt = Date.now() + 1600;
+      cameoRef.current.usesLeft -= 1;
+      cameoRef.current.lastUsed = Date.now();
+      setCameoCutin({ guest: cameoData.name, sig: cameoData.sigName, user: after.name, img: cameoData.img, element: cameoData.element });
+      hitStopUntil.current = Math.max(hitStopUntil.current, Date.now() + 260);
+      triggerShake("heavy", 400);
+      playSound("mugen_super", 0.5);
+      setTimeout(() => setCameoCutin(null), 2200);
+      return next;
+    });
+  };
+  // Forces the guest button's cooldown/uses display to tick down live without
+  // needing every combat frame to re-render.
+  const [, setCameoTick] = useState(0);
+  useEffect(() => {
+    if (battleState !== "ACTIVE" || !cameoData) return;
+    const iv = setInterval(() => setCameoTick((t) => t + 1), 500);
+    return () => clearInterval(iv);
+  }, [battleState, cameoData]);
   const loopState = useRef({ autoBattle, playerElement, combatSpeed, markedTargetId, elementalChain });
+  // THE WORLD -- tracks which time-stop casts we've already reacted to, so the
+  // one-time "pause the music" side-effect fires exactly once per cast (the
+  // timestamp field otherwise just sits on the unit for the rest of the fight).
+  const timeStopHandledRef = useRef({});
   useEffect(() => {
     loopState.current = { autoBattle, playerElement, combatSpeed, markedTargetId, elementalChain };
   }, [autoBattle, playerElement, combatSpeed, markedTargetId, elementalChain]);
+  // Reset the guest summon at the start of each fight: 2 uses, first available
+  // immediately ("the moment they're able"), then ~60s between uses.
+  React.useEffect(() => {
+    if (battleState === "ACTIVE") cameoRef.current = { usesLeft: 2, lastUsed: 0 };
+  }, [battleState]);
   React.useEffect(() => {
     if (battleState !== "ACTIVE") return;
     const timer = setInterval(() => {
@@ -642,33 +735,32 @@ const CampaignView = ({
         }
         const next = prev.map((u) => ({ ...u, effects: [...u.effects || []] }));
         const { autoBattle: curAuto, playerElement: curEl, combatSpeed: curSpd, markedTargetId: curMarked } = loopState.current;
+        // Speed rebalance: gauge gain is computed RELATIVE to everyone currently
+        // in this fight (getGaugeGain), not against a fixed absolute threshold --
+        // see utils.js for why the old fixed-cap formula stopped differentiating
+        // speed past roughly level 20.
+        const battleSpeeds = next.filter((u) => !u.dead).map((u) => getBattleStats(u, curEl, u.activeSynergies || []).speed);
         next.forEach((u) => {
           if (u.dead) return;
+          // Cameo transform is temporary: once the guest's cast window elapses,
+          // the summoner's own portrait returns.
+          if (u._cameoImg && Date.now() >= (u._cameoRevertAt || 0)) { u._cameoImg = null; u._cameoRevertAt = null; }
           const stats = getBattleStats(u, curEl, u.activeSynergies || []);
           if (u.skillCd < u.maxSkillCd) u.skillCd += 1;
           if (u.skillId2 && u.skillCd2 < u.maxSkillCd2) u.skillCd2 += 1;
-          let gaugeGain = stats.speed / 150 * curSpd * 1.1;
+          let gaugeGain = getGaugeGain(stats.speed, battleSpeeds, curSpd);
           if (curEl === "WIND" && !u.isEnemy) gaugeGain *= 1.15;
-          u.gauge += Math.min(8, Math.max(0.5, gaugeGain));
+          u.gauge += gaugeGain;
           if (u.gauge >= 100) {
+            // Same-tick guard: two units can both cross 100 gauge within one
+            // 50ms tick, before the top-of-callback hit-stop check runs again.
+            // Re-check here so the second unit waits its turn instead of also
+            // acting this tick (this is what actually enforces "no attacking
+            // in between abilities" -- see hitStopUntil sets below).
+            if (Date.now() < hitStopUntil.current) return;
             u.gauge = 0;
-            let incapacitated = false;
-            u.effects = u.effects.filter((e) => {
-              if (e.type === "burn" || e.type === "poison" || e.type === "static") {
-                const dotDmg = Math.floor(u.maxHp * (e.val || 0.05));
-                u.hp = Math.max(0, u.hp - dotDmg);
-                setFloatingDamages((fd) => [...fd, { id: Math.random(), targetId: u.id, amount: dotDmg, type: "miss" }]);
-                if (e.type === "static") u.lastAction = { targetId: u.id, msg: "GLITCH", type: "miss", time: Date.now() };
-              }
-              if (e.type === "regen") {
-                const healAmt = Math.floor(u.maxHp * (e.val || 0.05));
-                u.hp = Math.min(u.maxHp, u.hp + healAmt);
-                setFloatingDamages((fd) => [...fd, { id: Math.random(), targetId: u.id, amount: healAmt, type: "heal" }]);
-              }
-              if (e.type === "stun" || e.type === "freeze") incapacitated = true;
-              e.duration--;
-              return e.duration > 0;
-            });
+            const { incapacitated, popups } = applyStatusTick(u);
+            if (popups.length) setFloatingDamages((fd) => [...fd, ...popups]);
             if (u.hp <= 0) {
               if (!u.isEnemy && u._leaderRevive) {
                 u._leaderRevive = false;
@@ -686,6 +778,16 @@ const CampaignView = ({
               if ((u.isEnemy || curAuto) && (s1Ready || s2Ready || isBurstReady)) {
                 const nextState = executeCombatSkill({ combatants: next, attackerId: u.id, skills, playerElement: curEl, isLimitBreak: isBurstReady, forcedTargetId: !u.isEnemy ? curMarked : null, extraPowerMult: u.isEnemy ? 1 : comboMult() });
                 nextState.forEach((ns, ni) => next[ni] = ns);
+                const casterAfter = next.find((n) => n.id === u.id);
+                if (casterAfter?._triggeredTimeStopAt && timeStopHandledRef.current[u.id] !== casterAfter._triggeredTimeStopAt) {
+                  timeStopHandledRef.current[u.id] = casterAfter._triggeredTimeStopAt;
+                  if (typeof onWorldTimeStop === "function") onWorldTimeStop(casterAfter._timeStopMusicMs || 5000);
+                }
+                // Cinematic hold: freeze the WHOLE simulation for exactly as long as
+                // this cast's animation plays, so nothing else can act (or even fill
+                // gauge) mid-ability -- see getCastAnimMs/CAST_ANIM_MS.
+                const castMs = getCastAnimMs(casterAfter?.lastCastAnim);
+                if (castMs) hitStopUntil.current = Date.now() + castMs + HITSTOP_BUFFER_MS;
                 // Combo chain: ally casts extend the chain (and advance resonance);
                 // an enemy getting a skill off breaks it.
                 if (u.isEnemy) breakCombo();
@@ -694,38 +796,17 @@ const CampaignView = ({
                   applyResonance(next, u);
                 }
               } else {
-                const targets = next.filter((t) => t.isEnemy !== u.isEnemy && !t.dead && !t.effects.some((e) => e.type === "untargetable"));
-                if (targets.length > 0) {
-                  const taunted = targets.find((e) => e.effects.some((eff) => eff.type === "aggro"));
-                  const exposed = !u.isEnemy ? targets.find((e) => e.effects.some((eff) => eff.type === "expose")) : null;
-                  const marked = !u.isEnemy && curMarked ? targets.find((e) => e.id === curMarked) : null;
-                  const target = taunted || exposed || marked || targets[Math.floor(Math.random() * targets.length)];
-                  const tStats = getBattleStats(target, curEl);
-                  if (Math.random() < tStats.evasion) {
-                    u.lastAction = { targetId: target.id, amount: "MISS", type: "miss", time: Date.now() };
-                  } else {
-                    let dmg = Math.floor(stats.atk * (1 + stats.speed / 2e3));
-                    // Combo chain feeds basic attacks too; BREAK amplifies everything.
-                    if (!u.isEnemy) dmg = Math.floor(dmg * comboMult());
-                    const brokenEff = target.effects.find((e) => e.type === "broken");
-                    if (brokenEff) dmg = Math.floor(dmg * (1 + (brokenEff.val || 0.5)));
-                    const shield = target.effects.find((e) => e.type === "shield");
-                    if (shield) dmg = Math.floor(dmg * (1 - shield.val));
-                    dmg = applyMitigation(dmg, tStats.def, 1e3);
-                    target.hp = Math.max(0, target.hp - dmg);
-                    if (!u.isEnemy) { u._battleDamage = (u._battleDamage || 0) + dmg; u._battleBestHit = Math.max(u._battleBestHit || 0, dmg); }
-                    if (u.isEnemy) breakCombo();
-                    else bumpCombo();
-                    if (target.hp === 0) {
-                      if (!target.isEnemy && target._leaderRevive) {
-                        target._leaderRevive = false;
-                        target.hp = 1;
-                        target.lastAction = { ...target.lastAction, msg: "SAVED!" };
-                      } else target.dead = true;
-                    }
-                    u.burst = Math.min(100, (u.burst || 0) + 10);
-                    u.lastAction = { targetId: target.id, amount: dmg, type: "basic", time: Date.now() };
-                    setFloatingDamages((fd) => [...fd, { id: Math.random(), targetId: target.id, amount: dmg, type: "normal" }]);
+                const result = resolveBasicAttack({ attacker: u, allUnits: next, playerElement: curEl, comboMult, markedTargetId: curMarked });
+                if (result) {
+                  // A rushdown basic locks the sim for its full dash+flurry(+air)
+                  // duration and, for allies, climbs the combo chain by the whole
+                  // flurry -- a fast character's basic reads as a real combo.
+                  hitStopUntil.current = Date.now() + getBasicAttackMs(result.meleeAir) + HITSTOP_BUFFER_MS;
+                  if (u.isEnemy) breakCombo();
+                  else bumpCombo(result.meleeHits || 1);
+                  if (!result.missed) {
+                    if (!u.isEnemy) { u._battleDamage = (u._battleDamage || 0) + result.amount; u._battleBestHit = Math.max(u._battleBestHit || 0, result.amount); }
+                    setFloatingDamages((fd) => [...fd, { id: Math.random(), targetId: result.targetId, amount: result.amount, type: "normal" }]);
                   }
                 }
               }
@@ -747,7 +828,7 @@ const CampaignView = ({
       if (!prevBrokenIds.current.has(id)) {
         const unit = combatants.find((c) => c.id === id);
         setBreakBanner(unit?.name || "ENEMY");
-        hitStopUntil.current = Date.now() + 300;
+        hitStopUntil.current = Math.max(hitStopUntil.current, Date.now() + 300);
         triggerShake("heavy", 500);
         playSound("crit_hit", 0.6);
         setTimeout(() => setBreakBanner(null), 1400);
@@ -790,6 +871,8 @@ const CampaignView = ({
         else if (skill.type === "atk" || skill.type === "combo") {
           playSound("spin" + Math.floor(Math.random() * 3), 0.4);
           playSound("mugen_atk" + Math.floor(Math.random() * 5), 0.3);
+          const swipePool = skill.damageType === "magical" ? ["act_lunge_magic", "act_whoosh1", "act_whoosh2"] : ["act_swipe1", "act_swipe2", "act_swipe3", "act_swipe4", "act_lunge_generic"];
+          playSound(swipePool[Math.floor(Math.random() * swipePool.length)], 0.35);
         }
         if (!recentCaster.isEnemy && typeof triggerVisualEffect2 === "function") {
           triggerVisualEffect2(skill.damageType === "magical" ? "fx_magic_circle.png" : "fx_impact.png", "50%", "30%", 1.2);
@@ -805,7 +888,11 @@ const CampaignView = ({
         const isHeavy = isDmgAction && (u.lastAction.crit || /BREAK|EXECUTE|JACKPOT/.test(String(u.lastAction.msg || "")) || (actTarget && typeof u.lastAction.amount === "number" && u.lastAction.amount >= actTarget.maxHp * 0.2));
         showDamage(u.lastAction.targetId, txt, u.lastAction.crit ? "crit" : u.lastAction.type);
         if (isHeavy) {
-          hitStopUntil.current = Date.now() + 160;
+          // Extend-only: this reaction effect fires from watching combatants
+          // state AFTER an action resolved, potentially while that action's
+          // own (much longer) cinematic cast lock is still active -- never
+          // shrink an active lock down to this short a window.
+          hitStopUntil.current = Math.max(hitStopUntil.current, Date.now() + 160);
           triggerShake("heavy", 450);
         } else if (isDmgAction) {
           triggerShake("light", 250);
@@ -1685,6 +1772,15 @@ const CampaignView = ({
       columnNumber: 13
     }),
     activeBattle && /* @__PURE__ */ jsxDEV("div", { className: "battle-screen animate-fadeIn", children: [
+      cameoCutin && React.createElement("div", { className: "sig-cutin ally cameo-cutin", key: "cameo-cutin" }, [
+        React.createElement("div", { className: "sig-cutin-stripe", key: "stripe", style: { background: `linear-gradient(90deg, transparent, ${(ELEMENTS[cameoCutin.element] || {}).color || "#00d2ff"}, transparent)` } }),
+        React.createElement("img", { className: "sig-cutin-portrait", key: "img", src: cameoCutin.img, style: { borderColor: (ELEMENTS[cameoCutin.element] || {}).color || "#00d2ff" } }),
+        React.createElement("div", { className: "sig-cutin-textblock", key: "tb" }, [
+          React.createElement("div", { className: "sig-cutin-label", key: "l", style: { color: "#00d2ff" } }, "★ GUEST SUMMON"),
+          React.createElement("div", { className: "sig-cutin-name", key: "n" }, cameoCutin.sig),
+          React.createElement("div", { className: "sig-cutin-user", key: "u" }, cameoCutin.guest + " channeled by " + cameoCutin.user)
+        ])
+      ]),
       activeSkill && /* @__PURE__ */ jsxDEV("div", { className: `skill-banner ${String(activeSkill.name).includes("RESONANCE") ? "resonance-banner" : ""}`, children: [
         /* @__PURE__ */ jsxDEV("div", { className: "skill-banner-text", children: activeSkill.name }, void 0, false, {
           fileName: "<stdin>",
@@ -1704,6 +1800,26 @@ const CampaignView = ({
         lineNumber: 5057,
         columnNumber: 13
       }),
+      battleState === "ACTIVE" && (() => {
+        // TURN-ORDER STRIP: project who acts next by how soon each living unit's
+        // gauge reaches 100 given its current fill rate. Faster units surface
+        // earlier, so speed is finally visible at a glance.
+        const living = combatants.filter((c) => !c.dead);
+        const speeds = living.map((u) => getBattleStats(u, playerElement, u.activeSynergies || []).speed);
+        const order = living.map((u) => {
+          const spd = getBattleStats(u, playerElement, u.activeSynergies || []).speed;
+          const rate = Math.max(0.1, getGaugeGain(spd, speeds, combatSpeed));
+          return { u, eta: Math.max(0, (100 - (u.gauge || 0)) / rate) };
+        }).sort((a, b) => a.eta - b.eta).slice(0, 6);
+        return React.createElement("div", { key: "turn-strip", className: "turn-order-strip" },
+          React.createElement("span", { key: "lbl", className: "turn-order-label" }, "NEXT"),
+          order.map(({ u }, i) => React.createElement("div", {
+            key: u.id,
+            className: `turn-order-chip ${u.isEnemy ? "enemy" : "ally"} ${i === 0 ? "imminent" : ""}`,
+            title: u.name
+          }, React.createElement("img", { src: u._cameoImg || u.img, alt: u.name })))
+        );
+      })(),
       /* @__PURE__ */ jsxDEV("div", { className: "battle-header", style: { padding: "15px", background: "rgba(0,0,0,0.8)" }, children: [
         /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
           /* @__PURE__ */ jsxDEV("div", { className: "battle-header-info", children: [
@@ -1776,6 +1892,22 @@ const CampaignView = ({
                 columnNumber: 22
               }
             ),
+            cameoData && (() => {
+              const cdLeft = Math.max(0, 60000 - (Date.now() - cameoRef.current.lastUsed));
+              const ready = cameoRef.current.usesLeft > 0 && cdLeft <= 0;
+              return React.createElement("button", {
+                key: "cameo-btn",
+                onClick: triggerCameo,
+                disabled: !ready,
+                title: ready ? `Summon ${cameoData.name} — ${cameoData.sigName}` : cameoRef.current.usesLeft <= 0 ? "No guest summons left" : `Recharging (${Math.ceil(cdLeft / 1000)}s)`,
+                className: "train-btn cameo-summon-btn",
+                style: { padding: "4px 10px 4px 4px", fontSize: "0.65rem", width: "auto", display: "flex", alignItems: "center", gap: 6, opacity: ready ? 1 : 0.55, border: ready ? "2px solid #00d2ff" : "2px solid #333" }
+              }, [
+                React.createElement("img", { key: "face", src: cameoData.img, style: { width: 26, height: 26, borderRadius: "50%", objectFit: "cover", filter: ready ? "none" : "grayscale(1)" } }),
+                React.createElement("span", { key: "label" }, ready ? "SUMMON" : cameoRef.current.usesLeft <= 0 ? "SPENT" : `${Math.ceil(cdLeft / 1000)}s`),
+                React.createElement("span", { key: "uses", style: { fontSize: "0.55rem", opacity: 0.7 } }, `x${cameoRef.current.usesLeft}`)
+              ]);
+            })(),
             /* @__PURE__ */ jsxDEV("button", { onClick: () => {
               if (confirm("Abandon battle?")) {
                 setActiveBattle(null);
@@ -1832,7 +1964,8 @@ const CampaignView = ({
         lineNumber: 5063,
         columnNumber: 11
       }),
-      /* @__PURE__ */ jsxDEV("div", { className: `battle-scene ${sceneShake ? "scene-shake-" + sceneShake : ""}`, children: [
+      /* @__PURE__ */ jsxDEV("div", { ref: battleSceneRef, className: `battle-scene ${sceneShake ? "scene-shake-" + sceneShake : ""}`, children: [
+        /* @__PURE__ */ jsxDEV(ProjectileLayer, { combatants, containerRef: battleSceneRef }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
         parryFlash && /* @__PURE__ */ jsxDEV("div", { className: "parry-flash-overlay" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
         breakBanner && /* @__PURE__ */ jsxDEV("div", { className: "break-banner-wrap", children: [
           /* @__PURE__ */ jsxDEV("div", { className: "break-banner-flash" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),

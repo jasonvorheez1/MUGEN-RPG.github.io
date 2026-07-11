@@ -1578,6 +1578,12 @@
 <body>
     <div class="nightlife-overlay"></div>
     <div class="rain-overlay"></div>
+    <!-- Static anchor for the background-music YouTube player. Lives OUTSIDE the
+         React root on purpose: the app has three top-level screens (launcher /
+         main menu / playing) that return entirely different trees, and only the
+         last one used to render this div -- so music could never start on the
+         launcher or menu screens, and React unmounts would destroy the player. -->
+    <div id="bg-music-player" style="position:absolute;opacity:0;pointer-events:none"></div>
     <div id="app"></div>
     <!--
       Global remote-image loader shim.

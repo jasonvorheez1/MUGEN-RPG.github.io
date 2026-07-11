@@ -55,3 +55,12 @@ export function setMidiVolume(v) {
 export function isMidiPlaying() {
   return !!sequencer && !sequencer.paused;
 }
+
+// Browsers keep a fresh AudioContext suspended until a real user gesture. Call
+// this from a gesture handler to unlock audio that started "playing" silently.
+export function resumeAudioContext() {
+  if (!readyPromise) return;
+  readyPromise.then(({ ctx }) => {
+    if (ctx.state !== "running") ctx.resume().catch(() => {});
+  }).catch(() => {});
+}
