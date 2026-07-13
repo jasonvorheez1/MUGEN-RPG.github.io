@@ -144,8 +144,8 @@ const App = () => {
     return v ? parseInt(v, 10) : 1;
   });
   const [unlockedIds, setUnlockedIds] = useState(() => safeJSONParse("mugen_unlocked_ids", []));
-  const [unlockedFeatures, setUnlockedFeatures] = useState(() => safeJSONParse("mugen_unlocked_features", ["home", "roster", "train", "campaign", "inventory", "gacha", "shop"]));
-  const [squadIds, setSquadIds] = useState(() => safeJSONParse("mugen_squad_ids", []));
+  const [unlockedFeatures, setUnlockedFeatures] = useState(() => Array.from(new Set([...safeJSONParse("mugen_unlocked_features", ["home", "roster", "train", "campaign", "inventory", "gacha", "shop"]), "events", "trials", "missions"]))); /* TEMP-TEST-UNLOCK */
+  const [squadIds, setSquadIds] = useState(() => { const s = safeJSONParse("mugen_squad_ids", []); return s.length ? s : safeJSONParse("mugen_unlocked_ids", []).slice(0, 3); }); /* TEMP-TEST-SQUAD */
   // Cameo "guest" summon: an extra hero (export_id) who is NOT in the squad but
   // flashes in to fire their unlocked signature (FFRK Roaming Warrior style).
   const [cameoId, setCameoId] = useState(() => safeJSONParse("mugen_cameo_id", null));

@@ -211,6 +211,38 @@ const TrialsView = ({
     const f = extractFranchise(c);
     return !f || (franchiseCounts[f] || 0) < 3;
   });
+  // ============================ ALL-STAR GAUNTLET ============================
+  // Replaces the old endless "Void": a run through EVERY series in a fixed
+  // order, fought against each series' own champions, escalating every round
+  // (and harder still each full lap). The round counter reuses `endlessFloor`
+  // (already persisted). Series need >=2 members to field a champion team;
+  // sorted alphabetically so the order is stable and previewable.
+  const gauntletSeries = allFranchises
+    .filter((f) => (franchiseCounts[f] || 0) >= 2)
+    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  const gauntletLen = Math.max(1, gauntletSeries.length);
+  const gauntletRound = Math.max(1, endlessFloor);
+  const gauntletIdx = (gauntletRound - 1) % gauntletLen;
+  const gauntletLap = Math.floor((gauntletRound - 1) / gauntletLen);
+  const gauntletCurrentSeries = gauntletSeries[gauntletIdx] || null;
+  // Enemy CP for a given round: climbs every round, ramps harder each lap.
+  const gauntletCp = (round) => {
+    const lap = Math.floor((round - 1) / gauntletLen);
+    return Math.floor(45e3 * round * Math.pow(1.07, round) * (1 + lap * 0.6));
+  };
+  // A series' top `n` champions: signature-owners first, then best tier. Shared
+  // by the menu preview (portraits) and the battle builder (enemy stats).
+  const seriesChampions = (franchise, n) => {
+    if (!franchise) return [];
+    const sigOwners = new Set((skills || []).filter((s) => s.signature).map((s) => s.owner));
+    const tierOrder = ["SS", "S+", "S", "S-", "A+", "A", "A-", "B+", "B", "C+", "C"];
+    const tierRank = (t) => { const i = tierOrder.indexOf((t || "C").trim().toUpperCase()); return i === -1 ? 99 : i; };
+    return characters
+      .filter((c) => extractFranchise(c) === franchise)
+      .slice()
+      .sort((a, b) => (sigOwners.has(b.name) ? 1 : 0) - (sigOwners.has(a.name) ? 1 : 0) || tierRank(a.tier) - tierRank(b.tier))
+      .slice(0, n);
+  };
   const baseElementTrials = Object.keys(ELEMENTS).map((el) => ({
     baseId: `trial_el_${el}`,
     name: `${ELEMENTS[el].name} Singularity`,
@@ -450,7 +482,7 @@ const TrialsView = ({
     playSound(["mugen_round", "mugen_round2", "mugen_round3"][Math.floor(Math.random() * 3)], 0.6);
     setTimeout(() => playSound("mugen_fight", 0.6), 550);
     if (typeof setBattleMusicActive === "function") setBattleMusicActive(true);
-    if (typeof setIsHardBattle === "function") setIsHardBattle(trial.difficulty === "hard" || trial.difficulty === "expert" || trial.type === "endless");
+    if (typeof setIsHardBattle === "function") setIsHardBattle(trial.difficulty === "hard" || trial.difficulty === "expert" || trial.type === "endless" || trial.type === "allstar");
     const allies = squad.map((c, i) => {
       const initialStanceVal = c.element === playerElement ? 0.25 : 0.12;
       return {
@@ -515,7 +547,47 @@ const TrialsView = ({
     // confirm screen (see pendingTrial render below) rolls this EXACT loadout
     // -- what you scout is what you fight, not just a flavor sample.
     const bossGearRoll = seededRandom(trial.id + "_gear");
-    const enemies = bossEntries.map((bossDef, i) => {
+    let enemies;
+    if (trial.type === "allstar") {
+      // ALL-STAR ROUND: fight the current series' own champions (their real
+      // signatures), not a generic reskin -- more of them the deeper you go.
+      const champs = seriesChampions(trial.allstarFranchise, trial.allstarRound < 4 ? 2 : 3);
+      const chosen = champs.length ? champs : [characters[0]].filter(Boolean);
+      const shares = chosen.length >= 3 ? [0.42, 0.31, 0.27] : chosen.length === 2 ? [0.58, 0.42] : [1];
+      enemies = chosen.map((cd, i) => {
+        const st = getEnemyStatsFromCP(trial.cpReq * difficultyScale * shares[i], "boss");
+        const sig = findBossSig(cd.name);
+        return {
+          id: `allstar-${i}`,
+          name: cd.name,
+          img: cd.imageUrl,
+          ...st,
+          element: cd.element,
+          franchise: trial.allstarFranchise,
+          level: 100,
+          _equippedGear: rollEnemyGear(4, bossGearRoll),
+          skillId: cd.skillId || pickElite(trial.cpReq + i * 7),
+          skillId2: sig ? sig.id : pickElite(trial.cpReq + 13 + i),
+          abilityLevel: 12,
+          abilityLevel2: 12,
+          skillCd: 0,
+          skillCd2: 0,
+          maxSkillCd: 32,
+          maxSkillCd2: 52,
+          isEnemy: true,
+          isBoss: i === 0,
+          stagger: 0,
+          maxStagger: 1500,
+          gauge: 92 - i * 16,
+          burst: 0,
+          effects: [{ type: "shield", duration: 8, val: 0.32, label: "ALL-STAR AEGIS" }],
+          dead: false,
+          critRate: 0.06,
+          evasion: 0.05,
+          lifesteal: 0
+        };
+      });
+    } else enemies = bossEntries.map((bossDef, i) => {
       const bossStats = getEnemyStatsFromCP(trial.cpReq * difficultyScale * cpShares[i], "boss");
       const sig = findBossSig(bossDef.name);
       return {
@@ -560,6 +632,91 @@ const TrialsView = ({
       allies.forEach((a) => applyLeaderBonus(leaderChar, a, squad));
     }
     setCombatants([...enemies, ...allies]);
+  };
+  // Launch the current All-Star round against the active series. NO franchise/
+  // element requirement (any squad may enter) -- deliberately no `element`
+  // field so startTrial's element gate is skipped; the background/badge branch
+  // on type === "allstar" instead.
+  const startAllStarRound = () => {
+    const series = gauntletCurrentSeries;
+    if (!series) { createFloatingText("Recruit heroes across more series to open the gauntlet.", true); return; }
+    const round = gauntletRound;
+    const el = seriesChampions(series, 1)[0]?.element || "DARK";
+    startTrial({
+      id: `allstar_${round}`,
+      name: `${series} — Round ${round}`,
+      allstarFranchise: series,
+      allstarRound: round,
+      allstarElement: el,
+      cpReq: gauntletCp(round),
+      desc: `All-Star Gauntlet · Lap ${gauntletLap + 1}`,
+      rewards: { gems: 12 + round, materials: 120 + round * 12, essence: 6 + Math.floor(round / 4), aura: 20 + round * 6 },
+      difficulty: "hard",
+      type: "allstar"
+    });
+  };
+  // Overhauled All-Star menu: current series showcase (champion portraits +
+  // scaling enemy power), the escalating "road ahead" of upcoming series, and
+  // the full gauntlet roadmap. Built with React.createElement for brevity.
+  const renderAllStarMenu = () => {
+    const h = React.createElement;
+    const series = gauntletCurrentSeries;
+    const champs = seriesChampions(series, 3);
+    const cp = gauntletCp(gauntletRound);
+    const elColor = ELEMENTS[champs[0]?.element]?.color || "#facc15";
+    const upcoming = Array.from({ length: Math.min(6, gauntletLen) }).map((_, k) => ({
+      round: gauntletRound + k,
+      series: gauntletSeries[(gauntletIdx + k) % gauntletLen]
+    }));
+    return h("div", { className: "allstar-menu animate-fadeIn" }, [
+      h("div", { className: "allstar-hero glass-panel", key: "hero", style: { "--as-color": elColor } }, [
+        h("div", { className: "allstar-hero-bg", key: "bg" }),
+        h("div", { className: "allstar-kicker", key: "k" }, [
+          h("span", { className: "allstar-star", key: "s" }, "★"),
+          `LAP ${gauntletLap + 1}  ·  ROUND ${gauntletRound}  ·  ${gauntletLen} SERIES`
+        ]),
+        h("h1", { className: "allstar-title", key: "t" }, "ALL-STAR GAUNTLET"),
+        h("div", { className: "allstar-tagline", key: "tag" }, "Every series, in order. It only gets stronger."),
+        series ? h("div", { className: "allstar-now", key: "now" }, [
+          h("div", { className: "allstar-now-head", key: "nh" }, [
+            h("span", { className: "allstar-now-label", key: "l" }, "NOW ENTERING"),
+            h("span", { className: "allstar-now-series", key: "s" }, series)
+          ]),
+          h("div", { className: "allstar-champ-row", key: "cr" }, champs.length
+            ? champs.map((cd, i) => h("div", { className: `allstar-champ ${i === 0 ? "lead" : ""}`, key: i }, [
+                h("img", { key: "i", src: cd.imageUrl, alt: cd.name, loading: "lazy" }),
+                h("div", { className: "allstar-champ-name", key: "n" }, cd.name)
+              ]))
+            : h("div", { className: "allstar-empty", key: "e" }, "This series has no champions to field yet.")),
+          h("div", { className: "allstar-stats", key: "st" }, [
+            h("div", { className: "allstar-stat", key: "p" }, [
+              h("span", { className: "allstar-stat-label", key: "l" }, "ENEMY POWER"),
+              h("span", { className: "allstar-stat-val", key: "v", style: { color: "#ef4444" } }, formatPower(cp))
+            ]),
+            h("div", { className: "allstar-stat", key: "r" }, [
+              h("span", { className: "allstar-stat-label", key: "l" }, "REWARD"),
+              h("span", { className: "allstar-stat-val", key: "v", style: { color: "#facc15" } }, `${12 + gauntletRound} 💎`)
+            ]),
+            h("div", { className: "allstar-stat", key: "c" }, [
+              h("span", { className: "allstar-stat-label", key: "l" }, "COST"),
+              h("span", { className: "allstar-stat-val", key: "v" }, "50 ⚡")
+            ])
+          ]),
+          h("button", { className: "allstar-cta", key: "cta", onClick: () => startAllStarRound() },
+            `CHALLENGE ${String(series).toUpperCase()}`)
+        ]) : h("div", { className: "allstar-locked", key: "lk" },
+          "Recruit at least 2 heroes from a series to open the gauntlet.")
+      ]),
+      h("div", { className: "allstar-road glass-panel", key: "road" }, [
+        h("div", { className: "allstar-road-label", key: "l" }, "THE ROAD AHEAD"),
+        h("div", { className: "allstar-road-track", key: "t" }, upcoming.map((u, k) =>
+          h("div", { className: `allstar-stop ${k === 0 ? "current" : ""}`, key: k }, [
+            h("span", { className: "allstar-stop-num", key: "n" }, `R${u.round}`),
+            h("span", { className: "allstar-stop-name", key: "s" }, u.series || "—"),
+            k < upcoming.length - 1 ? h("span", { className: "allstar-stop-arrow", key: "a" }, "→") : null
+          ])))
+      ])
+    ]);
   };
   // Arena: a scouted 3v3 ladder, not a single hand-tuned boss. Unlike every other
   // Trial here, opponent CP is computed RELATIVE to the player's own chosen 3-hero
@@ -914,15 +1071,16 @@ const TrialsView = ({
   const finishTrial = () => {
     if (battleState === "WIN") {
       const isFirst = !clearedTrials.includes(activeTrial.id);
-      if (activeTrial.type === "endless") {
+      if (activeTrial.type === "allstar" || activeTrial.type === "endless") {
         setEndlessFloor((f) => f + 1);
         if (activeTrial.scaledRewards) {
           const r = activeTrial.scaledRewards;
           setGems((g) => g + (r.gems || 0));
           setMaterials((s) => s + (r.materials || 0));
           setEssence((e) => e + (r.essence || 0));
-          createFloatingText(`FLOOR CLEARED!`, false, "#ef4444");
         }
+        const nextSeries = gauntletSeries[gauntletRound % gauntletLen];
+        createFloatingText(`ROUND ${gauntletRound} CLEARED! Next: ${nextSeries || "???"}`, false, "#facc15");
       } else if (activeTrial.type === "arena") {
         setArenaWinStreak((streak) => {
           const next = streak + 1;
@@ -1094,13 +1252,13 @@ const TrialsView = ({
               padding: "8px 16px",
               borderRadius: 8,
               border: "none",
-              background: activeTab === "endless" ? "#ef4444" : "transparent",
-              color: activeTab === "endless" ? "#fff" : "var(--text-muted)",
+              background: activeTab === "endless" ? "#facc15" : "transparent",
+              color: activeTab === "endless" ? "#000" : "var(--text-muted)",
               fontWeight: 800,
               cursor: "pointer",
               fontSize: "0.75rem"
             },
-            children: "ENDLESS"
+            children: "★ ALL-STAR"
           },
           void 0,
           false,
@@ -1145,63 +1303,7 @@ const TrialsView = ({
       columnNumber: 7
     }),
     !activeTrial && !pendingTrial && /* @__PURE__ */ jsxDEV("div", { className: "trials-grid animate-fadeIn", style: { display: "grid", gap: 12 }, children: [
-      activeTab === "endless" && /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { textAlign: "center", padding: 40, borderColor: "#ef4444" }, children: [
-        /* @__PURE__ */ jsxDEV("h1", { style: { fontSize: "3rem", margin: 0, color: "#ef4444" }, children: [
-          "FLOOR ",
-          endlessFloor
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 7877,
-          columnNumber: 17
-        }),
-        /* @__PURE__ */ jsxDEV("div", { style: { color: "var(--text-muted)", margin: "10px 0 30px" }, children: "THE VOID NEVER ENDS" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 7878,
-          columnNumber: 17
-        }),
-        /* @__PURE__ */ jsxDEV("div", { style: { marginBottom: 20 }, children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.8rem", fontWeight: 900 }, children: "ENEMY PWR" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 7880,
-            columnNumber: 21
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.5rem", color: "#fff" }, children: Math.floor(endlessFloor * 25e3 * Math.pow(1.05, endlessFloor)).toLocaleString() }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 7881,
-            columnNumber: 21
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 7879,
-          columnNumber: 17
-        }),
-        /* @__PURE__ */ jsxDEV("button", { className: "train-btn", onClick: () => {
-          const floorCp = Math.floor(endlessFloor * 5e4 * Math.pow(1.06, endlessFloor));
-          const nextTrial = {
-            id: `endless_${endlessFloor}`,
-            name: `Void Floor ${endlessFloor}`,
-            element: ["FIRE", "WATER", "WIND", "LIGHT", "DARK", "EARTH"][endlessFloor % 6],
-            cpReq: floorCp,
-            desc: "Survive.",
-            rewards: {
-              gems: 10 + Math.floor(endlessFloor * 0.5),
-              materials: 100 + endlessFloor * 10,
-              essence: 5 + Math.floor(endlessFloor / 5)
-            },
-            difficulty: "hard",
-            type: "endless"
-          };
-          startTrial(nextTrial);
-        }, children: "ENTER THE VOID" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 7883,
-          columnNumber: 17
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 7876,
-        columnNumber: 14
-      }),
+      activeTab === "endless" && renderAllStarMenu(),
       activeTab === "arena" && (() => {
         const h = React.createElement;
         const tier = getArenaTier(arenaRank);
@@ -1870,7 +1972,7 @@ const TrialsView = ({
       }),
       /* @__PURE__ */ jsxDEV("div", { ref: battleSceneRef, className: "battle-scene", children: [
         /* @__PURE__ */ jsxDEV(ProjectileLayer, { combatants, containerRef: battleSceneRef }, void 0, false, {}),
-        /* @__PURE__ */ jsxDEV("div", { className: "battle-background-layer", style: { backgroundImage: `url(${activeTrial?.type === "endless" ? "background_void.png" : activeTrial?.element === "FIRE" ? "fx_burn.png" : activeTrial?.element === "WATER" ? "background_battle.png" : "background_citadel.png"})` } }, void 0, false, {
+        /* @__PURE__ */ jsxDEV("div", { className: "battle-background-layer", style: { backgroundImage: `url(${activeTrial?.type === "allstar" ? "background_citadel.png" : activeTrial?.type === "endless" ? "background_void.png" : activeTrial?.element === "FIRE" ? "fx_burn.png" : activeTrial?.element === "WATER" ? "background_battle.png" : "background_citadel.png"})` } }, void 0, false, {
           fileName: "<stdin>",
           lineNumber: 8125,
           columnNumber: 14
@@ -1886,11 +1988,12 @@ const TrialsView = ({
         (() => {
           const isArena = activeTrial?.type === "arena";
           const isVoid = activeTrial?.type === "endless";
+          const isAllStar = activeTrial?.type === "allstar";
           const tier = isArena ? getArenaTier(arenaRank) : null;
-          const tint = tier ? tier.color : isVoid ? "#a855f7" : ELEMENTS[activeTrial?.element]?.color || "#a855f7";
-          const emblem = tier ? tier.emblem : isVoid ? "◈" : "✦";
-          const label = tier ? `${tier.name} LEAGUE` : isVoid ? "THE VOID" : (activeTrial?.difficulty || "TRIAL").toUpperCase();
-          const missionName = isArena ? `RANK ${arenaRank}` : (activeTrial?.name || "").toUpperCase();
+          const tint = tier ? tier.color : isAllStar ? "#facc15" : isVoid ? "#a855f7" : ELEMENTS[activeTrial?.element]?.color || "#a855f7";
+          const emblem = tier ? tier.emblem : isAllStar ? "★" : isVoid ? "◈" : "✦";
+          const label = tier ? `${tier.name} LEAGUE` : isAllStar ? `ALL-STAR · ROUND ${activeTrial?.allstarRound || ""}` : isVoid ? "THE VOID" : (activeTrial?.difficulty || "TRIAL").toUpperCase();
+          const missionName = isArena ? `RANK ${arenaRank}` : isAllStar ? (activeTrial?.allstarFranchise || "").toUpperCase() : (activeTrial?.name || "").toUpperCase();
           return h(Fragment, { key: "trial-dressing" }, [
             h("div", { key: "vig", className: "trial-vignette", style: { "--tmb-color": tint } }),
             h("div", { key: "motes", className: "trial-ambient-layer" },

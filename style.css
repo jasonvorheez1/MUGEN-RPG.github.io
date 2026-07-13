@@ -3547,6 +3547,84 @@ select.search-bar {
 }
 
 /* =========================================================================
+   ALL-STAR GAUNTLET MENU — replaces the old flat "endless Void" panel with a
+   marquee showcase of the current series' champions, a live power/reward/cost
+   readout, and the escalating "road ahead" of upcoming series.
+   ========================================================================= */
+.allstar-menu { display: flex; flex-direction: column; gap: 14px; }
+.allstar-hero {
+    position: relative; overflow: hidden; border-radius: 20px; padding: 26px 24px 28px;
+    border: 1px solid rgba(250, 204, 21, 0.35);
+    background: linear-gradient(160deg, rgba(250,204,21,0.10), rgba(10,14,26,0.9) 55%);
+    text-align: center;
+}
+.allstar-hero-bg {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
+    background:
+        radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--as-color, #facc15) 30%, transparent), transparent 45%),
+        radial-gradient(circle at 85% 10%, rgba(250,204,21,0.18), transparent 40%);
+}
+.allstar-kicker {
+    position: relative; display: inline-flex; align-items: center; gap: 8px;
+    font-size: 0.62rem; font-weight: 900; letter-spacing: 3px; color: #facc15;
+    padding: 5px 14px; border-radius: 999px; background: rgba(250,204,21,0.1);
+    border: 1px solid rgba(250,204,21,0.3); margin-bottom: 12px;
+}
+.allstar-star { color: #facc15; text-shadow: 0 0 10px #facc15; animation: allstar-twinkle 1.8s ease-in-out infinite; }
+@keyframes allstar-twinkle { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.25); } }
+.allstar-title {
+    position: relative; margin: 0; font-family: 'Cinzel', serif; font-style: italic; font-weight: 900;
+    font-size: clamp(1.8rem, 6vw, 3rem); letter-spacing: 2px;
+    background: linear-gradient(180deg, #fff, #facc15); -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; text-shadow: 0 0 34px rgba(250,204,21,0.35);
+}
+.allstar-tagline { position: relative; font-size: 0.72rem; letter-spacing: 1px; color: var(--text-muted); margin-top: 4px; margin-bottom: 20px; }
+.allstar-now { position: relative; }
+.allstar-now-head { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-bottom: 14px; }
+.allstar-now-label { font-size: 0.55rem; font-weight: 900; letter-spacing: 3px; color: var(--text-muted); }
+.allstar-now-series { font-size: 1.5rem; font-weight: 900; color: #fff; text-shadow: 0 0 18px color-mix(in srgb, var(--as-color, #facc15) 60%, transparent); }
+.allstar-champ-row { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.allstar-champ { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 92px; }
+.allstar-champ img {
+    width: 84px; height: 84px; object-fit: cover; border-radius: 14px;
+    border: 2px solid rgba(255,255,255,0.15); box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+    transition: transform 0.2s;
+}
+.allstar-champ.lead img { width: 96px; height: 96px; border-color: #facc15; box-shadow: 0 0 26px rgba(250,204,21,0.4); }
+.allstar-champ:hover img { transform: translateY(-4px) scale(1.05); }
+.allstar-champ-name { font-size: 0.6rem; font-weight: 800; color: #e2e8f0; text-align: center; line-height: 1.1; max-width: 92px; }
+.allstar-empty, .allstar-locked { color: var(--text-muted); font-size: 0.8rem; padding: 26px 10px; }
+.allstar-stats { display: flex; justify-content: center; gap: 26px; margin-bottom: 20px; flex-wrap: wrap; }
+.allstar-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.allstar-stat-label { font-size: 0.5rem; font-weight: 900; letter-spacing: 2px; color: var(--text-muted); }
+.allstar-stat-val { font-size: 1.15rem; font-weight: 900; color: #fff; }
+.allstar-cta {
+    position: relative; border: none; cursor: pointer; width: min(360px, 90%);
+    padding: 15px 24px; border-radius: 14px; font-weight: 900; font-size: 0.9rem; letter-spacing: 1.5px;
+    color: #1a1400; background: linear-gradient(135deg, #ffe066, #facc15 55%, #eab308);
+    box-shadow: 0 8px 24px rgba(250,204,21,0.35); transition: transform 0.15s, box-shadow 0.15s;
+    animation: allstar-cta-pulse 2.4s ease-in-out infinite;
+}
+.allstar-cta:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(250,204,21,0.5); }
+@keyframes allstar-cta-pulse {
+    0%,100% { box-shadow: 0 8px 24px rgba(250,204,21,0.3); }
+    50% { box-shadow: 0 8px 34px rgba(250,204,21,0.55); }
+}
+.allstar-road { border-radius: 16px; padding: 16px 18px; border: 1px solid rgba(255,255,255,0.08); }
+.allstar-road-label { font-size: 0.55rem; font-weight: 900; letter-spacing: 3px; color: var(--text-muted); margin-bottom: 12px; }
+.allstar-road-track { display: flex; align-items: stretch; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+.allstar-stop {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 0 0 auto;
+    padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07); position: relative; min-width: 92px;
+}
+.allstar-stop.current { border-color: #facc15; background: rgba(250,204,21,0.1); box-shadow: 0 0 16px rgba(250,204,21,0.2); }
+.allstar-stop-num { font-size: 0.62rem; font-weight: 900; color: #facc15; }
+.allstar-stop.current .allstar-stop-num { color: #fff; }
+.allstar-stop-name { font-size: 0.6rem; font-weight: 700; color: #e2e8f0; text-align: center; line-height: 1.1; }
+.allstar-stop-arrow { position: absolute; right: -9px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.8rem; z-index: 1; }
+
+/* =========================================================================
    PROJECTILES -- ranged casts (fireball/ice shard/etc.) fly an actual orb
    from caster to target instead of just playing the caster's wind-up. See
    ProjectileLayer/Projectile in CombatSystem.js. `left`/`top` are set inline
