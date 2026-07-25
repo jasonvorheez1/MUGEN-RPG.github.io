@@ -7,10 +7,12 @@ import {
   Info,
   Plus
 } from "lucide-react";
-import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow, applyStatusTick, resolveBasicAttack, getCastAnimMs, getLungeMs, getBasicAttackMs, HITSTOP_BUFFER_MS, ProjectileLayer } from "../CombatSystem.js";
-import { ELEMENTS, TIER_STATS, BOSS_ROSTER, EQUIPMENT } from "../constants.js";
-import { calculateStat, playSound, calculateSubStat, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, SIGNATURE_BONUS, incrementCourierFieldBattles, getDominantSpecialKey, SPECIAL_ARCHETYPE_NAMES, getGaugeGain, getGearPassives, rollEnemyGear, seededRandom } from "../utils.js";
+import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow, applyStatusTick, resolveBasicAttack, getCastAnimMs, getCastAnimSound, getLungeMs, getBasicAttackMs, getCooldownGain, getFlurryHitSound, HITSTOP_BUFFER_MS, ProjectileLayer, pushShieldEffect, TurnOrderStrip } from "../CombatSystem.js";
+import { ELEMENTS, TIER_STATS, BOSS_ROSTER, EQUIPMENT, AUTO_CLEAR_PWR_MULT } from "../constants.js";
+import { calculateStat, playSound, calculateSubStat, applyLeaderBonus, applyCrewChemistry, getEnemyStatsFromCP, formatPower, applyMitigation, SIGNATURE_BONUS, incrementCourierFieldBattles, getDominantSpecialKey, SPECIAL_ARCHETYPE_NAMES, getGaugeGain, getGearPassives, rollEnemyGear, seededRandom, makeGearInstanceId, INITIAL_GAUGE_RANGE_WIDE } from "../utils.js";
 import { CampaignIntro } from "./ViewShared.js";
+import { TrialsMenu } from "./trials/TrialsMenu.js";
+import { PreTrialModal } from "./trials/PreTrialModal.js";
 
 // Arena league tiers — pure presentation, derived from rank. Gives the ladder the
 // Bronze→Master arc players expect from arena modes (Disney Heroes / CRK style).
@@ -92,6 +94,7 @@ const ArenaIntro = ({ squad, enemies, rank, onComplete }) => {
 
 const TrialsView = ({
   onWorldTimeStop,
+  cameoId = null,
   characters = [],
   unlockedIds = [],
   createFloatingText = () => {
@@ -118,7 +121,11 @@ const TrialsView = ({
   skills,
   setShowSquadBuilder,
   auraUpgrades = {},
-  setCharacters
+  setCharacters,
+  abilityShards = {},
+  setAbilityShards,
+  gearInventory = [],
+  setGearInventory
 }) => {
   const [pendingTrial, setPendingTrial] = useState(null);
   const [activeTrial, setActiveTrial] = useState(null);
@@ -142,6 +149,82 @@ const TrialsView = ({
   // nothing else can act (or even fill gauge) mid-ability.
   const hitStopUntil = useRef(0);
   const battleSceneRef = useRef(null);
+  // COMBO CHAIN -- see CampaignView's identical mechanic. Every ally hit
+  // extends it, any enemy action breaks it; the multiplier feeds back into
+  // resolveBasicAttack (comboMult) AND executeCombatSkill (extraPowerMult),
+  // and the raw count also feeds the melee flurry's own comboAmp (see
+  // resolveBasicAttack's comboCount) so a live chain snowballs into bigger,
+  // more air-heavy combos, not just more damage.
+  const comboRef = useRef({ count: 0 });
+  const [comboDisplay, setComboDisplay] = useState(0);
+  const comboMult = () => 1 + Math.min(0.4, comboRef.current.count * 0.02);
+  const bumpCombo = (n = 1) => {
+    comboRef.current.count += n;
+    setComboDisplay(comboRef.current.count);
+  };
+  const breakCombo = () => {
+    if (comboRef.current.count > 0) {
+      comboRef.current.count = 0;
+      setComboDisplay(0);
+    }
+  };
+  // CAMEO / GUEST SUMMON -- ported from CampaignView so guest abilities work
+  // in every battle mode, not just Campaign. Same rules: 2 uses/battle, ~60s
+  // between uses, first use available immediately, and auto-fires the instant
+  // it's ready while Auto is on (see the tick loop below) instead of sitting
+  // there unused waiting for a manual click.
+  const cameoData = useMemo(() => {
+    if (!cameoId) return null;
+    const c = (characters || []).find((x) => String(x.export_id) === String(cameoId));
+    if (!c) return null;
+    const sig = (skills || []).find((s) => s.signature && s.owner === c.name);
+    if (!sig) return null;
+    if (!(c.signatureUnlocked || (c.abilityLevels && c.abilityLevels[sig.id]))) return null;
+    return { sigId: sig.id, img: c.imageUrl, name: c.name, element: c.element, sigName: sig.name };
+  }, [cameoId, characters, skills]);
+  const cameoRef = useRef({ usesLeft: 2, lastUsed: 0 });
+  const [cameoCutin, setCameoCutin] = useState(null);
+  const triggerCameo = () => {
+    if (battleState !== "ACTIVE" || !cameoData) return;
+    if (Date.now() < hitStopUntil.current) return;
+    if (cameoRef.current.usesLeft <= 0) return;
+    if (Date.now() - cameoRef.current.lastUsed < 60000) return;
+    setCombatants((prev) => {
+      const next = [...prev];
+      const allies = next.filter((u) => !u.isEnemy && !u.dead);
+      if (!allies.length) return prev;
+      const idx = next.findIndex((u) => u.id === allies.reduce((best, u) => (u.gauge || 0) > (best.gauge || 0) ? u : best, allies[0]).id);
+      const caster = next[idx];
+      const orig = { skillId2: caster.skillId2, skillCd2: caster.skillCd2, maxSkillCd2: caster.maxSkillCd2, abilityLevel2: caster.abilityLevel2, skillCd: caster.skillCd, maxSkillCd: caster.maxSkillCd };
+      caster.skillId2 = cameoData.sigId;
+      caster.maxSkillCd2 = 0;
+      caster.skillCd2 = 0;
+      caster.abilityLevel2 = caster.abilityLevel2 || 1;
+      caster.maxSkillCd = 999999;
+      caster.skillCd = 0;
+      const ns = executeCombatSkill({ combatants: next, attackerId: caster.id, skills, playerElement, isLimitBreak: false });
+      ns.forEach((s, i) => next[i] = s);
+      const after = next[idx];
+      after.skillId2 = orig.skillId2;
+      after.skillCd2 = orig.skillCd2;
+      after.maxSkillCd2 = orig.maxSkillCd2;
+      after.abilityLevel2 = orig.abilityLevel2;
+      after.skillCd = orig.skillCd;
+      after.maxSkillCd = orig.maxSkillCd;
+      after._cameoImg = cameoData.img;
+      after._cameoRevertAt = Date.now() + 1600;
+      cameoRef.current.usesLeft -= 1;
+      cameoRef.current.lastUsed = Date.now();
+      setCameoCutin({ guest: cameoData.name, sig: cameoData.sigName, user: after.name, img: cameoData.img, element: cameoData.element });
+      hitStopUntil.current = Math.max(hitStopUntil.current, Date.now() + 260);
+      playSound("mugen_super", 0.5);
+      setTimeout(() => setCameoCutin(null), 2200);
+      return next;
+    });
+  };
+  React.useEffect(() => {
+    if (battleState === "ACTIVE") cameoRef.current = { usesLeft: 2, lastUsed: 0 };
+  }, [battleState]);
   useEffect(() => {
     if (battleState !== "ACTIVE") { deadIdsRef.current = new Set(); return; }
     const newlyDead = combatants.filter((c) => c.dead && !deadIdsRef.current.has(c.id));
@@ -153,11 +236,15 @@ const TrialsView = ({
       setTimeout(() => setKoEvent((k) => (k && k.id === u.id ? null : k)), 1500);
     }
   }, [combatants, battleState]);
-  const [arenaWinStreak, setArenaWinStreak] = useState(() => parseInt(localStorage.getItem("mugen_arena_streak") || "0", 10));
+  const [arenaWinStreak, setArenaWinStreak] = useState(() => {
+    const saved = parseInt(localStorage.getItem("mugen_arena_streak") || "0", 10);
+    return Number.isFinite(saved) ? Math.max(0, Math.min(saved, 2)) : 0;
+  });
   useEffect(() => {
     localStorage.setItem("mugen_arena_streak", arenaWinStreak.toString());
   }, [arenaWinStreak]);
   const ARENA_WINS_PER_RANK = 3;
+  const ARENA_QUALIFIER_WINS = ARENA_WINS_PER_RANK - 1;
   useEffect(() => {
     if (squadIds.length === 0) setShowSquadBuilder(true);
   }, []);
@@ -225,10 +312,15 @@ const TrialsView = ({
   const gauntletIdx = (gauntletRound - 1) % gauntletLen;
   const gauntletLap = Math.floor((gauntletRound - 1) / gauntletLen);
   const gauntletCurrentSeries = gauntletSeries[gauntletIdx] || null;
-  // Enemy CP for a given round: climbs every round, ramps harder each lap.
+  // Enemy CP for a given round: All-Star is the true endgame gauntlet, so
+  // ROUND 1 ALONE is already sized for the recommended squad (Ascension 5,
+  // Level 100, Skill Level 500 on both slots, ~Bond 50) -- see the PWR v6.0
+  // comment in utils.js for how that reference squad's power was derived
+  // (~30M PWR). It keeps climbing hard every round after that, and harder
+  // still each full lap, so it never stops being a genuine endgame test.
   const gauntletCp = (round) => {
     const lap = Math.floor((round - 1) / gauntletLen);
-    return Math.floor(45e3 * round * Math.pow(1.07, round) * (1 + lap * 0.6));
+    return Math.floor(30e6 * Math.pow(1.045, round - 1) * (1 + lap * 0.5));
   };
   // A series' top `n` champions: signature-owners first, then best tier. Shared
   // by the menu preview (portraits) and the battle builder (enemy stats).
@@ -243,12 +335,17 @@ const TrialsView = ({
       .sort((a, b) => (sigOwners.has(b.name) ? 1 : 0) - (sigOwners.has(a.name) ? 1 : 0) || tierRank(a.tier) - tierRank(b.tier))
       .slice(0, n);
   };
+  // Elemental Trials are the lenient/accessible end of Trials -- meant to be
+  // clearable well before endgame (unlike All-Star), so baseCp sits in the
+  // low-millions where a mid-game squad's PWR already lands (see the PWR
+  // v6.0 reference figures in utils.js), not the hundred-million-plus range
+  // that used to require a near-maxed roster just to attempt Easy.
   const baseElementTrials = Object.keys(ELEMENTS).map((el) => ({
     baseId: `trial_el_${el}`,
     name: `${ELEMENTS[el].name} Singularity`,
     desc: `A dimensional void echoing with concentrated ${ELEMENTS[el].name} energy. Only resonators of the same element can fully synchronize.`,
     element: el,
-    baseCp: 25e7,
+    baseCp: 1.2e6,
     baseRewards: { gems: 5e4, aura: 5e3, essence: 500, materials: 2500 },
     type: "element"
   }));
@@ -271,13 +368,16 @@ const TrialsView = ({
     owned.forEach((c) => { counts[c.element] = (counts[c.element] || 0) + 1; });
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
   };
+  // Series (franchise) Trials are also lenient by design -- same low-millions
+  // baseline as Elemental, with a small per-franchise-index bump so a deeper
+  // roster (more eligible franchises unlocked) nudges later ones up slightly.
   const baseFranchiseTrials = eligibleFranchises.map((f, i) => ({
     baseId: `trial_fr_${f.replace(/\s+/g, "_")}`,
     name: `${f} Paradox`,
     desc: `The collective destiny of the ${f} universe manifested as a trial of pure strength. Only those from the same origin can enter.`,
     franchise: f,
     element: ownedFranchiseElement(f) || undefined,
-    baseCp: 5e8 + i * 1e8,
+    baseCp: 1.5e6 + i * 2e5,
     baseRewards: { gems: 15e4, aura: 15e3, essence: 1500, materials: 1e4 },
     type: "franchise"
   }));
@@ -288,7 +388,7 @@ const TrialsView = ({
       desc: `A convergence of minor dimensions and forgotten worlds. Only those from low-population franchises can synchronize here.`,
       isWildcard: true,
       element: "DARK",
-      baseCp: 8e6,
+      baseCp: 5e5,
       baseRewards: { gems: 3e4, aura: 3500, essence: 350, materials: 1500 },
       type: "franchise"
     });
@@ -390,7 +490,7 @@ const TrialsView = ({
       const u = next[idx];
       if (!u || u.dead || (u.burst || 0) < 30) return prev;
       u.burst -= 30;
-      u.effects.push({ type: "shield", duration: 2, val: 0.3, label: "EMERGENCY GUARD" });
+      pushShieldEffect(u, { type: "shield", duration: 2, val: 0.3, label: "EMERGENCY GUARD" });
       u.effects.push({ type: "buff_def", duration: 2, val: 0.5, label: "DEF UP" });
       showDamage(u.id, "GUARD UP", "heal");
       playSound("shield_up");
@@ -416,7 +516,9 @@ const TrialsView = ({
       });
       const casterAfter = nextState.find((n) => n.id === unitId);
       const castMs = getCastAnimMs(casterAfter?.lastCastAnim);
-      if (castMs) hitStopUntil.current = Date.now() + castMs + HITSTOP_BUFFER_MS;
+      // BUG FIX: must match BattleUnit's speed-scaled animMs (see battleUI.jsx)
+      // or the sim idles after the (now-shorter) visual animation finishes.
+      if (castMs) hitStopUntil.current = Date.now() + Math.max(200, Math.round(castMs / (combatSpeed || 1))) + HITSTOP_BUFFER_MS;
       return nextState;
     });
   };
@@ -470,11 +572,13 @@ const TrialsView = ({
         return createFloatingText(`Requires at least 1 ${trial.element} hero!`, true);
       }
     }
-    const TRIAL_COST = 50;
+    const TRIAL_COST = trial.staminaCost || 50;
     if (stamina < TRIAL_COST) {
       return createFloatingText(`Need ${TRIAL_COST} Stamina for Trial!`, true);
     }
     setStamina((s) => s - TRIAL_COST);
+    comboRef.current.count = 0;
+    setComboDisplay(0);
     setActiveTrial(trial);
     setPendingTrial(null);
     setBattleState("INTRO");
@@ -517,10 +621,12 @@ const TrialsView = ({
         gauge: Math.random() * 50,
         burst: 0,
         effects: [
-          { type: "tactical_stance", duration: 9999, val: initialStanceVal, label: `STANCE:${playerElement}` }
+          { type: "tactical_stance", duration: 9999, val: initialStanceVal, label: `STANCE:${playerElement}` },
+          ...(c.name === "Jimmy Neutron" ? [{ type: "aggro", duration: 3, val: 0, label: "NOT LIKE THIS..." }] : [])
         ],
         dead: false,
         critRate: calculateSubStat(c, characters, "crit_rate", skills, auraUpgrades) / 100,
+        technique: calculateSubStat(c, characters, "technique", skills, auraUpgrades),
         evasion: calculateSubStat(c, characters, "evasion", skills, auraUpgrades) / 100,
         lifesteal: 0
       };
@@ -578,7 +684,8 @@ const TrialsView = ({
           isBoss: i === 0,
           stagger: 0,
           maxStagger: 1500,
-          gauge: 92 - i * 16,
+          // Fair-start fix: was 92-i*16 (76-92), a near-guaranteed first move. Same range as allies now.
+          gauge: Math.random() * INITIAL_GAUGE_RANGE_WIDE,
           burst: 0,
           effects: [{ type: "shield", duration: 8, val: 0.32, label: "ALL-STAR AEGIS" }],
           dead: false,
@@ -587,8 +694,52 @@ const TrialsView = ({
           lifesteal: 0
         };
       });
+    } else if (trial.type === "grind") {
+      // GRIND DUNGEONS -- deliberately lighter than a real Trial boss fight:
+      // "minion" stat archetype (not "boss"), no shield buff, only 1-2 weaker
+      // foes, so these stay fast and repeatable. Still draws from BOSS_ROSTER
+      // for art/name and still gets a real elite/signature skill so it isn't
+      // a total pushover, matching "enemies use real abilities" elsewhere.
+      const grindCount = trial.cpReq > 2e6 ? 2 : 1;
+      const grindShares = grindCount === 2 ? [0.6, 0.4] : [1];
+      enemies = Array.from({ length: grindCount }).map((_, i) => {
+        const gDef = BOSS_ROSTER[Math.abs(trial.id.length + trial.id.charCodeAt(trial.id.length - 1) + i * 11) % BOSS_ROSTER.length];
+        const gStats = getEnemyStatsFromCP(trial.cpReq * grindShares[i], "minion");
+        return {
+          id: `grind-${i}`,
+          name: gDef.name,
+          img: gDef.img,
+          ...gStats,
+          element: gDef.element,
+          level: Math.min(100, 20 + trial.cpReq / 5e4),
+          skillId: pickElite(trial.cpReq + i * 5),
+          skillId2: pickElite(trial.cpReq + 17 + i),
+          abilityLevel: 5,
+          abilityLevel2: 5,
+          skillCd: 0,
+          skillCd2: 0,
+          maxSkillCd: 45,
+          maxSkillCd2: 65,
+          isEnemy: true,
+          isBoss: i === 0,
+          stagger: 0,
+          maxStagger: 1500,
+          // Fair-start fix: was 60-i*15, ahead of allies' 0-50. Same range now.
+          gauge: Math.random() * INITIAL_GAUGE_RANGE_WIDE,
+          burst: 0,
+          effects: [],
+          dead: false,
+          critRate: 0.04,
+          evasion: 0.04,
+          lifesteal: 0
+        };
+      });
     } else enemies = bossEntries.map((bossDef, i) => {
-      const bossStats = getEnemyStatsFromCP(trial.cpReq * difficultyScale * cpShares[i], "boss");
+      // Named entries now fight like what they actually are -- a tank archetype
+      // (Whispy Woods, Mighty Bear) tanks, a glass one (Attack Slug, Beanbot)
+      // hits harder but folds faster -- instead of every trial boss sharing one
+      // flat "boss" stat curve regardless of lore identity.
+      const bossStats = getEnemyStatsFromCP(trial.cpReq * difficultyScale * cpShares[i], bossDef.archetype || "boss");
       const sig = findBossSig(bossDef.name);
       return {
         id: `trial-boss-${i}`,
@@ -611,7 +762,8 @@ const TrialsView = ({
         isBoss: i === 0,
         stagger: 0,
         maxStagger: 1500,
-        gauge: 90 - i * 20,
+        // Fair-start fix: was 90-i*20 (70-90), a near-guaranteed first move. Same range as allies now.
+        gauge: Math.random() * INITIAL_GAUGE_RANGE_WIDE,
         burst: 0,
         effects: [{ type: "shield", duration: Math.max(3, Math.floor(10 * difficultyScale)), val: 0.4 * difficultyScale, label: "TITAN SHIELD" }],
         dead: false,
@@ -624,10 +776,14 @@ const TrialsView = ({
       gems: Math.floor((trial.rewards?.gems || 0) * rewardScale),
       aura: Math.floor((trial.rewards?.aura || 0) * rewardScale),
       essence: Math.floor((trial.rewards?.essence || 0) * rewardScale),
-      materials: Math.floor((trial.rewards?.materials || 0) * rewardScale)
+      materials: Math.floor((trial.rewards?.materials || 0) * rewardScale),
+      credits: Math.floor((trial.rewards?.credits || 0) * rewardScale),
+      abilityShards: trial.targetSkillId ? { [trial.targetSkillId]: trial.shardAmount || 0 } : null,
+      gearReward: trial.gearReward || null
     } });
     const leaderId = squadIds[0];
     const leaderChar = leaderId ? characters.find((c) => String(c.export_id) === String(leaderId)) : null;
+    allies.forEach((a) => applyCrewChemistry(a, squad));
     if (leaderChar) {
       allies.forEach((a) => applyLeaderBonus(leaderChar, a, squad));
     }
@@ -654,6 +810,138 @@ const TrialsView = ({
       difficulty: "hard",
       type: "allstar"
     });
+  };
+  // ============================ GRIND DUNGEONS ============================
+  // A proper loot-run, not a target-picker: each clear drops a varied bundle
+  // (credits, materials, essence, aura, a random gear piece, and shards of a
+  // random ability at this tier's rarity band). Reward rates are pegged to
+  // Campaign's own "Raid" auto-sweep (10 stamina flat, credits = stageId*600,
+  // materials = stageId*40+~40, essence = stageId*3+5, aura = stageId*8) so a
+  // grind run is genuinely competitive per-stamina with just re-raiding a
+  // cleared Campaign stage -- it used to pay a small fraction of that, which
+  // made it pointless busywork next to Campaign farming. Bring shards to any
+  // equipped skill's SHARD BOOST (character screen) to instantly level it up
+  // for free. Six lenient, repeatable tiers -- short fights, no franchise/
+  // element gate -- meant to be run constantly, not saved for endgame like
+  // All-Star/Arena.
+  // Per-dungeon selected stamina PERCENTAGE (10%/25%/50%/100% of CURRENT
+  // stamina), remembered by tier. Percentage-based instead of a flat 1x-5x
+  // multiplier of a fixed base cost so the commitment automatically scales
+  // with however much stamina the player actually has right now -- which
+  // itself keeps growing from Deep Breath aura upgrades, Supernova, etc. A
+  // flat "5x" ceiling stops mattering the moment max stamina outgrows it;
+  // "50% of my current pool" never does.
+  const [grindPctByTier, setGrindPctByTier] = useState({});
+  const getGrindPct = (tier) => grindPctByTier[tier] || 25;
+  const GRIND_STAMINA_PCTS = [10, 25, 50, 100];
+  const grindEffMult = (dungeon, pct) => Math.max(1, Math.min(200, Math.floor((stamina * (pct / 100)) / dungeon.staminaCost)));
+  const GRIND_DUNGEONS = [
+    { tier: 1, name: "Back Alley Scrap", cpMult: 0.12, staminaCost: 12, shardAmount: 6, skillRarities: ["Common", "Uncommon"], gearRarities: ["Common"] },
+    { tier: 2, name: "Warehouse Raid", cpMult: 0.28, staminaCost: 16, shardAmount: 7, skillRarities: ["Uncommon", "Rare"], gearRarities: ["Common", "Rare"] },
+    { tier: 3, name: "Rooftop Skirmish", cpMult: 0.55, staminaCost: 20, shardAmount: 8, skillRarities: ["Rare"], gearRarities: ["Rare"] },
+    { tier: 4, name: "Underground Circuit", cpMult: 1, staminaCost: 26, shardAmount: 9, skillRarities: ["Rare", "Epic"], gearRarities: ["Rare", "Epic"] },
+    { tier: 5, name: "Vault Breach", cpMult: 1.8, staminaCost: 32, shardAmount: 10, skillRarities: ["Epic"], gearRarities: ["Epic"] },
+    { tier: 6, name: "The Deep End", cpMult: 3, staminaCost: 40, shardAmount: 12, skillRarities: ["Epic", "Legendary"], gearRarities: ["Epic", "Legendary"] }
+  ];
+  // Per-stamina rates roughly matching a mid-Campaign-stage Raid sweep, with a
+  // tier premium so deeper dungeons pay noticeably better per stamina too, not
+  // just a bigger flat number.
+  // STAMINA MULTIPLIER: the player can commit 2x/3x/5x a dungeon's base stamina
+  // cost in one run for proportionally bigger rewards, PLUS a small "bulk"
+  // premium (up to +20% at 5x) so spending stamina in one bigger sitting is
+  // strictly better per-stamina than the same total spent 1x at a time --
+  // this is the actual fix for "grind dungeons are pathetic," not just a
+  // flat number bump.
+  const GRIND_STAMINA_MULTS = [1, 2, 3, 5];
+  const grindBulkMult = (mult) => 1 + Math.min(0.2, (mult - 1) * 0.05);
+  const grindDungeonRewards = (dungeon, mult = 1) => {
+    const tierMult = 1 + (dungeon.tier - 1) * 0.16;
+    const bulkMult = grindBulkMult(mult);
+    const totalStamina = dungeon.staminaCost * mult;
+    return {
+      credits: Math.round(totalStamina * 2500 * tierMult * bulkMult),
+      materials: Math.round(totalStamina * 170 * tierMult * bulkMult),
+      essence: Math.round(totalStamina * 13 * tierMult * bulkMult),
+      aura: Math.round(totalStamina * 30 * tierMult * bulkMult)
+    };
+  };
+  const grindSkillPool = (rarities) => (skills || []).filter((s) => !s.signature && rarities.includes(s.rarity));
+  const rollGrindGear = (rarities) => {
+    const slots = ["weapon", "armor", "trinket"];
+    const slot = slots[Math.floor(Math.random() * slots.length)];
+    const pool = (EQUIPMENT[slot] || []).filter((it) => rarities.includes(it.rarity));
+    if (!pool.length) return null;
+    const item = pool[Math.floor(Math.random() * pool.length)];
+    return { slot, itemId: item.id, name: item.name, rarity: item.rarity };
+  };
+  const startGrindDungeon = (dungeon, mult = 1) => {
+    const pool = grindSkillPool(dungeon.skillRarities);
+    const targetSkill = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    // One gear roll PER multiplier step -- committing more stamina at once
+    // means more actual loot rolls, not just bigger numbers on the same roll.
+    const gearRolls = Array.from({ length: mult }).map(() => rollGrindGear(dungeon.gearRarities)).filter(Boolean);
+    startTrial({
+      id: `grind_${dungeon.tier}`,
+      name: mult > 1 ? `${dungeon.name} (${mult}x)` : dungeon.name,
+      desc: `Grind Dungeon · gear, credits, materials & shards${mult > 1 ? ` — ${mult}x stamina committed for bulk rewards` : ""}`,
+      cpReq: 1.2e6 * dungeon.cpMult,
+      rewards: grindDungeonRewards(dungeon, mult),
+      difficulty: "medium",
+      type: "grind",
+      staminaCost: dungeon.staminaCost * mult,
+      targetSkillId: targetSkill?.id || null,
+      shardAmount: Math.round(dungeon.shardAmount * mult * grindBulkMult(mult)),
+      gearReward: gearRolls
+    });
+  };
+  const SHARD_TIER_COLOR = { Common: "#94a3b8", Uncommon: "#60a5fa", Rare: "#3b82f6", Epic: "#a855f7", Legendary: "#facc15", Mythic: "#ff2ecb" };
+  const renderGrindDungeons = () => {
+    const h = React.createElement;
+    return h("div", { className: "grind-menu animate-fadeIn", style: { display: "grid", gap: 12 } },
+      h("div", { className: "glass-panel", style: { padding: 14, marginBottom: 4 } },
+        h("div", { style: { fontWeight: 900, fontSize: "1rem", color: "#facc15", marginBottom: 4 } }, "GRIND DUNGEONS"),
+        h("div", { style: { fontSize: "0.72rem", color: "var(--text-muted)" } }, `Every clear drops a mixed loot bundle: credits, materials, essence, aura, gear, and ability shards. Commit a bigger SLICE of your current stamina (10%/25%/50%/100%, ${stamina.toLocaleString()}⚡ right now) for proportionally bigger rewards PLUS a bulk bonus (up to +20%) and extra gear rolls -- this scales with your stamina pool automatically as it grows, unlike a flat multiplier. Spend shards on an equipped skill's SHARD BOOST (character screen) for an instant free level.`)
+      ),
+      GRIND_DUNGEONS.map((dungeon) => {
+        const cp = 1.2e6 * dungeon.cpMult;
+        const pct = getGrindPct(dungeon.tier);
+        const mult = grindEffMult(dungeon, pct);
+        const r = grindDungeonRewards(dungeon, mult);
+        const totalStamina = dungeon.staminaCost * mult;
+        const shardTotal = Math.round(dungeon.shardAmount * mult * grindBulkMult(mult));
+        const canAfford = stamina >= totalStamina && stamina >= dungeon.staminaCost;
+        return h("div", { key: dungeon.tier, className: "glass-panel", style: { padding: 14, display: "flex", flexDirection: "column", gap: 8 } },
+          h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 } },
+            h("div", null,
+              h("div", { style: { fontWeight: 900, fontSize: "0.9rem", color: "#fff" } }, `TIER ${dungeon.tier} — ${dungeon.name}`),
+              h("div", { style: { fontSize: "0.65rem", color: "var(--text-muted)" } }, `Recommended Power: ${formatPower(cp)} · ${totalStamina}⚡ (${pct}% of ${stamina.toLocaleString()} current, ${mult}× base run${mult > 1 ? "s" : ""})`)
+            ),
+            h("button", { className: "train-btn", style: { width: "auto", padding: "8px 18px", background: canAfford ? "linear-gradient(135deg,#00d2ff,#0891b2)" : "#334155", color: canAfford ? "#000" : "#94a3b8", opacity: canAfford ? 1 : 0.6 }, disabled: !canAfford, onClick: () => startGrindDungeon(dungeon, mult) }, canAfford ? "ENTER" : "NOT ENOUGH ⚡")
+          ),
+          h("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" } },
+            h("span", { style: { fontSize: "0.58rem", fontWeight: 900, color: "var(--text-muted)", letterSpacing: 1 } }, "STAMINA SLICE:"),
+            GRIND_STAMINA_PCTS.map((p) => h("button", {
+              key: p,
+              className: "sb-chip",
+              style: {
+                fontSize: "0.62rem", fontWeight: 900, cursor: "pointer", border: "1px solid " + (pct === p ? "#facc15" : "rgba(255,255,255,0.15)"),
+                background: pct === p ? "rgba(250,204,21,0.18)" : "rgba(255,255,255,0.04)", color: pct === p ? "#facc15" : "#fff"
+              },
+              onClick: () => setGrindPctByTier((prev) => ({ ...prev, [dungeon.tier]: p }))
+            }, `${p}%`))
+          ),
+          h("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+            h("span", { className: "sb-chip", style: { fontSize: "0.6rem", color: "#facc15" } }, `$${r.credits.toLocaleString()}`),
+            h("span", { className: "sb-chip", style: { fontSize: "0.6rem", color: "#a3e635" } }, `${r.materials.toLocaleString()} materials`),
+            h("span", { className: "sb-chip", style: { fontSize: "0.6rem", color: "#c084fc" } }, `${r.essence} essence`),
+            h("span", { className: "sb-chip", style: { fontSize: "0.6rem", color: "#f472b6" } }, `${r.aura} aura`),
+            h("span", { className: "sb-chip", style: { fontSize: "0.6rem", color: SHARD_TIER_COLOR[dungeon.gearRarities[dungeon.gearRarities.length - 1]] || "#fff" } }, `+${mult} gear piece${mult > 1 ? "s" : ""}`),
+            h("span", { className: "sb-chip", style: { fontSize: "0.6rem", color: "#00d2ff" } }, `+${shardTotal} ability shards`),
+            mult > 1 ? h("span", { className: "sb-chip", style: { fontSize: "0.6rem", color: "#4ade80", fontWeight: 900 } }, `+${Math.round((grindBulkMult(mult) - 1) * 100)}% bulk bonus`) : null
+          )
+        );
+      })
+    );
   };
   // Overhauled All-Star menu: current series showcase (champion portraits +
   // scaling enemy power), the escalating "road ahead" of upcoming series, and
@@ -700,10 +988,20 @@ const TrialsView = ({
             h("div", { className: "allstar-stat", key: "c" }, [
               h("span", { className: "allstar-stat-label", key: "l" }, "COST"),
               h("span", { className: "allstar-stat-val", key: "v" }, "50 ⚡")
+            ]),
+            h("div", { className: "allstar-stat", key: "yp" }, [
+              h("span", { className: "allstar-stat-label", key: "l" }, "YOUR POWER"),
+              h("span", { className: "allstar-stat-val", key: "v", style: { color: totalSquadPWR >= cp ? "#4ade80" : "#f87171" } }, formatPower(totalSquadPWR))
             ])
           ]),
-          h("button", { className: "allstar-cta", key: "cta", onClick: () => startAllStarRound() },
-            `CHALLENGE ${String(series).toUpperCase()}`)
+          h("div", { className: "allstar-cta-row", key: "ctarow", style: { display: "flex", gap: 8 } }, [
+            h("button", { className: "allstar-cta", key: "cta", style: { flex: 1 }, onClick: () => startAllStarRound() },
+              `CHALLENGE ${String(series).toUpperCase()}`),
+            canAutoClearAllStar() ? h("button", {
+              key: "auto", onClick: autoClearAllStarRound,
+              style: { flex: 1, border: "none", borderRadius: 10, fontWeight: 900, letterSpacing: 1, fontSize: "0.8rem", cursor: "pointer", background: "linear-gradient(135deg,#00d2ff,#0891b2)", color: "#000" }
+            }, "⚡ AUTO CLEAR") : null
+          ])
         ]) : h("div", { className: "allstar-locked", key: "lk" },
           "Recruit at least 2 heroes from a series to open the gauntlet.")
       ]),
@@ -732,7 +1030,7 @@ const TrialsView = ({
   // kits show up far more often than their natural drop odds would suggest. Climbing
   // a full rank takes ARENA_WINS_PER_RANK wins, not one -- a single win nudges the
   // promotion meter instead of insta-promoting.
-  const buildArenaMatchup = (avgAllyStats, rank, usedIds) => {
+  const buildArenaMatchup = (avgAllyStats, rank, usedIds, isPromotionMatch = false) => {
     const signatureOwners = new Set((skills || []).filter((s) => s.signature).map((s) => s.owner));
     const tierValue = (c) => TIER_STATS[c.tier]?.multiplier || 1;
     const highTierPool = characters.filter((c) => tierValue(c) >= 1.8);
@@ -745,8 +1043,8 @@ const TrialsView = ({
     const pickOpponent = () => {
       // ~80% chance of a Rank A-SS pick, ~20% chance of a lower-tier underdog
       // (still scaled to full arena strength via CP, not their own base stats).
-      const wantLow = Math.random() < 0.2;
-      const order = wantLow ? [sigLow, sigHigh, otherLow, otherHigh] : [sigHigh, sigLow, otherHigh, otherLow];
+      const wantLow = !isPromotionMatch && Math.random() < 0.2;
+      const order = isPromotionMatch ? [sigHigh, sigLow, otherHigh, otherLow] : wantLow ? [sigLow, sigHigh, otherLow, otherHigh] : [sigHigh, sigLow, otherHigh, otherLow];
       for (const pool of order) {
         const avail = pool.filter((c) => !usedIds.has(c.export_id));
         const pick = pickFrom(avail);
@@ -764,11 +1062,15 @@ const TrialsView = ({
     // Stat multipliers vs average ally: rank1 = slightly below ally, rank100 = far above.
     // Derived from actual ally HP/ATK/DEF so the combat formula 1000/(1000+def) always
     // produces a meaningful mitigation value regardless of player progression.
+    // Moderate difficulty bump ("sorta" harder, not All-Star-extreme): early
+    // ranks are barely touched, but the top of the ladder now demands a
+    // meaningfully stronger squad than before rather than a stats-matched one.
     const t = Math.max(0, rank - 1) / 99;
-    const hpMult  = 3  + t * 12;   // rank1: 3× ally HP,  rank100: 15× (very long fights)
-    const atkMult = 0.6 + t * 1.4; // rank1: 0.6× ally ATK, rank100: 2.0×
-    const defMult = 0.4 + t * 1.4; // rank1: 0.4× ally DEF, rank100: 1.8×
-    const spdMult = 0.7 + t * 0.8; // rank1: 0.7× ally SPD, rank100: 1.5×
+    const promoMult = isPromotionMatch ? 1.18 : 1;
+    const hpMult  = (3 + t * 16) * promoMult;
+    const atkMult = (0.62 + t * 1.8) * promoMult;
+    const defMult = (0.42 + t * 1.8) * promoMult;
+    const spdMult = (0.72 + t * 1.0) * promoMult;
     const bossScales = [1.5, 0.65, 0.65]; // boss is beefier, two minions are lighter
     const ARCHETYPES = ["tank", "elite", "elite"];
     return ARCHETYPES.map((archetype, i) => {
@@ -814,24 +1116,27 @@ const TrialsView = ({
         isBoss: i === 0,
         stagger: 0,
         maxStagger: i === 0 ? 2200 : 900,
-        gauge: 40 + Math.random() * 40,
+        // Fair-start fix: was 40-80, ahead of allies' 0-50. Same range now.
+        gauge: Math.random() * INITIAL_GAUGE_RANGE_WIDE,
         burst: 0,
         effects: [
-          { type: "regen", duration: 9999, val: 0.015, label: "ARENA RESILIENCE" }
+          { type: "regen", duration: 9999, val: isPromotionMatch ? 0.02 : 0.015, label: isPromotionMatch ? "PROMOTION RESILIENCE" : "ARENA RESILIENCE" },
+          ...(champ.name === "Jimmy Neutron" ? [{ type: "aggro", duration: 3, val: 0, label: "NOT LIKE THIS..." }] : [])
         ],
         dead: false,
         critRate: 0.05 + rank * 1e-3,
         evasion: 0.04 + rank * 5e-4,
         lifesteal: i === 0 ? 0.05 : 0,
         previewSkill1: skill1 ? { name: skill1.name, signature: !!skill1.signature, rarity: skill1.rarity } : null,
-        previewSkill2: skill2 ? { name: skill2.name, signature: !!skill2.signature, rarity: skill2.rarity } : null
+        previewSkill2: skill2 ? { name: skill2.name, signature: !!skill2.signature, rarity: skill2.rarity } : null,
+        isPromotionMatch
       };
     });
   };
   const scoutArenaOpponents = () => {
     const squad = characters.filter((c) => (squadIds || []).some((id) => String(id) === String(c.export_id))).slice(0, 3);
-    if (!squad || squad.length < 1) {
-      return createFloatingText("Select at least 1 hero for Arena (3v3)!", true);
+    if (!squad || squad.length < 3) {
+      return createFloatingText("Arena requires 3 heroes. Edit your squad to enter.", true);
     }
     const n = Math.max(1, squad.length);
     const avgAllyStats = squad.reduce((acc, c) => {
@@ -846,31 +1151,35 @@ const TrialsView = ({
     avgAllyStats.def   /= n;
     avgAllyStats.speed /= n;
     const usedIds = new Set();
-    const matchups = [0, 1, 2].map(() => buildArenaMatchup(avgAllyStats, arenaRank, usedIds));
-    setArenaScouted({ matchups, avgAllyStats });
+    const isPromotionMatch = arenaWinStreak >= ARENA_QUALIFIER_WINS;
+    const matchups = [0, 1, 2].map(() => buildArenaMatchup(avgAllyStats, arenaRank, usedIds, isPromotionMatch));
+    setArenaScouted({ matchups, avgAllyStats, isPromotionMatch });
     playSound("ui_cancel");
   };
   const startArenaMatchup = (enemies) => {
     const squad = characters.filter((c) => (squadIds || []).some((id) => String(id) === String(c.export_id))).slice(0, 3);
-    if (!squad || squad.length < 1) {
-      return createFloatingText("Select at least 1 hero for Arena (3v3)!", true);
+    if (!squad || squad.length < 3) {
+      return createFloatingText("Arena requires 3 heroes. Edit your squad to enter.", true);
     }
     const ARENA_COST = 75;
     if (stamina < ARENA_COST) {
       return createFloatingText(`Need ${ARENA_COST} Stamina for Arena!`, true);
     }
     setStamina((s) => s - ARENA_COST);
+    comboRef.current.count = 0;
+    setComboDisplay(0);
     setActiveTrial({
       id: `arena_${arenaRank}_${Date.now()}`,
-      name: `Arena Rank ${arenaRank}`,
+      name: `${enemies[0]?.isPromotionMatch ? "Promotion Match" : "Arena Match"} · Rank ${arenaRank}`,
       element: enemies[0].element,
       type: "arena",
+      isPromotionMatch: !!enemies[0]?.isPromotionMatch,
       rewards: {},
       scaledRewards: {
-        gems: 20 + Math.floor(arenaRank * 2.5),
-        materials: 200 + arenaRank * 25,
-        essence: 10 + Math.floor(arenaRank / 2),
-        aura: arenaRank * 5
+        gems: (20 + Math.floor(arenaRank * 2.5)) * (enemies[0]?.isPromotionMatch ? 2 : 1),
+        materials: (200 + arenaRank * 25) * (enemies[0]?.isPromotionMatch ? 2 : 1),
+        essence: (10 + Math.floor(arenaRank / 2)) * (enemies[0]?.isPromotionMatch ? 2 : 1),
+        aura: (arenaRank * 5) * (enemies[0]?.isPromotionMatch ? 2 : 1)
       }
     });
     setArenaScouted(null);
@@ -915,16 +1224,19 @@ const TrialsView = ({
         gauge: Math.random() * 50,
         burst: 0,
         effects: [
-          { type: "tactical_stance", duration: 9999, val: initialStanceVal, label: `STANCE:${playerElement}` }
+          { type: "tactical_stance", duration: 9999, val: initialStanceVal, label: `STANCE:${playerElement}` },
+          ...(c.name === "Jimmy Neutron" ? [{ type: "aggro", duration: 3, val: 0, label: "NOT LIKE THIS..." }] : [])
         ],
         dead: false,
         critRate: calculateSubStat(c, characters, "crit_rate", skills, auraUpgrades) / 100,
+        technique: calculateSubStat(c, characters, "technique", skills, auraUpgrades),
         evasion: calculateSubStat(c, characters, "evasion", skills, auraUpgrades) / 100,
         lifesteal: 0
       };
     });
     const leaderId = squadIds[0];
     const leaderChar = leaderId ? characters.find((c) => String(c.export_id) === String(leaderId)) : null;
+    allies.forEach((a) => applyCrewChemistry(a, squad));
     if (leaderChar) {
       allies.forEach((a) => applyLeaderBonus(leaderChar, a, squad));
     }
@@ -933,6 +1245,12 @@ const TrialsView = ({
   React.useEffect(() => {
     if (battleState !== "ACTIVE") return;
     const timer = setInterval(() => {
+      // Guest summon, auto-piloted -- fires the instant it's ready while Auto
+      // is on (see CampaignView's identical hook for why).
+      if (autoBattle && cameoData && Date.now() >= hitStopUntil.current) {
+        const cameoReady = cameoRef.current.usesLeft > 0 && Date.now() - cameoRef.current.lastUsed >= 60000;
+        if (cameoReady) triggerCameo();
+      }
       setCombatants((prev) => {
         if (!prev || prev.length === 0 || battleState !== "ACTIVE") return prev;
         // HIT-STOP: freeze the simulation for a beat after heavy impacts / while
@@ -957,11 +1275,15 @@ const TrialsView = ({
         const curSpd = combatSpeed;
         // Speed rebalance: shared with Campaign/Events -- see utils.js getGaugeGain.
         const battleSpeeds = next.filter((u) => !u.dead).map((u) => getBattleStats(u, curEl, u.activeSynergies || []).speed);
-        next.forEach((u) => {
+        // Fair-start fix: shuffle scan order each tick so same-tick gauge-100 ties
+        // aren't always won by enemies (see CampaignView.js for the full rationale).
+        const scanOrder = [...next].sort(() => Math.random() - 0.5);
+        scanOrder.forEach((u) => {
           if (u.dead) return;
+          // HIT-STUN -- see CombatSystem's getHitstunMs/applyHitstun.
+          if (Date.now() < (u._hitstunUntil || 0)) return;
           const stats = getBattleStats(u, curEl, u.activeSynergies || []);
-          if (u.skillCd < u.maxSkillCd) u.skillCd += 1;
-          if (u.skillId2 && u.skillCd2 < u.maxSkillCd2) u.skillCd2 += 1;
+          { const cdg = getCooldownGain(u); if (u.skillCd < u.maxSkillCd) u.skillCd = Math.min(u.maxSkillCd, u.skillCd + cdg); if (u.skillId2 && u.skillCd2 < u.maxSkillCd2) u.skillCd2 = Math.min(u.maxSkillCd2, u.skillCd2 + cdg); }
           u.gauge += getGaugeGain(stats.speed, battleSpeeds, curSpd);
           if (u.gauge >= 100) {
             // Same-tick guard -- see CampaignView's identical check for why.
@@ -984,7 +1306,7 @@ const TrialsView = ({
               const s1Ready = u.skillCd >= u.maxSkillCd;
               const s2Ready = u.skillId2 && u.skillCd2 >= u.maxSkillCd2;
               if ((u.isEnemy || curAuto) && (s1Ready || s2Ready || isBurstReady)) {
-                const nextState = executeCombatSkill({ combatants: next, attackerId: u.id, skills, playerElement: curEl, isLimitBreak: isBurstReady });
+                const nextState = executeCombatSkill({ combatants: next, attackerId: u.id, skills, playerElement: curEl, isLimitBreak: isBurstReady, extraPowerMult: u.isEnemy ? 1 : comboMult() });
                 nextState.forEach((ns, ni) => next[ni] = ns);
                 const casterAfter = next.find((n) => n.id === u.id);
                 if (casterAfter?._triggeredTimeStopAt && timeStopHandledRef.current[u.id] !== casterAfter._triggeredTimeStopAt) {
@@ -992,14 +1314,21 @@ const TrialsView = ({
                   if (typeof onWorldTimeStop === "function") onWorldTimeStop(casterAfter._timeStopMusicMs || 5000);
                 }
                 const castMs = getCastAnimMs(casterAfter?.lastCastAnim);
-                if (castMs) hitStopUntil.current = Date.now() + castMs + HITSTOP_BUFFER_MS;
+                if (castMs) hitStopUntil.current = Date.now() + Math.max(200, Math.round(castMs / (curSpd || 1))) + HITSTOP_BUFFER_MS;
+                if (u.isEnemy) breakCombo(); else bumpCombo(2);
               } else {
-                const result = resolveBasicAttack({ attacker: u, allUnits: next, playerElement: curEl });
+                const result = resolveBasicAttack({ attacker: u, allUnits: next, playerElement: curEl, comboMult, comboCount: comboRef.current.count, skills });
                 if (result) {
-                  hitStopUntil.current = Date.now() + getBasicAttackMs(result.meleeAir) + HITSTOP_BUFFER_MS;
+                  hitStopUntil.current = Date.now() + Math.max(200, Math.round(getBasicAttackMs(result.meleeAir) / (curSpd || 1))) + HITSTOP_BUFFER_MS;
+                  if (u.isEnemy) breakCombo(); else bumpCombo(result.meleeHits || 1);
                   if (!result.missed) {
                     if (!u.isEnemy) { u._battleDamage = (u._battleDamage || 0) + result.amount; u._battleBestHit = Math.max(u._battleBestHit || 0, result.amount); }
-                    setFloatingDamages((fd) => [...fd, { id: Math.random(), targetId: result.targetId, amount: result.amount, type: "normal" }]);
+                    const splits = result.hitSplits && result.hitSplits.length ? result.hitSplits : [result.amount];
+                    splits.forEach((d, hi) => setTimeout(() => {
+                      showDamage(result.targetId, d, hi === splits.length - 1 && splits.length > 1 ? "crit" : "normal");
+                      playSound(getFlurryHitSound(hi, splits.length, result.meleeAir), hi === splits.length - 1 ? 0.4 : 0.22);
+                      if (hi === 0 && result.meleeAir) playSound(["spin0", "spin1", "spin2"][Math.floor(Math.random() * 3)], 0.35);
+                    }, hi * 105));
                   }
                 }
               }
@@ -1032,7 +1361,7 @@ const TrialsView = ({
         if (skill.type === "heal") playSound("heal_spell");
         else if (skill.id === "taunt") playSound("mugen_taunt");
         else if (skill.damageType === "magical") playSound("magic_blast");
-        else playSound("attack_hit");
+        else playSound("attack");
         if (skill.signature) { playSound("knife_swing", 0.5); playSound("mugen_super", 0.45); }
         else if (skill.power >= 2.5) playSound("knife_swing", 0.5);
         else if (skill.type === "atk" || skill.type === "combo") {
@@ -1041,6 +1370,11 @@ const TrialsView = ({
           const swipePool = skill.damageType === "magical" ? ["act_lunge_magic", "act_whoosh1", "act_whoosh2"] : ["act_swipe1", "act_swipe2", "act_swipe3", "act_swipe4", "act_lunge_generic"];
           playSound(swipePool[Math.floor(Math.random() * swipePool.length)], 0.35);
         }
+        // Bespoke sting for the newer anime-flavored castAnim set (see
+        // CAST_ANIM_SOUND) -- layers on TOP of the generic picks above rather
+        // than replacing them; returns null (no-op) for every older castAnim.
+        const animSting = getCastAnimSound((skill.meta || {}).castAnim);
+        if (animSting) playSound(animSting, 0.4);
         if (!recentCaster.isEnemy && typeof triggerVisualEffect2 === "function") {
           triggerVisualEffect2(skill.damageType === "magical" ? "fx_magic_circle.png" : "fx_impact.png", "50%", "30%", 1.2);
         }
@@ -1068,41 +1402,123 @@ const TrialsView = ({
       }
     });
   }, [combatants, lastSkillTimestamp, battleState]);
+  const getVictoryRewards = (trial) => {
+    if (!trial?.scaledRewards) return {};
+    const repeatable = trial.type === "allstar" || trial.type === "endless" || trial.type === "arena" || trial.type === "grind";
+    if (!repeatable && clearedTrials.includes(trial.id)) return {};
+    return trial.scaledRewards;
+  };
+  const grantRewards = (rewards) => {
+    setGems((g) => g + (rewards.gems || 0));
+    setAura((a) => a + (rewards.aura || 0));
+    setMaterials((m) => m + (rewards.materials || 0));
+    setEssence((e) => e + (rewards.essence || 0));
+    if (rewards.credits && typeof setCredits === "function") setCredits((c) => c + rewards.credits);
+    if (rewards.abilityShards && typeof setAbilityShards === "function") {
+      setAbilityShards((prev) => {
+        const next = { ...prev };
+        Object.entries(rewards.abilityShards).forEach(([id, amt]) => { next[id] = (next[id] || 0) + amt; });
+        return next;
+      });
+    }
+    if (rewards.gearReward && typeof setGearInventory === "function") {
+      // Grind Dungeons can hand back MULTIPLE gear rolls when the player
+      // committed a stamina multiplier -- other trial types still pass a
+      // single object, so accept both shapes.
+      const items = Array.isArray(rewards.gearReward) ? rewards.gearReward : [rewards.gearReward];
+      items.filter(Boolean).forEach((g) => {
+        setGearInventory((prev) => [...prev, { instanceId: makeGearInstanceId(), slot: g.slot, itemId: g.itemId, level: 1 }]);
+        createFloatingText(`+ ${g.name} (${g.rarity})`, false, SHARD_TIER_COLOR[g.rarity] || "#00d2ff");
+      });
+    }
+  };
+  // AUTO-CLEAR: once a squad's PWR clears the recommended power by
+  // AUTO_CLEAR_PWR_MULT, the fight's a foregone conclusion -- skip the battle
+  // and grant rewards instantly. Deliberately NOT offered for Elemental/Series
+  // trials (they're the lenient/accessible tier, meant to always be played),
+  // only All-Star and Arena, the two hard/endgame modes.
+  const totalSquadPWR = useMemo(() => (squadIds || []).reduce((sum, id) => {
+    const c = characters.find((ch) => String(ch.export_id) === String(id));
+    return sum + (c ? calculateSubStat(c, characters, "pwr", skills, auraUpgrades) : 0);
+  }, 0), [squadIds, characters, skills, auraUpgrades]);
+  // Arena only ever fields 3, so its own PWR reference is the first 3 slots,
+  // not the full 5-wide squad total used elsewhere.
+  const arenaSquadPWR = useMemo(() => (squadIds || []).slice(0, 3).reduce((sum, id) => {
+    const c = characters.find((ch) => String(ch.export_id) === String(id));
+    return sum + (c ? calculateSubStat(c, characters, "pwr", skills, auraUpgrades) : 0);
+  }, 0), [squadIds, characters, skills, auraUpgrades]);
+  // Arena enemies scale off the PLAYER'S OWN stats (see buildArenaMatchup), so
+  // there's no external cpReq to compare against -- auto-clear instead unlocks
+  // once the squad is flatly this overqualified for the mode entirely,
+  // regardless of current rank (roughly a near-maxed 3-hero squad).
+  const ARENA_AUTO_CLEAR_PWR = 15e6;
+  const canAutoClearAllStar = () => gauntletCurrentSeries && totalSquadPWR >= gauntletCp(gauntletRound) * AUTO_CLEAR_PWR_MULT;
+  const canAutoClearArena = () => arenaSquadPWR >= ARENA_AUTO_CLEAR_PWR;
+  const autoClearAllStarRound = () => {
+    if (!canAutoClearAllStar()) return;
+    const TRIAL_COST = 50;
+    if (stamina < TRIAL_COST) { createFloatingText(`Need ${TRIAL_COST} Stamina!`, true); return; }
+    setStamina((s) => s - TRIAL_COST);
+    setEndlessFloor((f) => f + 1);
+    grantRewards({
+      gems: Math.floor(5e4 * 1),
+      aura: Math.floor(5e3 * 1),
+      essence: Math.floor(500 * 1),
+      materials: Math.floor(2500 * 1)
+    });
+    const nextSeries = gauntletSeries[gauntletRound % gauntletLen];
+    createFloatingText(`AUTO-CLEARED ROUND ${gauntletRound}! Next: ${nextSeries || "???"}`, false, "#00d2ff");
+    playSound("success");
+  };
+  const autoClearArenaMatch = () => {
+    if (!canAutoClearArena()) return;
+    const ARENA_COST = 75;
+    if (stamina < ARENA_COST) { createFloatingText(`Need ${ARENA_COST} Stamina for Arena!`, true); return; }
+    setStamina((s) => s - ARENA_COST);
+    const isPromotionMatch = arenaWinStreak >= ARENA_QUALIFIER_WINS;
+    const rewardMult = isPromotionMatch ? 2 : 1;
+    grantRewards({
+      gems: (20 + Math.floor(arenaRank * 2.5)) * rewardMult,
+      materials: (200 + arenaRank * 25) * rewardMult,
+      essence: (10 + Math.floor(arenaRank / 2)) * rewardMult,
+      aura: (arenaRank * 5) * rewardMult
+    });
+    if (isPromotionMatch) {
+      const promotedRank = arenaRank + 1;
+      setArenaWinStreak(0);
+      setArenaRank((rank) => rank + 1);
+      createFloatingText(`AUTO-CLEARED! PROMOTED TO RANK ${promotedRank}!`, false, "#00d2ff");
+    } else {
+      const nextStreak = Math.min(ARENA_QUALIFIER_WINS, arenaWinStreak + 1);
+      setArenaWinStreak(nextStreak);
+      createFloatingText(`AUTO-CLEARED QUALIFIER! (${nextStreak}/${ARENA_QUALIFIER_WINS})`, false, "#00d2ff");
+    }
+    setArenaScouted(null);
+    playSound("success");
+  };
   const finishTrial = () => {
     if (battleState === "WIN") {
       const isFirst = !clearedTrials.includes(activeTrial.id);
       if (activeTrial.type === "allstar" || activeTrial.type === "endless") {
         setEndlessFloor((f) => f + 1);
-        if (activeTrial.scaledRewards) {
-          const r = activeTrial.scaledRewards;
-          setGems((g) => g + (r.gems || 0));
-          setMaterials((s) => s + (r.materials || 0));
-          setEssence((e) => e + (r.essence || 0));
-        }
+        grantRewards(getVictoryRewards(activeTrial));
         const nextSeries = gauntletSeries[gauntletRound % gauntletLen];
         createFloatingText(`ROUND ${gauntletRound} CLEARED! Next: ${nextSeries || "???"}`, false, "#facc15");
       } else if (activeTrial.type === "arena") {
-        setArenaWinStreak((streak) => {
-          const next = streak + 1;
-          if (next >= ARENA_WINS_PER_RANK) {
-            setArenaRank((r) => r + 1);
-            createFloatingText(`PROMOTED TO RANK ${arenaRank + 1}!`, false, "#facc15");
-            return 0;
-          }
-          createFloatingText(`ARENA WIN! (${next}/${ARENA_WINS_PER_RANK} to promotion)`, false, "#facc15");
-          return next;
-        });
-        if (activeTrial.scaledRewards) {
-          const r = activeTrial.scaledRewards;
-          setGems((g) => g + (r.gems || 0));
-          setMaterials((s) => s + (r.materials || 0));
-          setEssence((e) => e + (r.essence || 0));
-          setAura((a) => a + (r.aura || 0));
+        if (activeTrial.isPromotionMatch) {
+          const promotedRank = arenaRank + 1;
+          setArenaWinStreak(0);
+          setArenaRank((rank) => rank + 1);
+          createFloatingText(`PROMOTED TO RANK ${promotedRank}!`, false, "#facc15");
+        } else {
+          const nextStreak = Math.min(ARENA_QUALIFIER_WINS, arenaWinStreak + 1);
+          setArenaWinStreak(nextStreak);
+          createFloatingText(nextStreak >= ARENA_QUALIFIER_WINS ? "PROMOTION MATCH UNLOCKED!" : `QUALIFIER WIN! (${nextStreak}/${ARENA_QUALIFIER_WINS})`, false, "#facc15");
         }
+        grantRewards(getVictoryRewards(activeTrial));
       } else if (isFirst) {
-        setClearedTrials((prev) => [...prev, activeTrial.id]);
-        setGems((g) => g + (activeTrial.scaledRewards?.gems || activeTrial.rewards.gems));
-        setAura((a) => a + (activeTrial.scaledRewards?.aura || activeTrial.rewards.aura));
+        setClearedTrials((prev) => prev.includes(activeTrial.id) ? prev : [...prev, activeTrial.id]);
+        grantRewards(getVictoryRewards(activeTrial));
         createFloatingText(`TRIAL CLEARED!`, false, "#4ade80");
       }
       playSound("menu_open");
@@ -1121,660 +1537,8 @@ const TrialsView = ({
     }, { totalLvl: 0, totalBond: 0, count: 0 });
   }, [characters, unlockedIds]);
   return /* @__PURE__ */ jsxDEV("div", { style: { padding: "16px 0" }, children: [
-    /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { marginBottom: 20, padding: "12px 20px", display: "flex", justifyContent: "space-around", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.05)" }, children: [
-      /* @__PURE__ */ jsxDEV("div", { style: { textAlign: "center" }, children: [
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "var(--text-muted)", fontWeight: 800 }, children: "TOTAL HERO LEVELS" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 7818,
-          columnNumber: 11
-        }),
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.1rem", fontWeight: 900, color: "var(--primary)" }, children: statsSummary.totalLvl.toLocaleString() }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 7819,
-          columnNumber: 11
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 7817,
-        columnNumber: 9
-      }),
-      /* @__PURE__ */ jsxDEV("div", { style: { textAlign: "center" }, children: [
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "var(--text-muted)", fontWeight: 800 }, children: "AVG BOND RANK" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 7822,
-          columnNumber: 11
-        }),
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.1rem", fontWeight: 900, color: "#f472b6" }, children: statsSummary.count > 0 ? (statsSummary.totalBond / statsSummary.count).toFixed(1) : 0 }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 7823,
-          columnNumber: 11
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 7821,
-        columnNumber: 9
-      }),
-      /* @__PURE__ */ jsxDEV("div", { style: { textAlign: "center" }, children: [
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "var(--text-muted)", fontWeight: 800 }, children: "ENDLESS FLOOR" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 7826,
-          columnNumber: 11
-        }),
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.1rem", fontWeight: 900, color: "#ef4444" }, children: endlessFloor }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 7827,
-          columnNumber: 11
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 7825,
-        columnNumber: 9
-      })
-    ] }, void 0, true, {
-      fileName: "<stdin>",
-      lineNumber: 7816,
-      columnNumber: 7
-    }),
-    /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }, children: [
-      /* @__PURE__ */ jsxDEV("h2", { style: { fontWeight: 900, margin: 0 }, children: "ENDGAME TRIALS" }, void 0, false, {
-        fileName: "<stdin>",
-        lineNumber: 7831,
-        columnNumber: 9
-      }),
-      /* @__PURE__ */ jsxDEV("button", { className: "upgrade-btn", style: { marginRight: 10, background: "#4ade80", color: "#000" }, onClick: () => setShowSquadBuilder(true), children: [
-        /* @__PURE__ */ jsxDEV(Users, { size: 14 }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 7833,
-          columnNumber: 11
-        }),
-        " DEPLOY SQUAD (",
-        squadIds.length,
-        "/5)"
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 7832,
-        columnNumber: 9
-      }),
-      /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 4, background: "rgba(255,255,255,0.05)", padding: 4, borderRadius: 12 }, children: [
-        /* @__PURE__ */ jsxDEV(
-          "button",
-          {
-            onClick: () => setActiveTab("element"),
-            style: {
-              padding: "8px 16px",
-              borderRadius: 8,
-              border: "none",
-              background: activeTab === "element" ? "var(--primary)" : "transparent",
-              color: activeTab === "element" ? "#fff" : "var(--text-muted)",
-              fontWeight: 800,
-              cursor: "pointer",
-              fontSize: "0.75rem"
-            },
-            children: "ELEMENTAL"
-          },
-          void 0,
-          false,
-          {
-            fileName: "<stdin>",
-            lineNumber: 7836,
-            columnNumber: 13
-          }
-        ),
-        /* @__PURE__ */ jsxDEV(
-          "button",
-          {
-            onClick: () => setActiveTab("franchise"),
-            style: {
-              padding: "8px 16px",
-              borderRadius: 8,
-              border: "none",
-              background: activeTab === "franchise" ? "#3b82f6" : "transparent",
-              color: activeTab === "franchise" ? "#fff" : "var(--text-muted)",
-              fontWeight: 800,
-              cursor: "pointer",
-              fontSize: "0.75rem"
-            },
-            children: "SERIES"
-          },
-          void 0,
-          false,
-          {
-            fileName: "<stdin>",
-            lineNumber: 7847,
-            columnNumber: 13
-          }
-        ),
-        /* @__PURE__ */ jsxDEV(
-          "button",
-          {
-            onClick: () => setActiveTab("endless"),
-            style: {
-              padding: "8px 16px",
-              borderRadius: 8,
-              border: "none",
-              background: activeTab === "endless" ? "#facc15" : "transparent",
-              color: activeTab === "endless" ? "#000" : "var(--text-muted)",
-              fontWeight: 800,
-              cursor: "pointer",
-              fontSize: "0.75rem"
-            },
-            children: "★ ALL-STAR"
-          },
-          void 0,
-          false,
-          {
-            fileName: "<stdin>",
-            lineNumber: 7858,
-            columnNumber: 13
-          }
-        ),
-        /* @__PURE__ */ jsxDEV(
-          "button",
-          {
-            onClick: () => setActiveTab("arena"),
-            style: {
-              padding: "8px 16px",
-              borderRadius: 8,
-              border: "none",
-              background: activeTab === "arena" ? "#facc15" : "transparent",
-              color: activeTab === "arena" ? "#000" : "var(--text-muted)",
-              fontWeight: 800,
-              cursor: "pointer",
-              fontSize: "0.75rem"
-            },
-            children: "ARENA"
-          },
-          void 0,
-          false,
-          {
-            fileName: "<stdin>",
-            lineNumber: 7859,
-            columnNumber: 13
-          }
-        )
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 7835,
-        columnNumber: 9
-      })
-    ] }, void 0, true, {
-      fileName: "<stdin>",
-      lineNumber: 7830,
-      columnNumber: 7
-    }),
-    !activeTrial && !pendingTrial && /* @__PURE__ */ jsxDEV("div", { className: "trials-grid animate-fadeIn", style: { display: "grid", gap: 12 }, children: [
-      activeTab === "endless" && renderAllStarMenu(),
-      activeTab === "arena" && (() => {
-        const h = React.createElement;
-        const tier = getArenaTier(arenaRank);
-        const mySquad = characters.filter((c) => (squadIds || []).some((id) => String(id) === String(c.export_id))).slice(0, 3);
-        const pips = Array.from({ length: ARENA_WINS_PER_RANK }).map((_, i) => h("span", {
-          key: i,
-          className: "arena-pip" + (i < arenaWinStreak ? " lit" : ""),
-          style: { "--pip-color": tier.color }
-        }));
-        const header = h("div", { className: "arena-hall-header glass-panel", style: { "--tier-color": tier.color } },
-          h("div", { className: "arena-tier-emblem", style: { color: tier.color } }, tier.emblem),
-          h("div", { style: { flex: 1, minWidth: 180 } },
-            h("div", { style: { fontSize: "0.62rem", fontWeight: 900, letterSpacing: 3, color: tier.color } }, tier.name + " LEAGUE"),
-            h("h1", { style: { margin: "2px 0 4px", fontSize: "2rem", fontFamily: "MugenTitle", color: "#fff" } }, "RANK " + arenaRank),
-            h("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
-              h("span", { style: { fontSize: "0.62rem", color: "var(--text-muted)", fontWeight: 800 } }, "PROMOTION"),
-              h("div", { style: { display: "flex", gap: 5 } }, pips),
-              h("span", { style: { fontSize: "0.62rem", color: tier.color, fontWeight: 900 } }, `${arenaWinStreak}/${ARENA_WINS_PER_RANK}`)
-            )
-          ),
-          h("div", { style: { textAlign: "right" } },
-            h("div", { style: { fontSize: "0.6rem", color: "var(--text-muted)", fontWeight: 800, marginBottom: 6 } }, "YOUR CREW (3v3) • 75 STAMINA"),
-            h("div", { style: { display: "flex", gap: 6, justifyContent: "flex-end" } },
-              mySquad.length
-                ? mySquad.map((c, i) => h("img", { key: i, src: c.imageUrl, className: "arena-crew-chip", style: { borderColor: ELEMENTS[c.element]?.color || "#fff" } }))
-                : h("span", { style: { fontSize: "0.7rem", color: "#f87171", fontWeight: 800 } }, "No squad set"),
-              h("button", { className: "upgrade-btn", style: { fontSize: "0.65rem", padding: "6px 10px" }, onClick: () => setShowSquadBuilder({ maxSquad: 3 }) }, "EDIT")
-            )
-          )
-        );
-        if (!arenaScouted) {
-          return h("div", { style: { display: "grid", gap: 14 } },
-            header,
-            h("div", { className: "glass-panel arena-gate-panel", style: { textAlign: "center", padding: "44px 20px", "--tier-color": tier.color } },
-              h("div", { style: { fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 4 } }, "Real champions defend the ladder. Beat " + ARENA_WINS_PER_RANK + " squads to reach Rank " + (arenaRank + 1) + "."),
-              h("div", { style: { fontSize: "0.68rem", color: tier.color, fontWeight: 800, marginBottom: 22 } }, "★ Watch for defenders with Signature abilities — they hit different."),
-              h("button", { className: "train-btn arena-scout-btn", style: { background: tier.color, color: "#000", width: "auto", padding: "14px 44px", margin: "0 auto" }, onClick: scoutArenaOpponents }, "⚔ SCOUT OPPONENTS")
-            )
-          );
-        }
-        const threat = (enemies) => enemies.reduce((s, e) => s + e.atk * 6 + e.def * 4 + Math.floor(e.maxHp / 8) + e.speed * 2, 0);
-        return h("div", { style: { display: "grid", gap: 14 } },
-          header,
-          h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
-            h("div", { style: { fontWeight: 900, color: tier.color, letterSpacing: 1 } }, "CHOOSE YOUR OPPONENT"),
-            h("button", { className: "upgrade-btn", style: { fontSize: "0.7rem" }, onClick: scoutArenaOpponents }, "↻ RESCOUT")
-          ),
-          ...arenaScouted.matchups.map((enemies, mi) => {
-            const sigCount = enemies.filter((e) => e.previewSkill2?.signature).length;
-            return h("div", { key: mi, className: "arena-opponent-card glass-panel", style: { "--tier-color": tier.color } },
-              h("div", { className: "arena-opponent-portraits" },
-                enemies.map((e, ei) => h("div", { key: ei, className: "arena-opp-slot" + (ei === 0 ? " boss" : "") },
-                  ei === 0 && h("div", { className: "arena-opp-crown" }, "👑"),
-                  h("img", { src: e.img, style: { borderColor: ELEMENTS[e.element]?.color || "#fff" } }),
-                  h("div", { className: "arena-opp-name" }, e.name),
-                  h("div", { className: "arena-opp-lv", style: { color: ELEMENTS[e.element]?.color || "#fff" } }, "LV." + e.level),
-                  e.previewSkill2?.signature && h("div", { className: "arena-opp-sig", title: e.previewSkill2.name }, "★ " + e.previewSkill2.name)
-                ))
-              ),
-              h("div", { className: "arena-opponent-footer" },
-                h("div", null,
-                  h("div", { style: { fontSize: "0.58rem", color: "var(--text-muted)", fontWeight: 800 } }, "THREAT LEVEL"),
-                  h("div", { style: { fontSize: "1.05rem", fontWeight: 900, color: sigCount >= 2 ? "#ef4444" : sigCount === 1 ? "#facc15" : "#4ade80" } },
-                    formatPower(threat(enemies)), sigCount > 0 ? ` • ${sigCount}★ SIG` : "")
-                ),
-                h("button", { className: "train-btn arena-fight-btn", style: { background: tier.color, color: "#000" }, onClick: () => startArenaMatchup(enemies) }, "⚔ BATTLE")
-              )
-            );
-          })
-        );
-      })(),
-      groupedTrials.filter((g) => g.type === activeTab).map((group) => {
-        const color = ELEMENTS[group.element]?.color || "#fff";
-        return /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { padding: 0, overflow: "hidden", border: `1px solid ${color}33` }, children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { padding: "16px", background: `linear-gradient(90deg, ${color}11, transparent)`, display: "flex", alignItems: "center", gap: 15 }, children: [
-            /* @__PURE__ */ jsxDEV("div", { className: "trial-icon-box", style: { background: color + "22", borderColor: color + "44", width: 48, height: 48, marginRight: 0 }, children: /* @__PURE__ */ jsxDEV(Star, { size: 20, color }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 7911,
-              columnNumber: 25
-            }) }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 7910,
-              columnNumber: 21
-            }),
-            /* @__PURE__ */ jsxDEV("div", { style: { flex: 1 }, children: [
-              /* @__PURE__ */ jsxDEV("h3", { style: { margin: 0, fontSize: "1.1rem", fontWeight: 900 }, children: group.name }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 7914,
-                columnNumber: 25
-              }),
-              /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.7rem", opacity: 0.9, marginTop: 4, display: "flex", gap: 8, alignItems: "center" }, children: group.franchise ? /* @__PURE__ */ jsxDEV(Fragment, { children: [
-                /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.65rem", fontWeight: 900, color: "#facc15" }, children: "Series:" }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 7919,
-                  columnNumber: 33
-                }),
-                /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.75rem", fontWeight: 900, color: "#fff" }, children: group.franchise }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 7920,
-                  columnNumber: 33
-                }),
-                /* @__PURE__ */ jsxDEV("div", { style: { marginLeft: 8, fontSize: "0.65rem", color: "var(--text-muted)" }, children: "Bring at least one matching unit." }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 7921,
-                  columnNumber: 33
-                })
-              ] }, void 0, true, {
-                fileName: "<stdin>",
-                lineNumber: 7918,
-                columnNumber: 31
-              }) : /* @__PURE__ */ jsxDEV(Fragment, { children: [
-                /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.65rem", fontWeight: 900, color: ELEMENTS[group.element]?.color || "#fff" }, children: group.element }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 7925,
-                  columnNumber: 33
-                }),
-                /* @__PURE__ */ jsxDEV("div", { style: { marginLeft: 8, fontSize: "0.65rem", color: "var(--text-muted)" }, children: "This trial favors that element." }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 7926,
-                  columnNumber: 33
-                })
-              ] }, void 0, true, {
-                fileName: "<stdin>",
-                lineNumber: 7924,
-                columnNumber: 31
-              }) }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 7915,
-                columnNumber: 25
-              })
-            ] }, void 0, true, {
-              fileName: "<stdin>",
-              lineNumber: 7913,
-              columnNumber: 21
-            })
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 7909,
-            columnNumber: 18
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1, background: "rgba(255,255,255,0.05)" }, children: group.variants.map((t) => {
-            const cleared = clearedTrials.includes(t.id);
-            const matchingHeroes = t.franchise ? characters.filter((c) => {
-              const f = extractFranchise(c);
-              return f && f.toLowerCase().trim() === String(t.franchise).toLowerCase().trim() && unlockedIds.includes(c.export_id);
-            }) : characters.filter((c) => String(c.element).toUpperCase() === String(t.element).toUpperCase() && unlockedIds.includes(c.export_id));
-            const hasRequirement = matchingHeroes.length >= 1;
-            const isDangerous = t.cpReq >= 1e6;
-            let badgeColor = "#4ade80";
-            if (t.difficulty === "medium") badgeColor = "#facc15";
-            if (t.difficulty === "hard") badgeColor = "#ef4444";
-            if (t.difficulty === "expert") badgeColor = "#a855f7";
-            const reqText = t.franchise ? `Requires: ${t.franchise}` : `Recommended element: ${t.element}`;
-            return /* @__PURE__ */ jsxDEV(
-              "button",
-              {
-                className: "trial-variant-btn",
-                style: {
-                  background: "transparent",
-                  border: "none",
-                  padding: "12px 8px",
-                  color: "#fff",
-                  cursor: hasRequirement ? "pointer" : "not-allowed",
-                  opacity: hasRequirement ? 1 : 0.45,
-                  position: "relative",
-                  textAlign: "left"
-                },
-                onClick: () => hasRequirement ? setPendingTrial(t) : createFloatingText(`Need ${t.franchise || t.element} Heroes!`, true),
-                title: reqText,
-                children: [
-                  /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }, children: [
-                    /* @__PURE__ */ jsxDEV("div", { children: [
-                      /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.65rem", fontWeight: 900, color: badgeColor }, children: t.difficulty.toUpperCase() }, void 0, false, {
-                        fileName: "<stdin>",
-                        lineNumber: 7969,
-                        columnNumber: 41
-                      }),
-                      /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.55rem", marginTop: 4, opacity: 0.8 }, children: reqText }, void 0, false, {
-                        fileName: "<stdin>",
-                        lineNumber: 7972,
-                        columnNumber: 41
-                      })
-                    ] }, void 0, true, {
-                      fileName: "<stdin>",
-                      lineNumber: 7968,
-                      columnNumber: 37
-                    }),
-                    /* @__PURE__ */ jsxDEV("div", { style: { textAlign: "right" }, children: [
-                      /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.9rem", fontWeight: 900, color: "#fff" }, children: t.cpReq >= 1e6 ? `${(t.cpReq / 1e6).toFixed(1)}M` : `${Math.floor(t.cpReq / 1e3)}K` }, void 0, false, {
-                        fileName: "<stdin>",
-                        lineNumber: 7975,
-                        columnNumber: 41
-                      }),
-                      cleared && /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#4ade80", fontWeight: 900, marginTop: 6 }, children: "CLEARED" }, void 0, false, {
-                        fileName: "<stdin>",
-                        lineNumber: 7976,
-                        columnNumber: 53
-                      })
-                    ] }, void 0, true, {
-                      fileName: "<stdin>",
-                      lineNumber: 7974,
-                      columnNumber: 37
-                    })
-                  ] }, void 0, true, {
-                    fileName: "<stdin>",
-                    lineNumber: 7967,
-                    columnNumber: 33
-                  }),
-                  /* @__PURE__ */ jsxDEV("div", { style: { marginTop: 8, display: "flex", gap: 8, alignItems: "center", fontSize: "0.65rem", color: "var(--text-muted)" }, children: [
-                    t.franchise ? /* @__PURE__ */ jsxDEV(Fragment, { children: [
-                      /* @__PURE__ */ jsxDEV("div", { style: { padding: "2px 8px", borderRadius: 8, background: "rgba(255,255,255,0.03)", fontWeight: 900 }, children: t.franchise }, void 0, false, {
-                        fileName: "<stdin>",
-                        lineNumber: 7984,
-                        columnNumber: 43
-                      }),
-                      /* @__PURE__ */ jsxDEV("div", { style: { opacity: 0.8 }, children: [
-                        matchingHeroes.length,
-                        " matching heroes"
-                      ] }, void 0, true, {
-                        fileName: "<stdin>",
-                        lineNumber: 7985,
-                        columnNumber: 43
-                      })
-                    ] }, void 0, true, {
-                      fileName: "<stdin>",
-                      lineNumber: 7983,
-                      columnNumber: 41
-                    }) : /* @__PURE__ */ jsxDEV(Fragment, { children: [
-                      /* @__PURE__ */ jsxDEV("div", { style: { width: 14, height: 14, borderRadius: 4, background: ELEMENTS[t.element]?.color || "#fff" } }, void 0, false, {
-                        fileName: "<stdin>",
-                        lineNumber: 7989,
-                        columnNumber: 43
-                      }),
-                      /* @__PURE__ */ jsxDEV("div", { style: { opacity: 0.8 }, children: [
-                        matchingHeroes.length,
-                        " ",
-                        matchingHeroes.length === 1 ? "match" : "matches"
-                      ] }, void 0, true, {
-                        fileName: "<stdin>",
-                        lineNumber: 7990,
-                        columnNumber: 43
-                      })
-                    ] }, void 0, true, {
-                      fileName: "<stdin>",
-                      lineNumber: 7988,
-                      columnNumber: 41
-                    }),
-                    isDangerous && /* @__PURE__ */ jsxDEV("div", { style: { marginLeft: "auto", color: "#ef4444", fontWeight: 900 }, children: "DANGEROUS" }, void 0, false, {
-                      fileName: "<stdin>",
-                      lineNumber: 7993,
-                      columnNumber: 53
-                    })
-                  ] }, void 0, true, {
-                    fileName: "<stdin>",
-                    lineNumber: 7981,
-                    columnNumber: 33
-                  })
-                ]
-              },
-              t.id,
-              true,
-              {
-                fileName: "<stdin>",
-                lineNumber: 7954,
-                columnNumber: 29
-              }
-            );
-          }) }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 7933,
-            columnNumber: 18
-          })
-        ] }, group.baseId, true, {
-          fileName: "<stdin>",
-          lineNumber: 7908,
-          columnNumber: 15
-        });
-      }),
-      activeTab !== "arena" && groupedTrials.filter((g) => g.type === activeTab).length === 0 && /* @__PURE__ */ jsxDEV("div", { style: { textAlign: "center", padding: 40, opacity: 0.5, border: "1px dashed rgba(255,255,255,0.2)", borderRadius: 20 }, children: [
-        /* @__PURE__ */ jsxDEV("p", { style: { fontWeight: 900, fontSize: "1.2rem", color: "#fff" }, children: "NO TRIALS DETECTED" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 8004,
-          columnNumber: 18
-        }),
-        /* @__PURE__ */ jsxDEV("p", { style: { fontSize: "0.8rem", maxWidth: 400, margin: "10px auto" }, children: activeTab === "franchise" ? "Recruit at least 1 hero from any franchise to unlock their Series Paradox Trial." : "Elemental trials appear automatically. If you see this, the multiverse is syncing..." }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 8005,
-          columnNumber: 18
-        }),
-        /* @__PURE__ */ jsxDEV("button", { className: "train-btn", style: { width: "auto", padding: "10px 20px", background: "#334155" }, onClick: () => setView("gacha"), children: "RECRUIT NEW HEROES" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 8010,
-          columnNumber: 18
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 8003,
-        columnNumber: 14
-      })
-    ] }, void 0, true, {
-      fileName: "<stdin>",
-      lineNumber: 7873,
-      columnNumber: 9
-    }),
-    pendingTrial && /* @__PURE__ */ jsxDEV("div", { className: "hero-select-modal animate-fadeIn", style: { display: "flex", flexDirection: "column" }, children: [
-      /* @__PURE__ */ jsxDEV("div", { className: "modal-header", children: [
-        /* @__PURE__ */ jsxDEV("div", { children: [
-          /* @__PURE__ */ jsxDEV("h2", { style: { margin: 0, color: pendingTrial.element ? ELEMENTS[pendingTrial.element].color : "#fff" }, children: pendingTrial.name }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 8022,
-            columnNumber: 15
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.8rem", opacity: 0.7, maxWidth: "400px", marginTop: 4 }, children: pendingTrial.desc }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 8023,
-            columnNumber: 15
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 8021,
-          columnNumber: 13
-        }),
-        /* @__PURE__ */ jsxDEV("button", { className: "upgrade-btn", style: { padding: "10px 20px" }, onClick: () => setPendingTrial(null), children: "CANCEL" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 8025,
-          columnNumber: 13
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 8020,
-        columnNumber: 11
-      }),
-      // "WHO'S GETTING IN" — surfaces every squad requirement for this trial as a
-      // chip (met/unmet/waived), mirroring the same pattern CampaignView uses for
-      // stage requirements. "Waived" means the requirement was auto-dropped
-      // because no owned hero could ever satisfy it (see the softlock fix in
-      // startTrial's franchise-trial element derivation above) -- surfacing that
-      // state here means the player can SEE why a requirement isn't listed as
-      // blocking, instead of just wondering why the trial always looked doable.
-      (pendingTrial.franchise || pendingTrial.element || pendingTrial.isWildcard) && (() => {
-        const h = React.createElement;
-        const squad = characters.filter((c) => (squadIds || []).some((id) => String(id) === String(c.export_id)));
-        const unlockedRoster = characters.filter((c) => unlockedIds.includes(c.export_id));
-        const frMatch = (c, t) => { const f = (extractFranchise(c) || "").toLowerCase().trim(); const tt = String(t).toLowerCase().trim(); return f === tt || f.includes(tt); };
-        const rosterCanFr = pendingTrial.franchise ? unlockedRoster.some((c) => frMatch(c, pendingTrial.franchise)) : true;
-        const rosterCanEl = pendingTrial.element ? unlockedRoster.some((c) => String(c.element).toUpperCase() === String(pendingTrial.element).toUpperCase()) : true;
-        const rosterCanWildcard = pendingTrial.isWildcard ? unlockedRoster.some((c) => { const f = extractFranchise(c) || "Minor"; return !f || (franchiseCounts[f] || 0) < 3; }) : true;
-        const reqs = [];
-        if (pendingTrial.franchise) reqs.push({ label: `${pendingTrial.franchise} hero`, waived: !rosterCanFr, met: squad.some((c) => frMatch(c, pendingTrial.franchise)) });
-        if (pendingTrial.element) reqs.push({ label: `${pendingTrial.element} hero`, waived: !rosterCanEl, met: squad.some((c) => String(c.element).toUpperCase() === String(pendingTrial.element).toUpperCase()) });
-        if (pendingTrial.isWildcard) reqs.push({ label: "Wildcard (minor series) hero", waived: !rosterCanWildcard, met: squad.some((c) => { const f = extractFranchise(c) || "Minor"; return !f || (franchiseCounts[f] || 0) < 3; }) });
-        return h("div", { style: { background: "rgba(233,69,96,0.08)", border: "1px solid var(--primary)", borderRadius: 12, padding: "10px 12px", marginBottom: 15, textAlign: "left" } },
-          h("div", { style: { fontSize: "0.6rem", fontWeight: 900, color: "var(--primary)", letterSpacing: 2, marginBottom: 7 } }, "WHO'S GETTING IN"),
-          h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } }, reqs.map((r, i) => {
-            const col = r.waived ? "#94a3b8" : r.met ? "#4ade80" : "#f87171";
-            return h("span", { key: i, style: { fontSize: "0.66rem", fontWeight: 800, padding: "3px 9px", borderRadius: 20, background: r.waived ? "rgba(148,163,184,0.12)" : r.met ? "rgba(74,222,128,0.13)" : "rgba(239,68,68,0.13)", color: col, border: "1px solid " + col + "44" } }, (r.waived ? "— " : r.met ? "✓ " : "✗ ") + r.label + (r.waived ? " (waived)" : ""));
-          }))
-        );
-      })(),
-      // SCOUT GEAR — reproduces the EXACT boss + gear roll startTrial() will
-      // use (same BOSS_ROSTER pick logic, same trial-id-seeded RNG) so what
-      // you scout here is what you actually fight, not a flavor sample.
-      (() => {
-        const h = React.createElement;
-        const RARITY_COLOR = { Common: "#94a3b8", Rare: "#38bdf8", Epic: "#a855f7", Legendary: "#facc15", Mythic: "#ff2ecb" };
-        const bossPick = BOSS_ROSTER[Math.abs(pendingTrial.id.length + pendingTrial.id.charCodeAt(0)) % BOSS_ROSTER.length];
-        const isDuoTrial = pendingTrial.difficulty === "hard" || pendingTrial.difficulty === "expert";
-        const bossEntries = isDuoTrial ? [bossPick, BOSS_ROSTER.find((b) => b.name === bossPick.duoPartner) || bossPick] : [bossPick];
-        const bossGearTier = { easy: 1, medium: 2, hard: 3, expert: 4 }[pendingTrial.difficulty] ?? 2;
-        const gearRoll = seededRandom(pendingTrial.id + "_gear");
-        return h("div", { style: { background: "rgba(0,0,0,0.3)", padding: 12, borderRadius: 14, marginBottom: 15 } },
-          h("div", { style: { fontSize: "0.6rem", fontWeight: 900, color: "#facc15", letterSpacing: 2, marginBottom: 8 } }, "SCOUT REPORT"),
-          h("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, bossEntries.map((boss) => {
-            const gear = rollEnemyGear(bossGearTier, gearRoll);
-            return h("div", { key: boss.name, style: { display: "flex", alignItems: "center", gap: 8 } },
-              h("img", { src: boss.img, style: { width: 32, height: 32, borderRadius: 8, objectFit: "cover", border: `1px solid ${ELEMENTS[boss.element]?.color || "#fff"}` } }),
-              h("span", { style: { fontWeight: 800, fontSize: "0.68rem", minWidth: 90 } }, boss.name),
-              h("div", { style: { display: "flex", flexWrap: "wrap", gap: 4 } }, gear.map((g) => {
-                const item = (EQUIPMENT[g.slot] || []).find((it) => it.id === g.itemId);
-                if (!item) return null;
-                const rc = RARITY_COLOR[item.rarity];
-                return h("span", { key: g.slot, title: item.name, style: { fontSize: "0.56rem", fontWeight: 800, padding: "2px 6px", borderRadius: 10, color: rc, border: `1px solid ${rc}66`, background: `${rc}18` } }, `${item.name} +${g.level}`);
-              })));
-          })));
-      })(),
-      /* @__PURE__ */ jsxDEV("div", { style: { background: "rgba(0,0,0,0.3)", padding: 15, borderRadius: 16, marginBottom: 20 }, children: [
-        /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }, children: [
-          /* @__PURE__ */ jsxDEV("h3", { style: { margin: 0, fontSize: "0.9rem", fontWeight: 900 }, children: [
-            "TRIAL SQUAD (",
-            squadIds.length,
-            "/5)"
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 8030,
-            columnNumber: 16
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
-            /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 8 }, children: [
-              /* @__PURE__ */ jsxDEV("button", { className: "upgrade-btn", style: { fontSize: "0.7rem" }, onClick: () => setShowSquadBuilder({
-                element: pendingTrial.element,
-                franchise: pendingTrial.franchise,
-                isWildcard: pendingTrial.isWildcard
-              }), children: "SELECT HEROES" }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 8032,
-                columnNumber: 19
-              }),
-              /* @__PURE__ */ jsxDEV("button", { className: "train-btn", style: { width: "auto", padding: "8px 24px" }, disabled: squadIds.length === 0, onClick: () => startTrial(pendingTrial), children: "PROCEED TO TRIAL" }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 8037,
-                columnNumber: 19
-              })
-            ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
-            squadIds.length === 0 && /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.65rem", color: "#ef4444", fontWeight: 700 }, children: "Select at least 1 hero to proceed" }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 8031,
-            columnNumber: 16
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 8029,
-          columnNumber: 13
-        }),
-        /* @__PURE__ */ jsxDEV("div", { className: "squad-slots-row", style: { gridTemplateColumns: "repeat(5, 1fr)" }, children: Array.from({ length: 5 }).map((_, i) => {
-          const heroId = squadIds[i];
-          const c = heroId ? characters.find((h) => String(h.export_id) === String(heroId)) : null;
-          return /* @__PURE__ */ jsxDEV("div", { className: `squad-member-slot ${c ? "active" : "empty"}`, onClick: () => setShowSquadBuilder(true), children: c ? /* @__PURE__ */ jsxDEV("img", { src: c.imageUrl }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 8048,
-            columnNumber: 28
-          }) : /* @__PURE__ */ jsxDEV(Plus, { size: 20, opacity: 0.2 }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 8048,
-            columnNumber: 55
-          }) }, i, false, {
-            fileName: "<stdin>",
-            lineNumber: 8047,
-            columnNumber: 21
-          });
-        }) }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 8042,
-          columnNumber: 13
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 8028,
-        columnNumber: 11
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { textAlign: "center", padding: 40, opacity: 0.7 }, children: [
-        /* @__PURE__ */ jsxDEV(Info, { size: 32, style: { marginBottom: 10 } }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 8056,
-          columnNumber: 14
-        }),
-        /* @__PURE__ */ jsxDEV("p", { children: "Ensure your squad matches the element or series requirement before entering." }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 8057,
-          columnNumber: 14
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 8055,
-        columnNumber: 11
-      })
-    ] }, void 0, true, {
-      fileName: "<stdin>",
-      lineNumber: 8019,
-      columnNumber: 9
-    }),
+    /* @__PURE__ */ jsxDEV(TrialsMenu, { onWorldTimeStop, cameoId, characters, unlockedIds, createFloatingText, squadIds, setSquadIds, clearedTrials, setClearedTrials, setGems, setAura, stamina, setStamina, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, triggerVisualEffect2, endlessFloor, setEndlessFloor, arenaRank, setArenaRank, setCredits, setMaterials, setEssence, skills, setShowSquadBuilder, auraUpgrades, setCharacters, abilityShards, setAbilityShards, gearInventory, setGearInventory, ARENA_AUTO_CLEAR_PWR, ARENA_QUALIFIER_WINS, ARENA_WINS_PER_RANK, DIFFICULTY_CONFIG, GRIND_DUNGEONS, GRIND_STAMINA_MULTS, GRIND_STAMINA_PCTS, SHARD_TIER_COLOR, activeSkill, activeTab, activeTrial, allFranchises, arenaScouted, arenaSquadPWR, arenaWinStreak, autoBattle, autoClearAllStarRound, autoClearArenaMatch, baseElementTrials, baseFranchiseTrials, battleSceneRef, battleState, breakCombo, buildArenaMatchup, bumpCombo, cameoCutin, cameoData, cameoRef, canAutoClearAllStar, canAutoClearArena, changePlayerElement, combatSpeed, combatants, comboDisplay, comboMult, comboRef, deadIdsRef, eligibleFranchises, extractFranchise, finishTrial, floatingDamages, franchiseCounts, gauntletCp, gauntletCurrentSeries, gauntletIdx, gauntletLap, gauntletLen, gauntletRound, gauntletSeries, getGrindPct, getVictoryRewards, grantRewards, grindBulkMult, grindDungeonRewards, grindEffMult, grindPctByTier, grindSkillPool, groupedTrials, handledActionTimes, hitStopUntil, koEvent, lastSkillTimestamp, minorFranchiseChars, ownedFranchiseElement, pendingTrial, playerElement, renderAllStarMenu, renderGrindDungeons, rollGrindGear, scoutArenaOpponents, seriesChampions, setActiveSkill, setActiveTab, setActiveTrial, setArenaScouted, setArenaWinStreak, setAutoBattle, setBattleState, setCameoCutin, setCombatSpeed, setCombatants, setComboDisplay, setFloatingDamages, setGrindPctByTier, setKoEvent, setLastSkillTimestamp, setPendingTrial, setPlayerElement, showDamage, startAllStarRound, startArenaMatchup, startGrindDungeon, startTrial, statsSummary, tacticalStanceId, timeStopHandledRef, toggleTrialSquadMember, totalSquadPWR, trials, triggerCameo, triggerDefend, triggerSkill }, void 0, false, {}),
+    pendingTrial && /* @__PURE__ */ jsxDEV(PreTrialModal, { onWorldTimeStop, cameoId, characters, unlockedIds, createFloatingText, squadIds, setSquadIds, clearedTrials, setClearedTrials, setGems, setAura, stamina, setStamina, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, triggerVisualEffect2, endlessFloor, setEndlessFloor, arenaRank, setArenaRank, setCredits, setMaterials, setEssence, skills, setShowSquadBuilder, auraUpgrades, setCharacters, abilityShards, setAbilityShards, gearInventory, setGearInventory, ARENA_AUTO_CLEAR_PWR, ARENA_QUALIFIER_WINS, ARENA_WINS_PER_RANK, DIFFICULTY_CONFIG, GRIND_DUNGEONS, GRIND_STAMINA_MULTS, GRIND_STAMINA_PCTS, SHARD_TIER_COLOR, activeSkill, activeTab, activeTrial, allFranchises, arenaScouted, arenaSquadPWR, arenaWinStreak, autoBattle, autoClearAllStarRound, autoClearArenaMatch, baseElementTrials, baseFranchiseTrials, battleSceneRef, battleState, breakCombo, buildArenaMatchup, bumpCombo, cameoCutin, cameoData, cameoRef, canAutoClearAllStar, canAutoClearArena, changePlayerElement, combatSpeed, combatants, comboDisplay, comboMult, comboRef, deadIdsRef, eligibleFranchises, extractFranchise, finishTrial, floatingDamages, franchiseCounts, gauntletCp, gauntletCurrentSeries, gauntletIdx, gauntletLap, gauntletLen, gauntletRound, gauntletSeries, getGrindPct, getVictoryRewards, grantRewards, grindBulkMult, grindDungeonRewards, grindEffMult, grindPctByTier, grindSkillPool, groupedTrials, handledActionTimes, hitStopUntil, koEvent, lastSkillTimestamp, minorFranchiseChars, ownedFranchiseElement, pendingTrial, playerElement, renderAllStarMenu, renderGrindDungeons, rollGrindGear, scoutArenaOpponents, seriesChampions, setActiveSkill, setActiveTab, setActiveTrial, setArenaScouted, setArenaWinStreak, setAutoBattle, setBattleState, setCameoCutin, setCombatSpeed, setCombatants, setComboDisplay, setFloatingDamages, setGrindPctByTier, setKoEvent, setLastSkillTimestamp, setPendingTrial, setPlayerElement, showDamage, startAllStarRound, startArenaMatchup, startGrindDungeon, startTrial, statsSummary, tacticalStanceId, timeStopHandledRef, toggleTrialSquadMember, totalSquadPWR, trials, triggerCameo, triggerDefend, triggerSkill }, void 0, false, {}),
     activeTrial && /* @__PURE__ */ jsxDEV("div", { className: "battle-screen animate-fadeIn", children: [
       battleState === "INTRO" && (activeTrial.type === "arena"
         ? /* @__PURE__ */ jsxDEV(
@@ -1866,6 +1630,7 @@ const TrialsView = ({
           /* @__PURE__ */ jsxDEV("div", { className: "ko-banner-name", children: [koEvent.name, koEvent.isEnemy ? " ELIMINATED" : " DOWN"] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
         ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
       ] }, koEvent.id + String(koEvent.time), true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+      /* @__PURE__ */ jsxDEV(TurnOrderStrip, { combatants, playerElement, combatSpeed }, "turn-strip", false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
       /* @__PURE__ */ jsxDEV("div", { className: "battle-header", style: { padding: 15, background: "rgba(0,0,0,0.8)" }, children: [
         /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
           /* @__PURE__ */ jsxDEV("h2", { style: { margin: 0, fontSize: "1rem" }, children: activeTrial.name.toUpperCase() }, void 0, false, {
@@ -1893,6 +1658,15 @@ const TrialsView = ({
                 columnNumber: 20
               }
             ),
+            cameoData ? (() => {
+              const cdLeft = Math.max(0, 60000 - (Date.now() - cameoRef.current.lastUsed));
+              const ready = cameoRef.current.usesLeft > 0 && cdLeft <= 0;
+              return React.createElement("button", {
+                key: "cameo", onClick: triggerCameo, disabled: !ready, className: "train-btn",
+                style: { padding: "8px 12px", fontSize: "0.7rem", width: "auto", background: ready ? "linear-gradient(135deg,#00d2ff,#0891b2)" : "#334155", color: ready ? "#000" : "#94a3b8" },
+                title: cameoRef.current.usesLeft <= 0 ? "No guest summons left" : !ready ? `Recharging (${Math.ceil(cdLeft / 1000)}s)` : `Summon ${cameoData.name}`
+              }, ready ? "SUMMON" : cameoRef.current.usesLeft <= 0 ? "SPENT" : `${Math.ceil(cdLeft / 1000)}s`);
+            })() : null,
             /* @__PURE__ */ jsxDEV(
               "button",
               {
@@ -1972,6 +1746,10 @@ const TrialsView = ({
       }),
       /* @__PURE__ */ jsxDEV("div", { ref: battleSceneRef, className: "battle-scene", children: [
         /* @__PURE__ */ jsxDEV(ProjectileLayer, { combatants, containerRef: battleSceneRef }, void 0, false, {}),
+        comboDisplay >= 2 && /* @__PURE__ */ jsxDEV("div", { className: `combo-counter ${comboDisplay >= 20 ? "combo-tier-3" : comboDisplay >= 10 ? "combo-tier-2" : "combo-tier-1"}`, children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "combo-hits", children: [comboDisplay, " HITS"] }, comboDisplay, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
+          /* @__PURE__ */ jsxDEV("div", { className: "combo-bonus", children: ["+", Math.round(Math.min(40, comboDisplay * 2)), "% DMG"] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+        ] }, void 0, true, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 }),
         /* @__PURE__ */ jsxDEV("div", { className: "battle-background-layer", style: { backgroundImage: `url(${activeTrial?.type === "allstar" ? "background_citadel.png" : activeTrial?.type === "endless" ? "background_void.png" : activeTrial?.element === "FIRE" ? "fx_burn.png" : activeTrial?.element === "WATER" ? "background_battle.png" : "background_citadel.png"})` } }, void 0, false, {
           fileName: "<stdin>",
           lineNumber: 8125,
@@ -1986,6 +1764,7 @@ const TrialsView = ({
         // element so endgame trials read as distinct occasions, not a reskin
         // of the same generic battle screen.
         (() => {
+          const h = React.createElement;
           const isArena = activeTrial?.type === "arena";
           const isVoid = activeTrial?.type === "endless";
           const isAllStar = activeTrial?.type === "allstar";
@@ -2052,7 +1831,7 @@ const TrialsView = ({
           lineNumber: 8130,
           columnNumber: 16
         })),
-        /* @__PURE__ */ jsxDEV("div", { className: "battle-formation enemy-row", children: combatants.filter((c) => c.isEnemy).map((u) => /* @__PURE__ */ jsxDEV(BattleUnit, { unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id) }, u.id, false, {
+        /* @__PURE__ */ jsxDEV("div", { className: "battle-formation enemy-row", children: combatants.filter((c) => c.isEnemy).map((u) => /* @__PURE__ */ jsxDEV(BattleUnit, { unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id), combatSpeed }, u.id, false, {
           fileName: "<stdin>",
           lineNumber: 8142,
           columnNumber: 60
@@ -2061,7 +1840,7 @@ const TrialsView = ({
           lineNumber: 8141,
           columnNumber: 14
         }),
-        /* @__PURE__ */ jsxDEV("div", { className: "battle-formation hero-row", children: combatants.filter((c) => !c.isEnemy).map((u) => /* @__PURE__ */ jsxDEV(BattleUnit, { unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id) }, u.id, false, {
+        /* @__PURE__ */ jsxDEV("div", { className: "battle-formation hero-row", children: combatants.filter((c) => !c.isEnemy).map((u) => /* @__PURE__ */ jsxDEV(BattleUnit, { unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id), combatSpeed }, u.id, false, {
           fileName: "<stdin>",
           lineNumber: 8145,
           columnNumber: 61
@@ -2204,10 +1983,7 @@ const TrialsView = ({
         VictoryScreen,
         {
           combatants,
-          rewards: {
-            ...activeTrial.scaledRewards,
-            gems: !clearedTrials.includes(activeTrial.id) || activeTrial.type === "endless" ? activeTrial.scaledRewards.gems : 0
-          },
+          rewards: getVictoryRewards(activeTrial),
           onConfirm: () => {
             finishTrial();
             if (setIsVictoryMusic) setIsVictoryMusic(false);

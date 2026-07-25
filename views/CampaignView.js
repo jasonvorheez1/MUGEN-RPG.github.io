@@ -9,10 +9,12 @@ import {
   Map as MapIcon,
   Plus
 } from "lucide-react";
-import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow, applyStatusTick, resolveBasicAttack, getCastAnimMs, getLungeMs, getBasicAttackMs, HITSTOP_BUFFER_MS, ProjectileLayer } from "../CombatSystem.js";
-import { CAMPAIGN_CONTENT, ELEMENTS, LEADER_SKILLS, COSMETICS } from "../constants.js";
-import { calculateStat, playSound, calculateSubStat, getTierEfficiency, applyLeaderBonus, getEnemyStatsFromCP, formatPower, applyMitigation, incrementCourierFieldBattles, getDominantSpecialKey, SPECIAL_ARCHETYPE_NAMES, getGaugeGain, getGearPassives, rollEnemyGear } from "../utils.js";
+import { BattleUnit, VictoryScreen, getBattleStats, executeCombatSkill, TacticalStanceRow, applyStatusTick, resolveBasicAttack, getCastAnimMs, getCastAnimSound, getLungeMs, getBasicAttackMs, getCooldownGain, getFlurryHitSound, HITSTOP_BUFFER_MS, ProjectileLayer, pushShieldEffect, TurnOrderStrip } from "../CombatSystem.js";
+import { CAMPAIGN_CONTENT, ELEMENTS, LEADER_SKILLS, COSMETICS, AUTO_CLEAR_PWR_MULT } from "../constants.js";
+import { calculateStat, playSound, calculateSubStat, getTierEfficiency, applyLeaderBonus, applyCrewChemistry, getEnemyStatsFromCP, formatPower, applyMitigation, incrementCourierFieldBattles, getDominantSpecialKey, SPECIAL_ARCHETYPE_NAMES, getGaugeGain, getGearPassives, rollEnemyGear, INITIAL_GAUGE_RANGE } from "../utils.js";
 import { isMobile, CampaignIntro } from "./ViewShared.js";
+import { CampaignMap } from "./campaign/CampaignMap.js";
+import { PreBattleModal } from "./campaign/PreBattleModal.js";
 
 const CampaignView = ({
   onWorldTimeStop,
@@ -89,6 +91,44 @@ const CampaignView = ({
       if (target) setCurrentArea(target);
     }
   }, [currentChapter, currentArea, campaignProgress]);
+  // QOL: one-click "CONTINUE" jump straight to the next uncleared stage's
+  // pre-battle modal, from anywhere in the map (chapter list, area list, or
+  // mid-browse). Previously the only way back to "my actual next fight" after
+  // backing out to the chapter list was re-walking chapter -> area -> stage
+  // by hand, even though the engine already knows exactly which stage is next
+  // (campaignProgress) -- this just surfaces that.
+  const jumpToNextStage = () => {
+    for (const chapter of CAMPAIGN_CONTENT) {
+      for (const area of chapter.areas) {
+        const stage = area.stages.find((s) => s.id === campaignProgress);
+        if (stage) {
+          setCurrentChapter(chapter);
+          setCurrentArea(area);
+          setPendingStage(stage);
+          setShowSquadBuilder(true);
+          playSound("ui_select");
+          return;
+        }
+      }
+    }
+    createFloatingText("Campaign complete — no next stage!", false, "#4ade80");
+  };
+  // QOL: fires the stage-cleared pop animation (see .tech-stage-item.just-cleared
+  // in style.css) the moment campaignProgress advances past a stage within this
+  // session, instead of the stage list just silently re-rendering with a new
+  // border color on the next visit.
+  const prevCampaignProgressRef = useRef(campaignProgress);
+  const [justClearedStageId, setJustClearedStageId] = useState(null);
+  useEffect(() => {
+    if (campaignProgress > prevCampaignProgressRef.current) {
+      const clearedId = prevCampaignProgressRef.current;
+      setJustClearedStageId(clearedId);
+      const t = setTimeout(() => setJustClearedStageId(null), 1400);
+      prevCampaignProgressRef.current = campaignProgress;
+      return () => clearTimeout(t);
+    }
+    prevCampaignProgressRef.current = campaignProgress;
+  }, [campaignProgress]);
   const [combatants, setCombatants] = useState([]);
   const [battleState, setBattleState] = useState("IDLE");
   const [battleLog, setBattleLog] = useState([]);
@@ -98,6 +138,10 @@ const CampaignView = ({
   const [autoBattle, setAutoBattle] = useState(false);
   const [combatSpeed, setCombatSpeed] = useState(1);
   const [markedTargetId, setMarkedTargetId] = useState(null);
+  // QOL: element filter for the stage list -- areas with a dozen+ stages made
+  // hunting for "the one WATER stage I still need" a manual scroll-and-squint.
+  const [stageElementFilter, setStageElementFilter] = useState("All");
+  useEffect(() => { setStageElementFilter("All"); }, [currentArea]);
   const [elementalChain, setElementalChain] = useState({ element: null, count: 0 });
   // COMBO CHAIN: a team-wide hit counter. Every ally hit extends it; any enemy
   // that gets an action off breaks it. Damage ramps +1.5% per hit (cap +45%),
@@ -204,11 +248,31 @@ const CampaignView = ({
   const squadIdSet = useMemo(() => new Set((squadIds || []).map((id) => String(id))), [squadIds]);
   const unlockedIdSet = useMemo(() => new Set((unlockedIds || []).map((id) => String(id))), [unlockedIds]);
   const squad = useMemo(() => characters.filter((c) => squadIdSet.has(String(c.export_id))), [characters, squadIdSet]);
-  const autoFillSquad = () => {
-    const sorted = [...characters].filter((c) => unlockedIds.includes(c.export_id)).sort((a, b) => calculateSubStat(b, characters, "pwr", skills) - calculateSubStat(a, characters, "pwr", skills)).slice(0, 5).map((c) => c.export_id);
+  // QOL: requirement-aware auto-fill. Previously this always sorted by raw PWR
+  // alone, so auto-filling for a stage with a requiredElement/requiredFranchise
+  // gate could easily leave that requirement unmet (the "WHO'S GETTING IN"
+  // checklist would show a red ✗ right after auto-filling) -- a real
+  // inconsistency between what the checklist demanded and what auto-fill
+  // produced. Also fixed a squad-size bug: this used to slice(0, 5) even
+  // though the squad UI everywhere else (slots row, modal maxSquad) caps at 4.
+  const autoFillSquad = (reqStage = null) => {
+    const pool = [...characters].filter((c) => unlockedIds.includes(c.export_id));
+    const matchesReq = (c) => {
+      if (!reqStage) return false;
+      const elOk = reqStage.requiredElement && String(c.element).toUpperCase() === String(reqStage.requiredElement).toUpperCase();
+      const frOk = reqStage.requiredFranchise && String(c.franchise || "").toLowerCase().trim().includes(String(reqStage.requiredFranchise).toLowerCase().trim());
+      return !!(elOk || frOk);
+    };
+    const sorted = pool.sort((a, b) => {
+      if (reqStage) {
+        const aReq = matchesReq(a), bReq = matchesReq(b);
+        if (aReq !== bReq) return aReq ? -1 : 1;
+      }
+      return calculateSubStat(b, characters, "pwr", skills) - calculateSubStat(a, characters, "pwr", skills);
+    }).slice(0, 4).map((c) => c.export_id);
     setSquadIds(sorted);
     playSound("equip");
-    createFloatingText("Auto-Assigned Elite Squad", false, "#4ade80");
+    createFloatingText(reqStage ? "Auto-Assigned Squad (requirements matched)" : "Auto-Assigned Elite Squad", false, "#4ade80");
   };
   const clearSquad = () => {
     setSquadIds([]);
@@ -307,6 +371,55 @@ const CampaignView = ({
     setTimeout(() => setFloatingDamages((prev) => prev.filter((d) => d.id !== id)), 1e3);
   };
   const [lastSkillTimestamp, setLastSkillTimestamp] = useState(0);
+  // AUTO-CLEAR: once the squad's total PWR clears the stage's recommended
+  // power by AUTO_CLEAR_PWR_MULT, skip the battle entirely and grant the same
+  // rewards a clean win would -- the fight's a foregone conclusion at that
+  // point. Mirrors the reward math the real WIN path uses (see the
+  // `setBattleRewards`/`onConfirm` pair below) so auto-clearing pays the same
+  // as playing it out.
+  const canAutoClearStage = (stage) => {
+    if (!stage) return false;
+    const req = (stage.cpReq || 1e3) * (isHardMode ? 2 : 1);
+    return totalSquadPWR >= req * AUTO_CLEAR_PWR_MULT;
+  };
+  const autoClearStage = (stage) => {
+    if (!stage) return;
+    if (squadIds.length < 1) { createFloatingText("Need at least 1 hero!", true); return; }
+    if (campaignProgress < stage.id) { createFloatingText("Stage locked!", true); return; }
+    if (!canAutoClearStage(stage)) return;
+    const STAGE_STAMINA_COST = 20;
+    if (stamina < STAGE_STAMINA_COST) { createFloatingText(`Need ${STAGE_STAMINA_COST} Stamina to deploy!`, true); return; }
+    setStamina((s) => s - STAGE_STAMINA_COST);
+    const id = stage.id;
+    const rewardMult = isHardMode ? 2 : 1;
+    const r = stage.rewards || {};
+    const credits = (r.credits || id * 500) * rewardMult;
+    const gems = r.gems || 0;
+    const aura = id * 2 * rewardMult;
+    const materialsGained = Math.floor((id * 8 + 10) * rewardMult);
+    const essenceGained = Math.floor(id / 3 + 1) * rewardMult;
+    setCampaignRanks((prev) => {
+      const current = prev[id];
+      const order = { "SSS": 6, "SS": 5, "S": 4, "A": 3, "B": 2, "C": 1 };
+      const earnedRank = "S"; // auto-clear = clean overpowered win
+      if (!current || order[earnedRank] > order[current]) return { ...prev, [id]: earnedRank };
+      return prev;
+    });
+    setCredits((c) => c + credits);
+    if (gems) setGems((g) => g + gems);
+    setAura((a) => a + aura);
+    const curMaterials = parseInt(localStorage.getItem("mugen_materials") || "0", 10);
+    const curEssence = parseInt(localStorage.getItem("mugen_essence") || "0", 10);
+    const nextMaterials = curMaterials + materialsGained;
+    const nextEssence = curEssence + essenceGained;
+    localStorage.setItem("mugen_materials", String(nextMaterials));
+    localStorage.setItem("mugen_essence", String(nextEssence));
+    window.dispatchEvent(new CustomEvent("mugen_materials_changed", { detail: { materials: nextMaterials, essence: nextEssence } }));
+    setCampaignProgress(Math.max(campaignProgress, id + 1));
+    setPendingStage(null);
+    playSound("success");
+    createFloatingText(`AUTO-CLEARED: ${stage.name}!`, false, "#00d2ff");
+  };
   const startStage = (stage) => {
     if (!stage) return;
     if (stage.squadSizeReq && squad.length < stage.squadSizeReq) {
@@ -430,15 +543,19 @@ const CampaignView = ({
         isEnemy: false,
         special: c.special,
         equipSlots: c.equipSlots,
-        gauge: Math.random() * 30,
+        gauge: Math.random() * INITIAL_GAUGE_RANGE,
         burst: 0,
         activeSynergies,
         effects: [
           // Apply initial stance immediately
-          { type: "tactical_stance", duration: 9999, val: c.element === initialElement ? 0.25 : 0.12, label: `STANCE:${initialElement}` }
+          { type: "tactical_stance", duration: 9999, val: c.element === initialElement ? 0.25 : 0.12, label: `STANCE:${initialElement}` },
+          // Jimmy Neutron draws aggro the instant the fight starts, no signature
+          // required -- everyone's still furious with him before he's done anything.
+          ...(c.name === "Jimmy Neutron" ? [{ type: "aggro", duration: 3, val: 0, label: "NOT LIKE THIS..." }] : [])
         ],
         dead: false,
         critRate: calculateSubStat(c, characters, "crit_rate", skills, auraUpgrades) / 100,
+        technique: calculateSubStat(c, characters, "technique", skills, auraUpgrades),
         evasion: calculateSubStat(c, characters, "evasion", skills, auraUpgrades) / 100,
         lifesteal: 0,
         tierMod,
@@ -479,7 +596,9 @@ const CampaignView = ({
       // their special move instead of a generic Rare/Epic/Legendary skill -- rare
       // early on, near-guaranteed by the back half of the campaign.
       if (isBoss && hasSkill2) {
-        const sigChance = Math.min(0.9, stage.id / 40);
+        // Raised floor so bosses can carry real Signature kits from early on,
+        // not just deep into the campaign (was ~0% until stage 4+).
+        const sigChance = Math.min(0.9, 0.3 + stage.id / 50);
         if (Math.random() < sigChance) {
           const signaturePool = (skills || []).filter((s) => s.signature);
           const elementSignatures = signaturePool.filter((s) => {
@@ -519,7 +638,10 @@ const CampaignView = ({
         stagger: 0,
         maxStagger: isBoss ? 900 : 350,
         // Stagger is much harder to trigger, making it a major tactical window
-        gauge: 20 + Math.random() * 50,
+        // Fair-start fix: enemies used to seed 20-70 gauge vs allies' 0-30, giving
+        // them a structural first-move advantage in nearly every fight regardless
+        // of the player's speed investment. Both sides now draw from the same range.
+        gauge: Math.random() * INITIAL_GAUGE_RANGE,
         burst: 0,
         effects,
         dead: false,
@@ -530,6 +652,7 @@ const CampaignView = ({
     });
     const leaderId = squadIds[0];
     const leaderChar = leaderId ? characters.find((c) => String(c.export_id) === String(leaderId)) : null;
+    allies.forEach((a) => applyCrewChemistry(a, squad));
     if (leaderChar) {
       allies.forEach((a) => applyLeaderBonus(leaderChar, a, squad));
       addLog(`LEADER SKILL: ${LEADER_SKILLS.find((s) => s.id === leaderChar.leaderSkillId)?.name || "ACTIVE"}`);
@@ -561,7 +684,7 @@ const CampaignView = ({
       if (!u || u.dead || (u.burst || 0) < cost) return prev;
       u.burst -= cost;
       if (isPerfect) {
-        u.effects.push({ type: "shield", duration: 2, val: 0.5, label: "PERFECT GUARD" });
+        pushShieldEffect(u, { type: "shield", duration: 2, val: 0.5, label: "PERFECT GUARD" });
         u.effects.push({ type: "buff_atk", duration: 2, val: 0.25, label: "COUNTER STANCE" });
         showDamage(u.id, "PERFECT GUARD!", "heal");
         // Parry flash: white screen pop + a beat of hit-stop. Pure kimochi.
@@ -576,7 +699,7 @@ const CampaignView = ({
         playSound("mugen_guard", 0.7);
         playSound("crit_hit", 0.4);
       } else {
-        u.effects.push({ type: "shield", duration: 2, val: 0.3, label: "EMERGENCY GUARD" });
+        pushShieldEffect(u, { type: "shield", duration: 2, val: 0.3, label: "EMERGENCY GUARD" });
         u.effects.push({ type: "buff_def", duration: 2, val: 0.5, label: "DEF UP" });
         showDamage(u.id, "GUARD UP", "heal");
         playSound("shield_up");
@@ -607,7 +730,13 @@ const CampaignView = ({
       });
       const casterAfter = nextState.find((n) => n.id === unitId);
       const castMs = getCastAnimMs(casterAfter?.lastCastAnim);
-      if (castMs) hitStopUntil.current = Math.max(hitStopUntil.current, Date.now() + castMs + HITSTOP_BUFFER_MS);
+      // BUG FIX: this lock used to hold the sim for the FULL, unscaled cast
+      // duration no matter the battle-speed setting, while BattleUnit's own
+      // visual animation now plays speed-scaled (see battleUI.jsx animMs) --
+      // without matching the lock here, the animation would finish early and
+      // the game would just sit idle until this longer, stale lock expired,
+      // making the speed toggle feel like it barely does anything.
+      if (castMs) hitStopUntil.current = Math.max(hitStopUntil.current, Date.now() + Math.max(200, Math.round(castMs / (combatSpeed || 1))) + HITSTOP_BUFFER_MS);
       bumpCombo(2);
       applyResonance(nextState, u);
       return nextState;
@@ -683,6 +812,15 @@ const CampaignView = ({
   React.useEffect(() => {
     if (battleState !== "ACTIVE") return;
     const timer = setInterval(() => {
+      // GUEST SUMMON, AUTO-PILOTED: while Auto is on, fire the guest the
+      // instant it's actually ready (uses left + off cooldown) instead of
+      // letting it sit unused -- the manual button still works identically
+      // when Auto is off. Runs every tick so it fires as soon as possible,
+      // including right at battle start.
+      if (loopState.current.autoBattle && cameoData && Date.now() >= hitStopUntil.current) {
+        const cameoReady = cameoRef.current.usesLeft > 0 && Date.now() - cameoRef.current.lastUsed >= 60000;
+        if (cameoReady) triggerCameo();
+      }
       setCombatants((prev) => {
         if (!prev || prev.length === 0 || battleState !== "ACTIVE") return prev;
         // HIT-STOP: freeze the simulation for a beat after heavy impacts.
@@ -740,14 +878,25 @@ const CampaignView = ({
         // see utils.js for why the old fixed-cap formula stopped differentiating
         // speed past roughly level 20.
         const battleSpeeds = next.filter((u) => !u.dead).map((u) => getBattleStats(u, curEl, u.activeSynergies || []).speed);
-        next.forEach((u) => {
+        // Fair-start fix: `next` is always [...enemies, ...allies], so when two
+        // units cross 100 gauge in the same 50ms tick, plain array order let
+        // enemies win that tie every single time. Visiting a shuffled copy each
+        // tick (the objects are the same references, so `next` itself and all
+        // gauge/cooldown updates are unaffected) makes same-tick ties a coin flip
+        // instead of a structural enemy advantage.
+        const scanOrder = [...next].sort(() => Math.random() - 0.5);
+        scanOrder.forEach((u) => {
           if (u.dead) return;
+          // HIT-STUN: a unit that just got hit is locked out entirely -- no
+          // gauge, no cooldowns, no action -- until their stun window clears
+          // (see getHitstunMs). This is what lets a rushdown chain read as one
+          // continuous combo instead of the victim just trading blows back.
+          if (Date.now() < (u._hitstunUntil || 0)) return;
           // Cameo transform is temporary: once the guest's cast window elapses,
           // the summoner's own portrait returns.
           if (u._cameoImg && Date.now() >= (u._cameoRevertAt || 0)) { u._cameoImg = null; u._cameoRevertAt = null; }
           const stats = getBattleStats(u, curEl, u.activeSynergies || []);
-          if (u.skillCd < u.maxSkillCd) u.skillCd += 1;
-          if (u.skillId2 && u.skillCd2 < u.maxSkillCd2) u.skillCd2 += 1;
+          { const cdg = getCooldownGain(u); if (u.skillCd < u.maxSkillCd) u.skillCd = Math.min(u.maxSkillCd, u.skillCd + cdg); if (u.skillId2 && u.skillCd2 < u.maxSkillCd2) u.skillCd2 = Math.min(u.maxSkillCd2, u.skillCd2 + cdg); }
           let gaugeGain = getGaugeGain(stats.speed, battleSpeeds, curSpd);
           if (curEl === "WIND" && !u.isEnemy) gaugeGain *= 1.15;
           u.gauge += gaugeGain;
@@ -787,7 +936,10 @@ const CampaignView = ({
                 // this cast's animation plays, so nothing else can act (or even fill
                 // gauge) mid-ability -- see getCastAnimMs/CAST_ANIM_MS.
                 const castMs = getCastAnimMs(casterAfter?.lastCastAnim);
-                if (castMs) hitStopUntil.current = Date.now() + castMs + HITSTOP_BUFFER_MS;
+                // BUG FIX: see triggerSkill's identical fix above -- must match
+                // BattleUnit's speed-scaled animMs or the sim just idles after
+                // the (now-shorter) visual animation finishes.
+                if (castMs) hitStopUntil.current = Date.now() + Math.max(200, Math.round(castMs / (curSpd || 1))) + HITSTOP_BUFFER_MS;
                 // Combo chain: ally casts extend the chain (and advance resonance);
                 // an enemy getting a skill off breaks it.
                 if (u.isEnemy) breakCombo();
@@ -796,17 +948,26 @@ const CampaignView = ({
                   applyResonance(next, u);
                 }
               } else {
-                const result = resolveBasicAttack({ attacker: u, allUnits: next, playerElement: curEl, comboMult, markedTargetId: curMarked });
+                const result = resolveBasicAttack({ attacker: u, allUnits: next, playerElement: curEl, comboMult, markedTargetId: curMarked, comboCount: comboRef.current.count, skills });
                 if (result) {
                   // A rushdown basic locks the sim for its full dash+flurry(+air)
                   // duration and, for allies, climbs the combo chain by the whole
                   // flurry -- a fast character's basic reads as a real combo.
-                  hitStopUntil.current = Date.now() + getBasicAttackMs(result.meleeAir) + HITSTOP_BUFFER_MS;
+                  hitStopUntil.current = Date.now() + Math.max(200, Math.round(getBasicAttackMs(result.meleeAir) / (curSpd || 1))) + HITSTOP_BUFFER_MS;
                   if (u.isEnemy) breakCombo();
                   else bumpCombo(result.meleeHits || 1);
                   if (!result.missed) {
                     if (!u.isEnemy) { u._battleDamage = (u._battleDamage || 0) + result.amount; u._battleBestHit = Math.max(u._battleBestHit || 0, result.amount); }
-                    setFloatingDamages((fd) => [...fd, { id: Math.random(), targetId: result.targetId, amount: result.amount, type: "normal" }]);
+                    // Pop a SEPARATE number per flurry strike (staggered), each with
+                    // its own hit sound, so a multi-hit basic reads and SOUNDS like
+                    // an actual combo, not one silent lump. Air combos get an extra
+                    // whoosh layer on the launching first hit.
+                    const splits = result.hitSplits && result.hitSplits.length ? result.hitSplits : [result.amount];
+                    splits.forEach((d, hi) => setTimeout(() => {
+                      showDamage(result.targetId, d, hi === splits.length - 1 && splits.length > 1 ? "crit" : "normal");
+                      playSound(getFlurryHitSound(hi, splits.length, result.meleeAir), hi === splits.length - 1 ? 0.4 : 0.22);
+                      if (hi === 0 && result.meleeAir) playSound(["spin0", "spin1", "spin2"][Math.floor(Math.random() * 3)], 0.35);
+                    }, hi * 105));
                   }
                 }
               }
@@ -852,7 +1013,11 @@ const CampaignView = ({
     const recentCaster = combatants.find((c) => c.lastSkillTime > lastSkillTimestamp);
     if (recentCaster) {
       setLastSkillTimestamp(recentCaster.lastSkillTime);
-      const skill = (skills || []).find((s) => s.id === recentCaster.skillId);
+      // Bug fix: this read only skillId, so a slot-2/signature cast (which sets
+      // lastSkillIds instead -- see CombatSystem.js) showed the WRONG (slot-1)
+      // skill name in the banner. TrialsView/EventsView already prefer
+      // lastSkillIds; Campaign never got the same fix until now.
+      const skill = (skills || []).find((s) => s.id === (recentCaster.lastSkillIds?.[0] || recentCaster.skillId));
       if (skill) {
         setActiveSkill({ name: skill.name, user: recentCaster.name });
         setTimeout(() => setActiveSkill(null), 1500);
@@ -861,7 +1026,7 @@ const CampaignView = ({
         else if (skill.type === "buff" || skill.id === "guard") { playSound("shield_up"); playSound("mugen_guard0", 0.5); }
         else if (skill.damageType === "magical") playSound("magic_blast");
         else if (skill.power >= 2.5) playSound("slash_heavy");
-        else playSound("attack_hit");
+        else playSound("attack");
         playSound(["mugen_hit_a", "mugen_hit_b", "mugen_hit_c", "mugen_hit_d", "mugen_hit_e"][Math.floor(Math.random() * 5)], 0.3);
         // Layer in the M.U.G.E.N spin/knife/punch flair: signatures get a knife
         // swing + the super sting, heavy hits get a swing, everything else gets
@@ -874,6 +1039,11 @@ const CampaignView = ({
           const swipePool = skill.damageType === "magical" ? ["act_lunge_magic", "act_whoosh1", "act_whoosh2"] : ["act_swipe1", "act_swipe2", "act_swipe3", "act_swipe4", "act_lunge_generic"];
           playSound(swipePool[Math.floor(Math.random() * swipePool.length)], 0.35);
         }
+        // Bespoke sting for the newer anime-flavored castAnim set (see
+        // CAST_ANIM_SOUND) -- layers on TOP of the generic picks above rather
+        // than replacing them; returns null (no-op) for every older castAnim.
+        const animSting = getCastAnimSound((skill.meta || {}).castAnim);
+        if (animSting) playSound(animSting, 0.4);
         if (!recentCaster.isEnemy && typeof triggerVisualEffect2 === "function") {
           triggerVisualEffect2(skill.damageType === "magical" ? "fx_magic_circle.png" : "fx_impact.png", "50%", "30%", 1.2);
         }
@@ -918,7 +1088,7 @@ const CampaignView = ({
             playSound("explosion", 0.5);
           } else {
             triggerVisualEffect2("fx_impact.png", tx, ty, 0.6);
-            playSound("attack_hit", 0.15);
+            playSound("attack", 0.15);
           }
           if (target?.effects?.some((e) => e.type === "burn")) triggerVisualEffect2("fx_burn.png", tx, ty, 0.4);
           if (target?.effects?.some((e) => e.type === "static")) triggerVisualEffect2("fx_lightning.png", tx, ty, 0.5);
@@ -1014,763 +1184,8 @@ const CampaignView = ({
       lineNumber: 4719,
       columnNumber: 7
     }),
-    !activeBattle && !pendingStage && /* @__PURE__ */ jsxDEV("div", { className: "campaign-navigation animate-fadeIn", children: [
-      /* @__PURE__ */ jsxDEV("div", { className: "glass-panel aero-glass", style: { padding: "15px 25px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", borderLeft: "5px solid var(--primary)" }, children: [
-        /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", alignItems: "center", gap: 15 }, children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { width: 44, height: 44, borderRadius: "50%", background: "rgba(233, 69, 96, 0.2)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)" }, children: /* @__PURE__ */ jsxDEV(MapIcon, { size: 24 }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 4748,
-            columnNumber: 21
-          }) }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 4747,
-            columnNumber: 17
-          }),
-          /* @__PURE__ */ jsxDEV("div", { children: [
-            /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.65rem", fontWeight: 900, color: "var(--primary)", letterSpacing: 2 }, children: "THE MAP" }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 4751,
-              columnNumber: 20
-            }),
-            /* @__PURE__ */ jsxDEV("div", { className: "breadcrumb-nav", style: { margin: 0 }, children: [
-              /* @__PURE__ */ jsxDEV("span", { className: "breadcrumb-item", style: { opacity: currentChapter || currentArea ? 0.6 : 1, color: currentChapter || currentArea ? "" : "#fff" }, onClick: () => {
-                setCurrentChapter(null);
-                setCurrentArea(null);
-              }, children: "MUGEN CITY" }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 4753,
-                columnNumber: 21
-              }),
-              currentChapter && /* @__PURE__ */ jsxDEV(Fragment, { children: [
-                /* @__PURE__ */ jsxDEV(ChevronRight, { size: 14, opacity: 0.5 }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4758,
-                  columnNumber: 25
-                }),
-                /* @__PURE__ */ jsxDEV("span", { className: `breadcrumb-item ${!currentArea ? "active" : ""}`, style: { color: !currentArea ? "#fff" : "" }, onClick: () => setCurrentArea(null), children: currentChapter.title.toUpperCase() }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4759,
-                  columnNumber: 25
-                })
-              ] }, void 0, true, {
-                fileName: "<stdin>",
-                lineNumber: 4757,
-                columnNumber: 25
-              }),
-              currentArea && /* @__PURE__ */ jsxDEV(Fragment, { children: [
-                /* @__PURE__ */ jsxDEV(ChevronRight, { size: 14, opacity: 0.5 }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4766,
-                  columnNumber: 25
-                }),
-                /* @__PURE__ */ jsxDEV("span", { className: "breadcrumb-item active", style: { color: "#fff" }, children: currentArea.name.toUpperCase() }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4767,
-                  columnNumber: 25
-                })
-              ] }, void 0, true, {
-                fileName: "<stdin>",
-                lineNumber: 4765,
-                columnNumber: 25
-              })
-            ] }, void 0, true, {
-              fileName: "<stdin>",
-              lineNumber: 4752,
-              columnNumber: 20
-            })
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 4750,
-            columnNumber: 17
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 4746,
-          columnNumber: 14
-        }),
-        /* @__PURE__ */ jsxDEV("div", { style: { textAlign: "right" }, children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#94a3b8", fontWeight: 900, letterSpacing: 1 }, children: "CITY CRED" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 4774,
-            columnNumber: 17
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.2rem", fontWeight: 900, color: "#fff" }, children: [
-            Math.floor(campaignProgress / 60 * 100),
-            "%"
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 4775,
-            columnNumber: 17
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 4773,
-          columnNumber: 14
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 4745,
-        columnNumber: 11
-      }),
-      !currentChapter && !currentArea && /* @__PURE__ */ jsxDEV("div", { className: "chapters-list", style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", gap: 15 }, children: CAMPAIGN_CONTENT.map((chapter, i) => {
-        const prevChapter = CAMPAIGN_CONTENT[i - 1];
-        const isLocked = i > 0 && getChapterProgress(prevChapter).completed < getChapterProgress(prevChapter).total;
-        const progress = getChapterProgress(chapter);
-        const isCompleted = progress.completed === progress.total;
-        return /* @__PURE__ */ jsxDEV(
-          "div",
-          {
-            className: `chapter-card aero-glass ${isLocked ? "locked" : "neon-hover"}`,
-            style: {
-              height: "220px",
-              flexDirection: "column",
-              justifyContent: "flex-end",
-              padding: 25,
-              border: "1px solid rgba(255,255,255,0.1)",
-              boxShadow: isLocked ? "none" : "0 10px 30px rgba(0,0,0,0.5)"
-            },
-            onClick: () => !isLocked && (setCurrentChapter(chapter), playSound("ui_select")),
-            children: [
-              /* @__PURE__ */ jsxDEV("div", { className: "chapter-bg", style: { backgroundImage: `url(${chapter.image})`, opacity: isLocked ? 0.1 : 0.3, filter: "saturate(1.5) contrast(1.2)" } }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 4802,
-                columnNumber: 21
-              }),
-              /* @__PURE__ */ jsxDEV("div", { className: "chapter-info", style: { position: "relative", zIndex: 10, width: "100%" }, children: [
-                /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.65rem", fontWeight: 900, color: isLocked ? "#94a3b8" : "var(--primary)", letterSpacing: 3, marginBottom: 5 }, children: [
-                  "DATA_NODE_0",
-                  chapter.id
-                ] }, void 0, true, {
-                  fileName: "<stdin>",
-                  lineNumber: 4804,
-                  columnNumber: 23
-                }),
-                /* @__PURE__ */ jsxDEV("h3", { style: { fontSize: "1.8rem", fontFamily: "MugenTitle", textShadow: "0 2px 10px #000" }, children: chapter.title }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4805,
-                  columnNumber: 23
-                }),
-                /* @__PURE__ */ jsxDEV("p", { style: { fontSize: "0.8rem", opacity: 0.7, margin: "5px 0 15px 0", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }, children: chapter.desc }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4806,
-                  columnNumber: 23
-                }),
-                /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
-                  /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 10 }, children: isLocked ? /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.7rem", color: "#ef4444", fontWeight: 900 }, children: "[ ACCESS_DENIED ]" }, void 0, false, {
-                    fileName: "<stdin>",
-                    lineNumber: 4811,
-                    columnNumber: 33
-                  }) : /* @__PURE__ */ jsxDEV(Fragment, { children: [
-                    /* @__PURE__ */ jsxDEV("div", { className: "progress-pill", style: { background: "rgba(255,255,255,0.05)", borderColor: isCompleted ? "#4ade80" : "" }, children: [
-                      progress.completed,
-                      "/",
-                      progress.total,
-                      " STAGES"
-                    ] }, void 0, true, {
-                      fileName: "<stdin>",
-                      lineNumber: 4814,
-                      columnNumber: 37
-                    }),
-                    isCompleted && /* @__PURE__ */ jsxDEV("div", { className: "daily-reward-badge", style: { margin: 0 }, children: "CLEAR" }, void 0, false, {
-                      fileName: "<stdin>",
-                      lineNumber: 4817,
-                      columnNumber: 53
-                    })
-                  ] }, void 0, true, {
-                    fileName: "<stdin>",
-                    lineNumber: 4813,
-                    columnNumber: 33
-                  }) }, void 0, false, {
-                    fileName: "<stdin>",
-                    lineNumber: 4809,
-                    columnNumber: 26
-                  }),
-                  !isLocked && /* @__PURE__ */ jsxDEV(ChevronRight, { size: 20, color: "var(--primary)" }, void 0, false, {
-                    fileName: "<stdin>",
-                    lineNumber: 4821,
-                    columnNumber: 40
-                  })
-                ] }, void 0, true, {
-                  fileName: "<stdin>",
-                  lineNumber: 4808,
-                  columnNumber: 23
-                })
-              ] }, void 0, true, {
-                fileName: "<stdin>",
-                lineNumber: 4803,
-                columnNumber: 21
-              })
-            ]
-          },
-          chapter.id,
-          true,
-          {
-            fileName: "<stdin>",
-            lineNumber: 4789,
-            columnNumber: 19
-          }
-        );
-      }) }, void 0, false, {
-        fileName: "<stdin>",
-        lineNumber: 4781,
-        columnNumber: 13
-      }),
-      currentChapter && !currentArea && /* @__PURE__ */ jsxDEV("div", { className: "tech-areas-list", style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 15 }, children: currentChapter.areas.map((area, i) => {
-        const isLocked = campaignProgress < area.stages[0].id;
-        const progress = getAreaProgress(area);
-        const isDone = progress.completed === progress.total;
-        return /* @__PURE__ */ jsxDEV(
-          "div",
-          {
-            className: `tech-area-card aero-glass ${isLocked ? "locked" : "neon-hover"}`,
-            style: {
-              flexDirection: "column",
-              alignItems: "flex-start",
-              padding: 25,
-              height: "180px",
-              justifyContent: "space-between",
-              border: `1px solid ${isDone ? "#4ade8044" : "rgba(255,255,255,0.1)"}`
-            },
-            onClick: () => !isLocked && (setCurrentArea(area), playSound("ui_select")),
-            children: [
-              /* @__PURE__ */ jsxDEV("div", { className: "chapter-bg", style: { backgroundImage: `url(nightlife_bokeh.png)`, opacity: 0.05 } }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 4852,
-                columnNumber: 21
-              }),
-              /* @__PURE__ */ jsxDEV("div", { style: { width: "100%" }, children: [
-                /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", fontWeight: 900, color: isLocked ? "#94a3b8" : "#00d2ff", letterSpacing: 2, marginBottom: 5 }, children: [
-                  "SECTOR_ID: ",
-                  area.id.toString().padStart(2, "0")
-                ] }, void 0, true, {
-                  fileName: "<stdin>",
-                  lineNumber: 4854,
-                  columnNumber: 25
-                }),
-                /* @__PURE__ */ jsxDEV("h3", { style: { margin: "0 0 10px 0", fontSize: "1.4rem", fontFamily: "Rajdhani", fontWeight: 900 }, children: area.name.toUpperCase() }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4855,
-                  columnNumber: 25
-                }),
-                /* @__PURE__ */ jsxDEV("div", { className: "tech-progress-bar", style: { width: "100%", height: 4, background: "rgba(255,255,255,0.05)" }, children: /* @__PURE__ */ jsxDEV("div", { className: "tech-progress-fill", style: { width: `${progress.completed / progress.total * 100}%`, background: isDone ? "#4ade80" : "#00d2ff", boxShadow: `0 0 10px ${isDone ? "#4ade80" : "#00d2ff"}` } }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4857,
-                  columnNumber: 29
-                }) }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4856,
-                  columnNumber: 25
-                })
-              ] }, void 0, true, {
-                fileName: "<stdin>",
-                lineNumber: 4853,
-                columnNumber: 21
-              }),
-              /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }, children: [
-                /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.8rem", fontWeight: 900, color: isDone ? "#4ade80" : "#fff" }, children: [
-                  progress.completed,
-                  " / ",
-                  progress.total,
-                  " COMPLETION"
-                ] }, void 0, true, {
-                  fileName: "<stdin>",
-                  lineNumber: 4862,
-                  columnNumber: 24
-                }),
-                !isLocked && /* @__PURE__ */ jsxDEV("div", { style: { width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsxDEV(ArrowRight, { size: 16, color: isDone ? "#4ade80" : "#fff" }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4865,
-                  columnNumber: 201
-                }) }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4865,
-                  columnNumber: 38
-                })
-              ] }, void 0, true, {
-                fileName: "<stdin>",
-                lineNumber: 4861,
-                columnNumber: 21
-              })
-            ]
-          },
-          area.id,
-          true,
-          {
-            fileName: "<stdin>",
-            lineNumber: 4839,
-            columnNumber: 19
-          }
-        );
-      }) }, void 0, false, {
-        fileName: "<stdin>",
-        lineNumber: 4832,
-        columnNumber: 13
-      }),
-      currentArea && (() => {
-        const sweepableInArea = currentArea.stages.filter((s) => campaignProgress > s.id && campaignRanks[s.id]);
-        return sweepableInArea.length > 0 && /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 8, gap: 8 }, children: [
-          /* @__PURE__ */ jsxDEV("span", { style: { fontSize: "0.65rem", color: "var(--text-muted)", alignSelf: "center" } , children: `${sweepableInArea.length} stages raidable` }, void 0, false, {}),
-          /* @__PURE__ */ jsxDEV("button", { className: "raid-btn main", style: { background: "#facc15", color: "#000", padding: "6px 14px" }, onClick: (e) => { e.stopPropagation(); sweepableInArea.forEach((s) => handleRaid(s, 10)); createFloatingText(`SWEPT ×${sweepableInArea.length * 10}!`, false, "#facc15"); }, children: "⚡ SWEEP AREA ×10" }, void 0, false, {})
-        ] }, void 0, true, {});
-      })(),
-      currentArea && /* @__PURE__ */ jsxDEV("div", { className: `tech-stages-list ${isHardMode ? "hard-mode" : ""}`, children: currentArea.stages.map((stage) => {
-        const isLocked = campaignProgress < stage.id;
-        const isCompleted = campaignProgress > stage.id;
-        const isNext = !isLocked && !isCompleted;
-        const bestRank = campaignRanks[stage.id];
-        const canRaid = !!bestRank;
-        const raidLabel = bestRank ? `${(RAID_RANK_MULTS[bestRank] || 0.5).toFixed(2)}×` : null;
-        const displayCP = stage.cpReq * (isHardMode ? 2 : 1);
-        return /* @__PURE__ */ jsxDEV(
-          "div",
-          {
-            className: `tech-stage-item ${isLocked ? "locked" : ""} ${isCompleted ? "completed" : ""} ${isHardMode ? "nightmare" : ""} ${isNext ? "next-up" : ""}`,
-            style: isNext ? { borderColor: ELEMENTS[stage.element].color, boxShadow: `0 0 14px ${ELEMENTS[stage.element].color}55` } : void 0,
-            onClick: () => {
-              if (!isLocked) {
-                setPendingStage(stage);
-                setShowSquadBuilder(true);
-              }
-            },
-            children: [
-              /* @__PURE__ */ jsxDEV("div", { className: "stage-id-hex", children: /* @__PURE__ */ jsxDEV("span", { style: { fontSize: "0.8rem", fontWeight: 900, color: "#fff" }, children: stage.id }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 4895,
-                columnNumber: 24
-              }) }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 4894,
-                columnNumber: 21
-              }),
-              /* @__PURE__ */ jsxDEV("div", { style: { flex: 1, padding: "0 15px" }, children: [
-                /* @__PURE__ */ jsxDEV("h4", { style: { margin: 0, fontSize: "1rem", color: "#fff" }, children: stage.name }, void 0, false, {
-                  fileName: "<stdin>",
-                  lineNumber: 4898,
-                  columnNumber: 25
-                }),
-                /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 10, marginTop: 4, alignItems: "center" }, children: [
-                  isNext && /* @__PURE__ */ jsxDEV("div", { className: "rank-sticker", style: { background: ELEMENTS[stage.element].color, color: "#000" }, children: "NEXT" }, void 0, false, {
-                    fileName: "<stdin>",
-                    lineNumber: 4900,
-                    columnNumber: 30
-                  }),
-                  bestRank && /* @__PURE__ */ jsxDEV("div", { className: `rank-sticker ${bestRank === "SSS" ? "gold" : ""}`, children: bestRank }, void 0, false, {
-                    fileName: "<stdin>",
-                    lineNumber: 4900,
-                    columnNumber: 42
-                  }),
-                  /* @__PURE__ */ jsxDEV("div", { className: "cp-pill", style: { color: totalSquadPWR < displayCP ? "#ef4444" : "#4ade80" }, children: [
-                    "PWR_REQ: ",
-                    formatPower(displayCP)
-                  ] }, void 0, true, {
-                    fileName: "<stdin>",
-                    lineNumber: 4901,
-                    columnNumber: 29
-                  }),
-                  /* @__PURE__ */ jsxDEV("div", { className: "el-tag", style: { background: ELEMENTS[stage.element].color + "22", border: `1px solid ${ELEMENTS[stage.element].color}` }, children: stage.element }, void 0, false, {
-                    fileName: "<stdin>",
-                    lineNumber: 4904,
-                    columnNumber: 29
-                  })
-                ] }, void 0, true, {
-                  fileName: "<stdin>",
-                  lineNumber: 4899,
-                  columnNumber: 25
-                })
-              ] }, void 0, true, {
-                fileName: "<stdin>",
-                lineNumber: 4897,
-                columnNumber: 21
-              }),
-              /* @__PURE__ */ jsxDEV("div", { className: "stage-actions", children: isCompleted ? canRaid ? /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }, children: [
-                raidLabel && /* @__PURE__ */ jsxDEV("span", { style: { fontSize: "0.6rem", color: "#facc15", fontWeight: 900, alignSelf: "center", marginRight: 2 }, children: raidLabel }, void 0, false, {}),
-                /* @__PURE__ */ jsxDEV("button", { className: "raid-btn", onClick: (e) => { e.stopPropagation(); handleRaid(stage, 1); }, children: "×1" }, void 0, false, {}),
-                /* @__PURE__ */ jsxDEV("button", { className: "raid-btn", onClick: (e) => { e.stopPropagation(); handleRaid(stage, 10); }, children: "×10" }, void 0, false, {}),
-                /* @__PURE__ */ jsxDEV("button", { className: "raid-btn main", onClick: (e) => { e.stopPropagation(); handleRaid(stage, 50); }, children: "×50" }, void 0, false, {}),
-                /* @__PURE__ */ jsxDEV("button", { className: "raid-btn main", style: { background: "#facc15", color: "#000" }, onClick: (e) => { e.stopPropagation(); handleRaid(stage, 100); }, children: "×100" }, void 0, false, {})
-              ] }, void 0, true, {}) : /* @__PURE__ */ jsxDEV("span", { className: "clear-label", children: "SECURED" }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 4918,
-                columnNumber: 28
-              }) : /* @__PURE__ */ jsxDEV("div", { className: "start-arrow", children: /* @__PURE__ */ jsxDEV(ChevronRight, { size: 18 }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 4921,
-                columnNumber: 55
-              }) }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 4921,
-                columnNumber: 26
-              }) }, void 0, false, {
-                fileName: "<stdin>",
-                lineNumber: 4910,
-                columnNumber: 21
-              })
-            ]
-          },
-          stage.id,
-          true,
-          {
-            fileName: "<stdin>",
-            lineNumber: 4884,
-            columnNumber: 21
-          }
-        );
-      }) }, void 0, false, {
-        fileName: "<stdin>",
-        lineNumber: 4875,
-        columnNumber: 13
-      })
-    ] }, void 0, true, {
-      fileName: "<stdin>",
-      lineNumber: 4743,
-      columnNumber: 9
-    }),
-    pendingStage && /* @__PURE__ */ jsxDEV("div", { className: "hero-select-modal animate-fadeIn", style: { display: "flex", flexDirection: "column", backgroundImage: `linear-gradient(180deg, rgba(5,5,10,0.55), rgba(5,5,10,0.92) 60%, rgba(5,5,10,0.97)), url(${pendingStage.bg || "background_battle.png"})`, backgroundSize: "cover", backgroundPosition: "center" }, children: [
-      /* @__PURE__ */ jsxDEV("div", { className: "modal-header", style: { background: "rgba(10,10,16,0.55)", borderRadius: 16, padding: "10px 16px", backdropFilter: "blur(6px)" }, children: [
-        /* @__PURE__ */ jsxDEV("div", { children: [
-          /* @__PURE__ */ jsxDEV("h2", { style: { margin: 0, color: ELEMENTS[pendingStage.element]?.color || "var(--primary)" }, children: pendingStage.name }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 4938,
-            columnNumber: 15
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.8rem", opacity: 0.7, maxWidth: "400px", marginTop: 4 }, children: [
-            "Target Enemy: ",
-            pendingStage.enemy,
-            " \u2022 Element: ",
-            pendingStage.element
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 4939,
-            columnNumber: 15
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 4937,
-          columnNumber: 13
-        }),
-        /* @__PURE__ */ jsxDEV("button", { className: "upgrade-btn", style: { padding: "10px 20px" }, onClick: () => setPendingStage(null), children: "BACK" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 4943,
-          columnNumber: 13
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 4936,
-        columnNumber: 11
-      }),
-      /* @__PURE__ */ jsxDEV("div", { style: { background: "rgba(0,0,0,0.3)", padding: 15, borderRadius: 16, marginBottom: 20 }, children: [
-        /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }, children: [
-          /* @__PURE__ */ jsxDEV("h3", { style: { margin: 0, fontSize: "0.9rem", fontWeight: 900 }, children: [
-            "MISSION SQUAD (",
-            squadIds.length,
-            "/5)"
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 4948,
-            columnNumber: 16
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 8 }, children: [
-            /* @__PURE__ */ jsxDEV("button", { className: "upgrade-btn", style: { fontSize: "0.7rem" }, onClick: () => setShowSquadBuilder({
-              element: pendingStage.requiredElement,
-              franchise: pendingStage.requiredFranchise
-            }), children: "EDIT SQUAD" }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 4950,
-              columnNumber: 19
-            }),
-            /* @__PURE__ */ jsxDEV("button", { className: "train-btn", style: { width: "auto", padding: "8px 24px" }, disabled: squadIds.length === 0, onClick: () => startStage(pendingStage), children: "COMMENCE MISSION" }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 4954,
-              columnNumber: 19
-            })
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 4949,
-            columnNumber: 16
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 4947,
-          columnNumber: 13
-        }),
-        /* @__PURE__ */ jsxDEV("div", { className: "squad-slots-row", style: { gridTemplateColumns: "repeat(5, 1fr)" }, children: Array.from({ length: 5 }).map((_, i) => {
-          const heroId = squadIds[i];
-          const c = heroId ? characters.find((h) => String(h.export_id) === String(heroId)) : null;
-          return /* @__PURE__ */ jsxDEV("div", { className: `squad-member-slot ${c ? "active" : "empty"}`, onClick: () => setShowSquadBuilder(true), children: c ? /* @__PURE__ */ jsxDEV("img", { src: c.imageUrl }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 4965,
-            columnNumber: 28
-          }) : /* @__PURE__ */ jsxDEV(Plus, { size: 20, opacity: 0.2 }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 4965,
-            columnNumber: 55
-          }) }, i, false, {
-            fileName: "<stdin>",
-            lineNumber: 4964,
-            columnNumber: 21
-          });
-        }) }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 4959,
-          columnNumber: 13
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 4946,
-        columnNumber: 11
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: `glass-panel ${isHardMode ? "nightmare-panel" : ""}`, style: { padding: 20, textAlign: "center", opacity: 0.8 }, children: [
-        isHardMode && /* @__PURE__ */ jsxDEV("div", { style: { color: "#ef4444", fontWeight: 900, fontSize: "0.8rem", letterSpacing: 2, marginBottom: 5, animation: "pulse-glow 1s infinite" }, children: "NIGHTMARE DIFFICULTY" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 4973,
-          columnNumber: 29
-        }),
-        (pendingStage.requiredElement || pendingStage.requiredFranchise || pendingStage.requiredRelType || pendingStage.minAvgLevel || pendingStage.squadSizeReq) && (() => {
-          const h = React.createElement;
-          const ps = pendingStage;
-          const avg = squad.length ? squad.reduce((s, c) => s + (c.level || 1), 0) / squad.length : 0;
-          const unlockedRoster = characters.filter((c) => unlockedIdSet.has(String(c.export_id)));
-          const frMatch = (c, t) => { const f = (c.franchise || "").toLowerCase().trim(); const tt = String(t).toLowerCase().trim(); return f === tt || f.includes(tt); };
-          const rosterCanFr = ps.requiredFranchise ? unlockedRoster.some((c) => frMatch(c, ps.requiredFranchise)) : true;
-          const rosterCanEl = ps.requiredElement ? unlockedRoster.some((c) => String(c.element).toUpperCase() === String(ps.requiredElement).toUpperCase()) : true;
-          const reqs = [];
-          if (ps.squadSizeReq) reqs.push({ label: `Full squad of ${ps.squadSizeReq}`, met: squad.length >= ps.squadSizeReq });
-          if (ps.minAvgLevel) reqs.push({ label: `Avg Lv.${ps.minAvgLevel}+ (now ${Math.floor(avg)})`, met: avg >= ps.minAvgLevel });
-          if (ps.requiredElement) reqs.push({ label: `${ps.requiredElement} hero`, waived: !rosterCanEl, met: squad.some((c) => String(c.element).toUpperCase() === String(ps.requiredElement).toUpperCase()) });
-          if (ps.requiredFranchise) reqs.push({ label: `${ps.requiredFranchise} hero`, waived: !rosterCanFr, met: squad.some((c) => frMatch(c, ps.requiredFranchise)) });
-          if (ps.requiredRelType) reqs.push({ label: `${ps.requiredRelType} bond`, met: squad.some((c) => String(c.relationship || "").toLowerCase().includes(ps.requiredRelType.toLowerCase())) });
-          return h("div", { style: { background: "rgba(233,69,96,0.08)", border: "1px solid var(--primary)", borderRadius: 12, padding: "10px 12px", marginBottom: 15, textAlign: "left" } },
-            h("div", { style: { fontSize: "0.6rem", fontWeight: 900, color: "var(--primary)", letterSpacing: 2, marginBottom: 7 } }, "WHO'S GETTING IN"),
-            h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } }, reqs.map((r, i) => {
-              const ok = r.waived || r.met;
-              const col = r.waived ? "#94a3b8" : r.met ? "#4ade80" : "#f87171";
-              return h("span", { key: i, style: { fontSize: "0.66rem", fontWeight: 800, padding: "3px 9px", borderRadius: 20, background: r.waived ? "rgba(148,163,184,0.12)" : r.met ? "rgba(74,222,128,0.13)" : "rgba(239,68,68,0.13)", color: col, border: "1px solid " + col + "44" } }, (r.waived ? "— " : r.met ? "✓ " : "✗ ") + r.label + (r.waived ? " (waived)" : ""));
-            }))
-          );
-        })(),
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.75rem", fontWeight: 900, color: "#facc15", marginBottom: 10 }, children: [
-          "RECOMMENDED POWER: ",
-          (pendingStage.cpReq * (isHardMode ? 2 : 1)).toLocaleString()
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 4985,
-          columnNumber: 14
-        }),
-        /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "center", gap: 20 }, children: [
-          /* @__PURE__ */ jsxDEV("div", { children: [
-            /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "var(--text-muted)" }, children: "CURRENT SQUAD" }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 4990,
-              columnNumber: 20
-            }),
-            /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.2rem", fontWeight: 900, color: totalSquadPWR < pendingStage.cpReq * (isHardMode ? 2 : 1) ? "#ef4444" : "#4ade80" }, children: totalSquadPWR.toLocaleString() }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 4991,
-              columnNumber: 20
-            })
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 4989,
-            columnNumber: 17
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { width: 1, background: "rgba(255,255,255,0.1)" } }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 4995,
-            columnNumber: 17
-          }),
-          /* @__PURE__ */ jsxDEV("div", { children: [
-            /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "var(--text-muted)" }, children: "WIN CHANCE" }, void 0, false, {
-              fileName: "<stdin>",
-              lineNumber: 4997,
-              columnNumber: 20
-            }),
-            /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.2rem", fontWeight: 900 }, children: [
-              Math.min(100, Math.floor(totalSquadPWR / (pendingStage.cpReq * (isHardMode ? 2 : 1)) * 100)),
-              "%"
-            ] }, void 0, true, {
-              fileName: "<stdin>",
-              lineNumber: 4998,
-              columnNumber: 20
-            })
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 4996,
-            columnNumber: 17
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 4988,
-          columnNumber: 14
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 4972,
-        columnNumber: 11
-      })
-    ] }, void 0, true, {
-      fileName: "<stdin>",
-      lineNumber: 4935,
-      columnNumber: 9
-    }),
-    raidResults && /* @__PURE__ */ jsxDEV("div", { className: "battle-result-overlay animate-fadeIn", children: /* @__PURE__ */ jsxDEV("div", { className: "glass-panel", style: { width: "90%", maxWidth: "400px", padding: 30, textAlign: "center", borderColor: "#4ade80" }, children: [
-      /* @__PURE__ */ jsxDEV("h2", { style: { margin: "0 0 5px 0", color: "#4ade80", fontSize: "1.8rem" }, children: "RAID COMPLETE" }, void 0, false, {
-        fileName: "<stdin>",
-        lineNumber: 5010,
-        columnNumber: 19
-      }),
-      /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 20 }, children: [
-        "Results for ",
-        raidResults.count,
-        "x ",
-        raidResults.stage
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 5011,
-        columnNumber: 19
-      }),
-      /* @__PURE__ */ jsxDEV("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15, marginBottom: 25 }, children: [
-        /* @__PURE__ */ jsxDEV("div", { className: "gacha-summary-stat", children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#94a3b8" }, children: "CREDITS" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 5015,
-            columnNumber: 25
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.1rem", fontWeight: 900, color: "#facc15" }, children: [
-            "+$",
-            raidResults.credits.toLocaleString()
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 5016,
-            columnNumber: 25
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 5014,
-          columnNumber: 22
-        }),
-        /* @__PURE__ */ jsxDEV("div", { className: "gacha-summary-stat", children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#94a3b8" }, children: "AURA" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 5019,
-            columnNumber: 25
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.1rem", fontWeight: 900, color: "#a855f7" }, children: [
-            "+",
-            raidResults.aura
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 5020,
-            columnNumber: 25
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 5018,
-          columnNumber: 22
-        }),
-        /* @__PURE__ */ jsxDEV("div", { className: "gacha-summary-stat", children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#94a3b8" }, children: "MATERIALS" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 5023,
-            columnNumber: 25
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.1rem", fontWeight: 900, color: "#94a3b8" }, children: [
-            "+",
-            raidResults.materials
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 5024,
-            columnNumber: 25
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 5022,
-          columnNumber: 22
-        }),
-        /* @__PURE__ */ jsxDEV("div", { className: "gacha-summary-stat", children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#94a3b8" }, children: "ESSENCE" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 5027,
-            columnNumber: 25
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.1rem", fontWeight: 900, color: "#f97316" }, children: [
-            "+",
-            raidResults.essence
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 5028,
-            columnNumber: 25
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 5026,
-          columnNumber: 22
-        }),
-        /* @__PURE__ */ jsxDEV("div", { className: "gacha-summary-stat", children: [
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.6rem", color: "#94a3b8" }, children: "GEMS" }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 5031,
-            columnNumber: 25
-          }),
-          /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "1.1rem", fontWeight: 900, color: "#00d2ff" }, children: [
-            "+",
-            raidResults.gems
-          ] }, void 0, true, {
-            fileName: "<stdin>",
-            lineNumber: 5032,
-            columnNumber: 25
-          })
-        ] }, void 0, true, {
-          fileName: "<stdin>",
-          lineNumber: 5030,
-          columnNumber: 22
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 5013,
-        columnNumber: 19
-      }),
-      raidResults.items.length > 0 && /* @__PURE__ */ jsxDEV("div", { style: { marginBottom: 20, maxHeight: "150px", overflowY: "auto" }, className: "custom-scroll", children: [
-        /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.65rem", fontWeight: 900, color: "#4ade80", marginBottom: 10 }, children: "LOOT FOUND:" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 5038,
-          columnNumber: 24
-        }),
-        /* @__PURE__ */ jsxDEV("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }, children: raidResults.items.map((item, idx) => /* @__PURE__ */ jsxDEV("div", { style: { background: "rgba(255, 255, 255, 0.05)", padding: "6px", borderRadius: 8, fontSize: "0.7rem", fontWeight: 800, color: "#fff" }, children: [
-          /* @__PURE__ */ jsxDEV(Sparkles, { size: 10, style: { marginRight: 5 } }, void 0, false, {
-            fileName: "<stdin>",
-            lineNumber: 5042,
-            columnNumber: 31
-          }),
-          " ",
-          item
-        ] }, idx, true, {
-          fileName: "<stdin>",
-          lineNumber: 5041,
-          columnNumber: 28
-        })) }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 5039,
-          columnNumber: 24
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 5037,
-        columnNumber: 21
-      }),
-      /* @__PURE__ */ jsxDEV("button", { className: "train-btn", onClick: () => setRaidResults(null), children: "CONFIRM" }, void 0, false, {
-        fileName: "<stdin>",
-        lineNumber: 5049,
-        columnNumber: 19
-      })
-    ] }, void 0, true, {
-      fileName: "<stdin>",
-      lineNumber: 5009,
-      columnNumber: 16
-    }) }, void 0, false, {
-      fileName: "<stdin>",
-      lineNumber: 5008,
-      columnNumber: 13
-    }),
+    !activeBattle && !pendingStage && /* @__PURE__ */ jsxDEV(CampaignMap, { onWorldTimeStop, characters, unlockedIds, credits, setCredits, gems, setGems, aura, setAura, stamina, setStamina, maxStamina, createFloatingText, campaignProgress, setCampaignProgress, setShards, squadIds, setSquadIds, triggerVisualEffect2, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, skills, items, addToInventory, setCharacters, setShowSquadBuilder, campaignRanks, setCampaignRanks, auraUpgrades, settings, cameoId, cameoData, cameoRef, cameoCutin, setCameoCutin, fxEnabled, activeBattle, setActiveBattle, battleRewards, setBattleRewards, battleRank, setBattleRank, pendingStage, setPendingStage, isHardMode, setIsHardMode, currentChapter, setCurrentChapter, currentArea, setCurrentArea, autoAreaChapterRef, jumpToNextStage, prevCampaignProgressRef, justClearedStageId, setJustClearedStageId, combatants, setCombatants, battleState, setBattleState, battleLog, setBattleLog, activeSkill, setActiveSkill, floatingDamages, setFloatingDamages, playerElement, setPlayerElement, autoBattle, setAutoBattle, combatSpeed, setCombatSpeed, markedTargetId, setMarkedTargetId, stageElementFilter, setStageElementFilter, elementalChain, setElementalChain, comboRef, comboMult, comboDisplay, setComboDisplay, hitStopUntil, battleSceneRef, sceneShake, setSceneShake, shakeTimer, triggerShake, prevBrokenIds, breakBanner, setBreakBanner, bumpCombo, breakCombo, parryFlash, setParryFlash, resonanceRef, applyResonance, tacticalStanceId, changePlayerElement, squadIdSet, unlockedIdSet, squad, autoFillSquad, clearSquad, getSynergies, totalSquadPWR, synergies, raidResults, setRaidResults, RAID_RANK_MULTS, handleRaid, handleSweepAll, addLog, showDamage, lastSkillTimestamp, setLastSkillTimestamp, canAutoClearStage, autoClearStage, startStage, triggerDefend, triggerSkill, triggerCameo, loopState, timeStopHandledRef, handledActionTimes, getChapterProgress, getAreaProgress  }, void 0, false, {}),
+    pendingStage && /* @__PURE__ */ jsxDEV(PreBattleModal, { onWorldTimeStop, characters, unlockedIds, credits, setCredits, gems, setGems, aura, setAura, stamina, setStamina, maxStamina, createFloatingText, campaignProgress, setCampaignProgress, setShards, squadIds, setSquadIds, triggerVisualEffect2, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, skills, items, addToInventory, setCharacters, setShowSquadBuilder, campaignRanks, setCampaignRanks, auraUpgrades, settings, cameoId, cameoData, cameoRef, cameoCutin, setCameoCutin, fxEnabled, activeBattle, setActiveBattle, battleRewards, setBattleRewards, battleRank, setBattleRank, pendingStage, setPendingStage, isHardMode, setIsHardMode, currentChapter, setCurrentChapter, currentArea, setCurrentArea, autoAreaChapterRef, jumpToNextStage, prevCampaignProgressRef, justClearedStageId, setJustClearedStageId, combatants, setCombatants, battleState, setBattleState, battleLog, setBattleLog, activeSkill, setActiveSkill, floatingDamages, setFloatingDamages, playerElement, setPlayerElement, autoBattle, setAutoBattle, combatSpeed, setCombatSpeed, markedTargetId, setMarkedTargetId, stageElementFilter, setStageElementFilter, elementalChain, setElementalChain, comboRef, comboMult, comboDisplay, setComboDisplay, hitStopUntil, battleSceneRef, sceneShake, setSceneShake, shakeTimer, triggerShake, prevBrokenIds, breakBanner, setBreakBanner, bumpCombo, breakCombo, parryFlash, setParryFlash, resonanceRef, applyResonance, tacticalStanceId, changePlayerElement, squadIdSet, unlockedIdSet, squad, autoFillSquad, clearSquad, getSynergies, totalSquadPWR, synergies, raidResults, setRaidResults, RAID_RANK_MULTS, handleRaid, handleSweepAll, addLog, showDamage, lastSkillTimestamp, setLastSkillTimestamp, canAutoClearStage, autoClearStage, startStage, triggerDefend, triggerSkill, triggerCameo, loopState, timeStopHandledRef, handledActionTimes, getChapterProgress, getAreaProgress  }, void 0, false, {}),
     activeBattle && /* @__PURE__ */ jsxDEV("div", { className: "battle-screen animate-fadeIn", children: [
       cameoCutin && React.createElement("div", { className: "sig-cutin ally cameo-cutin", key: "cameo-cutin" }, [
         React.createElement("div", { className: "sig-cutin-stripe", key: "stripe", style: { background: `linear-gradient(90deg, transparent, ${(ELEMENTS[cameoCutin.element] || {}).color || "#00d2ff"}, transparent)` } }),
@@ -1800,26 +1215,7 @@ const CampaignView = ({
         lineNumber: 5057,
         columnNumber: 13
       }),
-      battleState === "ACTIVE" && (() => {
-        // TURN-ORDER STRIP: project who acts next by how soon each living unit's
-        // gauge reaches 100 given its current fill rate. Faster units surface
-        // earlier, so speed is finally visible at a glance.
-        const living = combatants.filter((c) => !c.dead);
-        const speeds = living.map((u) => getBattleStats(u, playerElement, u.activeSynergies || []).speed);
-        const order = living.map((u) => {
-          const spd = getBattleStats(u, playerElement, u.activeSynergies || []).speed;
-          const rate = Math.max(0.1, getGaugeGain(spd, speeds, combatSpeed));
-          return { u, eta: Math.max(0, (100 - (u.gauge || 0)) / rate) };
-        }).sort((a, b) => a.eta - b.eta).slice(0, 6);
-        return React.createElement("div", { key: "turn-strip", className: "turn-order-strip" },
-          React.createElement("span", { key: "lbl", className: "turn-order-label" }, "NEXT"),
-          order.map(({ u }, i) => React.createElement("div", {
-            key: u.id,
-            className: `turn-order-chip ${u.isEnemy ? "enemy" : "ally"} ${i === 0 ? "imminent" : ""}`,
-            title: u.name
-          }, React.createElement("img", { src: u._cameoImg || u.img, alt: u.name })))
-        );
-      })(),
+      battleState === "ACTIVE" && React.createElement(TurnOrderStrip, { key: "turn-strip", combatants, playerElement, combatSpeed }),
       /* @__PURE__ */ jsxDEV("div", { className: "battle-header", style: { padding: "15px", background: "rgba(0,0,0,0.8)" }, children: [
         /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
           /* @__PURE__ */ jsxDEV("div", { className: "battle-header-info", children: [
@@ -2039,7 +1435,8 @@ const CampaignView = ({
             isMarked: markedTargetId === u.id,
             onMark: () => setMarkedTargetId(u.id),
             floatingDamages: floatingDamages.filter((d) => d.targetId === u.id),
-            reducedFx: !fxEnabled
+            reducedFx: !fxEnabled,
+            combatSpeed
           },
           u.id,
           false,
@@ -2053,7 +1450,7 @@ const CampaignView = ({
           lineNumber: 5124,
           columnNumber: 14
         }),
-        /* @__PURE__ */ jsxDEV("div", { className: "battle-formation hero-row", children: combatants.filter((c) => !c.isEnemy).map((u) => /* @__PURE__ */ jsxDEV(BattleUnit, { unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id), reducedFx: !fxEnabled }, u.id, false, {
+        /* @__PURE__ */ jsxDEV("div", { className: "battle-formation hero-row", children: combatants.filter((c) => !c.isEnemy).map((u) => /* @__PURE__ */ jsxDEV(BattleUnit, { unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id), reducedFx: !fxEnabled, combatSpeed }, u.id, false, {
           fileName: "<stdin>",
           lineNumber: 5137,
           columnNumber: 19
@@ -2216,15 +1613,32 @@ const CampaignView = ({
           lineNumber: 5215,
           columnNumber: 16
         }),
-        /* @__PURE__ */ jsxDEV("button", { className: "train-btn", style: { width: "240px", marginTop: 30 }, onClick: () => {
-          setActiveBattle(null);
-          setBattleState("IDLE");
-          if (setBattleMusicActive) setBattleMusicActive(false);
-        }, children: "RETURN TO MAP" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 5216,
-          columnNumber: 16
-        })
+        /* @__PURE__ */ jsxDEV("div", { style: { display: "flex", gap: 12, marginTop: 30 }, children: [
+          /* @__PURE__ */ jsxDEV("button", {
+            className: "train-btn", style: { width: "180px", background: "linear-gradient(135deg,#00d2ff,#0891b2)", color: "#000" },
+            disabled: stamina < 20,
+            onClick: () => {
+              // QOL: retry immediately with the same stage/squad instead of
+              // forcing a full re-navigation back through chapter -> area ->
+              // stage -> squad builder -> COMMENCE just to try again.
+              const stage = activeBattle;
+              setActiveBattle(null);
+              setBattleState("IDLE");
+              if (setBattleMusicActive) setBattleMusicActive(false);
+              if (stage) setTimeout(() => startStage(stage), 0);
+            },
+            children: stamina < 20 ? "NEED STAMINA" : "↻ RETRY"
+          }, void 0, false, {}),
+          /* @__PURE__ */ jsxDEV("button", { className: "train-btn", style: { width: "180px" }, onClick: () => {
+            setActiveBattle(null);
+            setBattleState("IDLE");
+            if (setBattleMusicActive) setBattleMusicActive(false);
+          }, children: "RETURN TO MAP" }, void 0, false, {
+            fileName: "<stdin>",
+            lineNumber: 5216,
+            columnNumber: 16
+          })
+        ] }, void 0, true, {})
       ] }, void 0, true, {
         fileName: "<stdin>",
         lineNumber: 5214,

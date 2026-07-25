@@ -42,6 +42,7 @@ import { BondView } from "./views/BondView.js";
 import { EventsView } from "./views/EventsView.js";
 import { SquadBuilderModal } from "./CombatSystem.js";
 import { playMidi, stopMidi, setMidiVolume, resumeAudioContext } from "./midiEngine.js";
+import { NavSidebar } from "./app/NavSidebar.js";
 const App = () => {
   const [characters, setCharacters] = useState([]);
   const [skills, setSkills] = useState([]);
@@ -111,6 +112,12 @@ const App = () => {
   };
   const [inventory, setInventory] = useState(() => safeJSONParse("mugen_inventory", {}));
   const [shards, setShards] = useState(() => safeJSONParse("mugen_shards", {}));
+  // Ability Shards: a per-SKILL-id currency (not per-character) earned mostly
+  // from Grind Dungeons. Lets a player farm shards of a SPECIFIC ability they
+  // want and then craft it directly onto a skill slot -- a deterministic
+  // alternative to the old pure-gamble gem reroll, with dungeons giving a
+  // reason to keep grinding once a player has a target ability in mind.
+  const [abilityShards, setAbilityShards] = useState(() => safeJSONParse("mugen_ability_shards", {}));
   // Shared gear inventory: one physical instance { instanceId, slot, itemId,
   // level } per owned piece of gear, account-wide (not per-character). A
   // character only holds a reference per slot (char.equipSlots), so gear can
@@ -144,8 +151,8 @@ const App = () => {
     return v ? parseInt(v, 10) : 1;
   });
   const [unlockedIds, setUnlockedIds] = useState(() => safeJSONParse("mugen_unlocked_ids", []));
-  const [unlockedFeatures, setUnlockedFeatures] = useState(() => Array.from(new Set([...safeJSONParse("mugen_unlocked_features", ["home", "roster", "train", "campaign", "inventory", "gacha", "shop"]), "events", "trials", "missions"]))); /* TEMP-TEST-UNLOCK */
-  const [squadIds, setSquadIds] = useState(() => { const s = safeJSONParse("mugen_squad_ids", []); return s.length ? s : safeJSONParse("mugen_unlocked_ids", []).slice(0, 3); }); /* TEMP-TEST-SQUAD */
+  const [unlockedFeatures, setUnlockedFeatures] = useState(() => safeJSONParse("mugen_unlocked_features", ["home", "roster", "train", "campaign", "inventory", "gacha", "shop"]));
+  const [squadIds, setSquadIds] = useState(() => safeJSONParse("mugen_squad_ids", []));
   // Cameo "guest" summon: an extra hero (export_id) who is NOT in the squad but
   // flashes in to fire their unlocked signature (FFRK Roaming Warrior style).
   const [cameoId, setCameoId] = useState(() => safeJSONParse("mugen_cameo_id", null));
@@ -214,6 +221,14 @@ const App = () => {
   const [favorites, setFavorites] = useState(() => safeJSONParse("mugen_favorites", []));
   const lastCloudSaveTime = useRef(0);
   const lastQuotaWarnTime = useRef(0);
+  // Save status indicator: drives the small HUD pill's saving/saved/error
+  // animation (see the "save-indicator" render below). Previously the ONLY
+  // save feedback anywhere was a floating-text toast, and only on manual
+  // (non-quick) saves -- autosave, which per the comment above `saveGame`
+  // fires "every few seconds", was completely silent. Now every save tick
+  // (auto or manual) drives this indicator.
+  const [saveStatus, setSaveStatus] = useState("idle");
+  const saveStatusTimeout = useRef(null);
   const [showDailyModal, setShowDailyModal] = useState(false);
   const [battleMusicActive, setBattleMusicActive] = useState(false);
   const [isVictoryMusic, setIsVictoryMusic] = useState(false);
@@ -280,7 +295,11 @@ const App = () => {
     return { level, score, totalHeroLevels, totalBondLevels, uniqueHeroes, stagesCleared };
   }, [characters, unlockedIds, campaignProgress]);
   const totalAccountLevel = masteryMetrics.level;
-  const facilityRank = Math.floor(totalAccountLevel / 15) + 1;
+  // Rank 2 (unlocks Events + Trials) used to require ~10 Campaign stage
+  // clears before a new player could see 2 of the game's 5ish main modes at
+  // all. Eased slightly (Rank 2 at Lv.12 instead of Lv.15) -- still a real
+  // early goal, not an instant unlock.
+  const facilityRank = Math.floor(totalAccountLevel / 12) + 1;
   const maxStamina = 250 + Math.floor(totalAccountLevel * 4) + (auraUpgrades.stamina || 0) * 25 + (facilityRank >= 5 ? 50 : 0);
   const recoveryRate = (0.4 + totalAccountLevel * 0.02) * (1 + (auraUpgrades.stamina || 0) * 0.1);
   const maxVaultCapacity = 5e4 + totalAccountLevel * 2500 + (auraUpgrades.vault || 0) * 5e4;
@@ -584,6 +603,8 @@ const App = () => {
     // Never persist while the roster hasn't loaded — a flush during boot would
     // write an empty character array and wipe all progression on next launch.
     if (loading || !characters.length) return;
+    if (saveStatusTimeout.current) clearTimeout(saveStatusTimeout.current);
+    setSaveStatus("saving");
     try {
       const saveData = {
         mugen_trainer_save_v2: characters,
@@ -598,6 +619,7 @@ const App = () => {
         mugen_stamina: Math.floor(stamina).toString(),
         mugen_inventory: inventory,
         mugen_shards: shards,
+        mugen_ability_shards: abilityShards,
         mugen_gear_inventory: gearInventory,
         mugen_campaign_progress: campaignProgress.toString(),
         mugen_campaign_ranks: campaignRanks,
@@ -638,26 +660,40 @@ const App = () => {
         // to also fail) or a save_meta timestamp implying success. Surface
         // this to the player, throttled so it isn't spammy -- saveGame(true)
         // can run every few seconds via the autosave effect.
-        const now = Date.now();
-        if (now - lastQuotaWarnTime.current > 120e3) {
-          lastQuotaWarnTime.current = now;
+        const now2 = Date.now();
+        if (now2 - lastQuotaWarnTime.current > 120e3) {
+          lastQuotaWarnTime.current = now2;
           createFloatingText("⚠ Storage full — progress may not be saving! Clear old backups in Settings → Data.", true);
         }
+        setSaveStatus("error");
+        saveStatusTimeout.current = setTimeout(() => setSaveStatus("idle"), 2200);
         return;
       }
       localStorage.setItem("mugen_save_meta", JSON.stringify({ version: SAVE_VERSION, savedAt: Date.now() }));
       setLastSavedAt(Date.now());
       if (!quick) writeBackupSnapshot(saveData);
       const now = Date.now();
+      // Bug fix: this used to unconditionally show "Cloud Sync Complete" on
+      // every manual save regardless of whether a cloud write actually ran —
+      // in any deployment without a `websim` datastore (e.g. this project's
+      // own local `python serve.py` server) the write never happens, so the
+      // toast was flatly lying about what had just occurred. Track whether a
+      // cloud write actually succeeded and say something true either way.
+      let cloudSynced = false;
       if (!quick || now - lastCloudSaveTime.current > 45e3) {
         if (typeof websim !== "undefined" && websim.datastore) {
           lastCloudSaveTime.current = now;
           await websim.datastore.set("mugen_trainer_cloud_save", saveData);
+          cloudSynced = true;
         }
       }
-      if (!quick) createFloatingText("Cloud Sync Complete", false, "#00d2ff");
+      if (!quick) createFloatingText(cloudSynced ? "Cloud Sync Complete" : "Progress Saved", false, "#00d2ff");
+      setSaveStatus("saved");
+      saveStatusTimeout.current = setTimeout(() => setSaveStatus("idle"), quick ? 1200 : 1800);
     } catch (e) {
       console.error(e);
+      setSaveStatus("error");
+      saveStatusTimeout.current = setTimeout(() => setSaveStatus("idle"), 2200);
     }
   };
   useEffect(() => {
@@ -693,6 +729,7 @@ const App = () => {
           if (cloudSave.mugen_inventory) setInventory(cloudSave.mugen_inventory);
           if (cloudSave.mugen_gear_inventory) setGearInventory(cloudSave.mugen_gear_inventory);
           if (cloudSave.mugen_shards) setShards(cloudSave.mugen_shards);
+          if (cloudSave.mugen_ability_shards) setAbilityShards(cloudSave.mugen_ability_shards);
           if (cloudSave.mugen_unlocked_ids) setUnlockedIds(cloudSave.mugen_unlocked_ids);
           if (cloudSave.mugen_unlocked_features) setUnlockedFeatures(cloudSave.mugen_unlocked_features);
           if (cloudSave.mugen_squad_ids) setSquadIds(cloudSave.mugen_squad_ids);
@@ -716,9 +753,18 @@ const App = () => {
             localStorage.setItem(key, typeof cloudSave[key] === "string" ? cloudSave[key] : JSON.stringify(cloudSave[key]));
           });
         }
+        // A non-2xx response still has a Response object.  Calling json() on
+        // an HTML error page then throws a misleading parse error and leaves
+        // the player with an empty game, so fail with the real source first.
+        if (!resChars.ok || !resSkills.ok || !resItems.ok) {
+          throw new Error(`Failed to load game data (characters: ${resChars.status}, skills: ${resSkills.status}, items: ${resItems.status}).`);
+        }
         const data = await resChars.json();
         const skillsData = await resSkills.json();
         const itemsData = await resItems.json();
+        if (!Array.isArray(data?.collections?.character_v1) || !Array.isArray(skillsData) || !itemsData || typeof itemsData !== "object") {
+          throw new Error("Game data has an unexpected format. Please refresh and try again.");
+        }
         // Signature skills are character-bound progression rewards. They are merged into the
         // live skills list (so combat can resolve them) but deliberately NOT part of `skillsData`,
         // which seeds random skill assignment / rerolls — keeping signatures unrollable.
@@ -900,22 +946,37 @@ const App = () => {
           const userPrompt = `You are given character names with their image-dominant color hex where available. For each entry map the character to one of these elements: FIRE, WATER, WIND, LIGHT, DARK, NEUTRAL, EARTH based primarily on the color clue, but use name cues if color is UNKNOWN. Respond with ONLY a single JSON object mapping names to elements. Example: { "Name A": "FIRE", "Name B": "EARTH" }.
 
 Data: { ${promptLines} }`;
-          const aiContent = await generateAI(userPrompt, "Map names to elements from color hex cues. Output only a JSON object.", true);
+          // generateAI() was rewritten into a dedicated character-dialogue engine
+          // (always returns a {text, expression, action, moodDelta} object shaped
+          // for roleplay) so it can't serve this raw-JSON classification task.
+          // Call the completions API directly instead, same as generateAI does
+          // internally, to get a plain string back.
+          let aiContent = "";
+          if (typeof window !== "undefined" && window.websim?.chat?.completions?.create) {
+            const completion = await window.websim.chat.completions.create({
+              messages: [
+                { role: "system", content: "Map names to elements from color hex cues. Output only a JSON object." },
+                { role: "user", content: userPrompt }
+              ],
+              json: true
+            });
+            aiContent = typeof completion.content === "string" ? completion.content : JSON.stringify(completion.content || {});
+          }
           let refinedMap = {};
-          try {
-            let cleanJson = (aiContent || "").trim();
-            if (cleanJson.startsWith("```")) {
-              cleanJson = cleanJson.replace(/```(?:json)?\n?([\s\S]*?)\n?```/g, "$1").trim();
+          // No AI backend available (e.g. local dev server) -- skip quietly rather
+          // than attempting to JSON.parse an empty string.
+          if (aiContent) {
+            try {
+              let cleanJson = aiContent.trim();
+              if (cleanJson.startsWith("```")) {
+                cleanJson = cleanJson.replace(/```(?:json)?\n?([\s\S]*?)\n?```/g, "$1").trim();
+              }
+              const jsonMatch = cleanJson.match(/\{[\s\S]*\}/);
+              refinedMap = JSON.parse(jsonMatch ? jsonMatch[0] : cleanJson);
+            } catch (parseErr) {
+              console.warn("AI element JSON parse failed, skipping element refinement", parseErr);
+              refinedMap = {};
             }
-            const jsonMatch = cleanJson.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              refinedMap = JSON.parse(jsonMatch[0]);
-            } else {
-              refinedMap = JSON.parse(cleanJson);
-            }
-          } catch (parseErr) {
-            console.warn("AI element JSON parse failed, skipping element refinement", parseErr);
-            refinedMap = {};
           }
           const VALID = /* @__PURE__ */ new Set(["FIRE", "WATER", "WIND", "LIGHT", "DARK", "NEUTRAL", "EARTH"]);
           finalCharacters.forEach((c) => {
@@ -928,13 +989,20 @@ Data: { ${promptLines} }`;
         } catch (e) {
           console.warn("AI Element refinement failed", e);
         }
-        let currentIds = JSON.parse(localStorage.getItem("mugen_unlocked_ids") || "[]");
+        // Save data is user-controlled browser storage.  A malformed or old
+        // value must not stop the complete roster from loading.
+        let currentIds = safeJSONParse("mugen_unlocked_ids", []);
+        if (!Array.isArray(currentIds)) currentIds = [];
         if (currentIds.length === 0 && finalCharacters.length > 0) {
           const inRange = finalCharacters.filter((c) => {
             const idNum = Number(c.export_id);
             return !isNaN(idNum) && idNum >= 1 && idNum <= 200;
           });
-          const pickCount = 4;
+          // 5, not 4 -- a fresh squad caps at 5 members, so a new player used
+          // to only ever be able to field 4/5 until their first lucky gacha
+          // pull. Starting with a full squad already available feels much
+          // better on the very first login.
+          const pickCount = 5;
           let picks = [];
           if (inRange.length <= pickCount) {
             picks = inRange.map((c) => c.export_id);
@@ -952,9 +1020,8 @@ Data: { ${promptLines} }`;
           currentIds = picks;
           setUnlockedIds(currentIds);
         }
-        const saved = localStorage.getItem("mugen_trainer_save_v2");
-        if (saved) {
-          const parsed = JSON.parse(saved);
+        const parsed = safeJSONParse("mugen_trainer_save_v2", []);
+        if (Array.isArray(parsed)) {
           finalCharacters.forEach((c) => {
             const match = parsed.find((s) => String(s.export_id) === String(c.export_id));
             if (match) {
@@ -1100,7 +1167,14 @@ Data: { ${promptLines} }`;
     );
     const friendRegenBonus = bestFriendLevel >= 10 ? 0.15 : 0;
     const effectiveRate = recoveryRate * (1 + friendRegenBonus);
-    recoveryInterval.current = setInterval(() => setStamina((s) => Math.min(s + effectiveRate / 20, maxStamina)), 500);
+    // Bug fix: this used to be an unconditional Math.min(s + rate, maxStamina)
+    // on every 500ms tick, which clamped stamina straight back down to
+    // maxStamina the instant an "overcharge" item (stamina_xl, the cook_*
+    // feast items) pushed it above the cap -- the floating text would flash
+    // "OVERCHARGED +200!" and then the very next tick silently deleted it.
+    // Regen should only ever fill UP to the cap, never claw back stamina
+    // that's already sitting above it.
+    recoveryInterval.current = setInterval(() => setStamina((s) => s >= maxStamina ? s : Math.min(s + effectiveRate / 20, maxStamina)), 500);
     passiveInterval.current = setInterval(() => {
       setVaultCredits((v) => {
         const rate = Math.max(1, Math.floor(totalAccountLevel / 5));
@@ -1118,7 +1192,7 @@ Data: { ${promptLines} }`;
       clearInterval(recoveryInterval.current);
       clearInterval(passiveInterval.current);
     };
-  }, [totalAccountLevel, maxStamina, appState, recoveryRate, maxVaultCapacity]);
+  }, [totalAccountLevel, maxStamina, appState, recoveryRate, maxVaultCapacity, characters, unlockedIds, auraUpgrades, facilityRank]);
   useEffect(() => {
     if (appState === "playing") {
       playSound("view_change", settings.audio.master * 0.4);
@@ -1147,6 +1221,11 @@ Data: { ${promptLines} }`;
         const offlineStamina = Math.floor(diffSeconds * recoveryRate);
         if (offlineStamina > 0) {
           setStamina((s) => {
+            // Bug fix: same overcharge-erasing clamp as the live regen tick --
+            // if the player closed the app with banked overcharge stamina
+            // (above maxStamina), this used to wipe it down to maxStamina on
+            // next launch instead of leaving it alone.
+            if (s >= maxStamina) return s;
             const before = s;
             const after = Math.min(maxStamina, Math.floor(s + offlineStamina));
             if (after > before && typeof createFloatingText === "function") {
@@ -1219,10 +1298,11 @@ Data: { ${promptLines} }`;
     if (characters.length) {
       const pwr = characters.filter((c) => unlockedIds.includes(c.export_id)).reduce((s, c) => s + calculateSubStat(c, characters, "pwr", skills, auraUpgrades), 0);
       setTotalPWR(pwr);
-      // Unlocking is tied to Street Gym Rank-ups (one rank every 15 account levels)
-      // instead of a scattered pile of one-off level thresholds -- rank up and you
-      // get a clear batch of new venues, not a surprise toast on a random level.
-      const rank = Math.floor(totalAccountLevel / 15) + 1;
+      // Unlocking is tied to Street Gym Rank-ups (one rank every 12 account levels,
+      // matches facilityRank above) instead of a scattered pile of one-off level
+      // thresholds -- rank up and you get a clear batch of new venues, not a
+      // surprise toast on a random level.
+      const rank = Math.floor(totalAccountLevel / 12) + 1;
       const newUnlocks = [...unlockedFeatures];
       const newlyUnlocked = [];
       // One-time migration: Recruit & Shop used to be rank-gated -- existing saves
@@ -1269,9 +1349,15 @@ Data: { ${promptLines} }`;
       if (window.__mugenSkipAutosave) return;
       try { saveGameRef.current(true); } catch (e) {}
     };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
     window.addEventListener("beforeunload", flush);
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
-    return () => window.removeEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
   useEffect(() => {
     try {
@@ -2117,392 +2203,7 @@ Data: { ${promptLines} }`;
       lineNumber: 1526,
       columnNumber: 21
     }),
-    /* @__PURE__ */ jsxDEV("nav", { className: "nav-container", children: !isMobile ? /* @__PURE__ */ jsxDEV(Fragment, { children: [
-      /* @__PURE__ */ jsxDEV("div", { className: "nav-brand", style: { fontFamily: "Cinzel", letterSpacing: "4px", fontStyle: "italic", background: "linear-gradient(to right, #fff, #94a3b8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }, children: "MUGEN 08" }, void 0, false, {}),
-      // --- MAIN: the everyday loop ---
-      /* @__PURE__ */ jsxDEV("div", { className: "nav-section-label", children: "Main" }, void 0, false, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "home" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("home"); playSound("menu_click", 0.2); }, children: [
-        /* @__PURE__ */ jsxDEV(Home, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "The District" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${["train", "abilities", "social"].includes(view) ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("train"); playSound("menu_click", 0.2); }, children: [
-        characters[selectedCharIndex] ? /* @__PURE__ */ jsxDEV("img", { src: characters[selectedCharIndex].imageUrl, className: "nav-char-icon", alt: "" }, void 0, false, {}) : /* @__PURE__ */ jsxDEV(Sword, { size: 20 }, void 0, false, {}),
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Profile" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "roster" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("roster"); playSound("menu_click", 0.2); }, children: [
-        /* @__PURE__ */ jsxDEV(Users, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Roster" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: "nav-divider" }, void 0, false, {}),
-      // --- NIGHTLIFE: social + the gamble ---
-      /* @__PURE__ */ jsxDEV("div", { className: "nav-section-label", children: "Nightlife" }, void 0, false, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "lounge" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("lounge"); playSound("menu_click", 0.2); }, children: [
-        /* @__PURE__ */ jsxDEV(Heart, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Lounge" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "gacha" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("gacha"); playSound("menu_click", 0.2); }, children: [
-        /* @__PURE__ */ jsxDEV(Clover, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Recruit" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: "nav-divider" }, void 0, false, {}),
-      // --- BATTLE: where the PWR goes to work ---
-      /* @__PURE__ */ jsxDEV("div", { className: "nav-section-label", children: "Battle" }, void 0, false, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "campaign" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("campaign"); playSound("menu_click", 0.2); }, children: [
-        /* @__PURE__ */ jsxDEV(Swords, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Campaign" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${!unlockedFeatures.includes("events") ? "locked-nav" : ""} ${view === "events" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => unlockedFeatures.includes("events") ? (setView("events"), playSound("menu_click", 0.2)) : createFloatingText("Reach Street Gym Rank 2 to unlock", true), children: [
-        /* @__PURE__ */ jsxDEV(Sparkles, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Events" }, void 0, false, {}),
-        !unlockedFeatures.includes("events") && /* @__PURE__ */ jsxDEV("span", { className: "nav-rank-req", children: "RANK 2" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${!unlockedFeatures.includes("trials") ? "locked-nav" : ""} ${view === "trials" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => unlockedFeatures.includes("trials") ? (setView("trials"), playSound("menu_click", 0.2)) : createFloatingText("Reach Street Gym Rank 2 to unlock", true), children: [
-        /* @__PURE__ */ jsxDEV(Star, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Trials" }, void 0, false, {}),
-        !unlockedFeatures.includes("trials") && /* @__PURE__ */ jsxDEV("span", { className: "nav-rank-req", children: "RANK 2" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: "nav-divider" }, void 0, false, {}),
-      // --- BUSINESS: gear, gold, and gig work ---
-      /* @__PURE__ */ jsxDEV("div", { className: "nav-section-label", children: "Business" }, void 0, false, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${!unlockedFeatures.includes("missions") ? "locked-nav" : ""} ${view === "missions" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => unlockedFeatures.includes("missions") ? (setView("missions"), playSound("menu_click", 0.2)) : createFloatingText("Reach Street Gym Rank 3 to unlock", true), children: [
-        /* @__PURE__ */ jsxDEV(Trophy, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Jobs" }, void 0, false, {}),
-        !unlockedFeatures.includes("missions") && /* @__PURE__ */ jsxDEV("span", { className: "nav-rank-req", children: "RANK 3" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "inventory" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("inventory"); playSound("menu_click", 0.2); }, children: [
-        /* @__PURE__ */ jsxDEV(LayoutGrid, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Stash" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "shop" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("shop"); playSound("menu_click", 0.2); }, children: [
-        /* @__PURE__ */ jsxDEV(ShoppingBag, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Shop" }, void 0, false, {})
-      ] }, void 0, true, {}),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "settings" ? "active" : ""}`, onMouseEnter: () => playSound("menu_hover", 0.1), onClick: () => { setView("settings"); playSound("menu_click", 0.2); }, style: { marginTop: "auto" }, children: [
-        /* @__PURE__ */ jsxDEV(Settings, { size: 20 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Settings" }, void 0, false, {})
-      ] }, void 0, true, {})
-    ] }, void 0, true, {
-      fileName: "<stdin>",
-      lineNumber: 1531,
-      columnNumber: 11
-    }) : /* @__PURE__ */ jsxDEV(Fragment, { children: [
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "home" ? "active" : ""}`, onClick: () => {
-        setView("home");
-        setShowMobileMore(false);
-        playSound("menu_click", 0.2);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Home, { size: 22 }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1611,
-          columnNumber: 15
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Base" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1611,
-          columnNumber: 34
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1610,
-        columnNumber: 13
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${["train", "abilities", "social"].includes(view) ? "active" : ""}`, onClick: () => {
-        setView("train");
-        setShowMobileMore(false);
-        playSound("menu_click", 0.2);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Sword, { size: 22 }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1614,
-          columnNumber: 15
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Hero" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1614,
-          columnNumber: 35
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1613,
-        columnNumber: 13
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "campaign" ? "active" : ""}`, onClick: () => {
-        setView("campaign");
-        setShowMobileMore(false);
-        playSound("menu_click", 0.2);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Swords, { size: 22 }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1619,
-          columnNumber: 15
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Combat" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1619,
-          columnNumber: 36
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1616,
-        columnNumber: 13
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "events" ? "active" : ""}`, onClick: () => {
-        setView("events");
-        setShowMobileMore(false);
-        playSound("menu_click", 0.2);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Sparkles, { size: 22 }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1622,
-          columnNumber: 15
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Events" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1622,
-          columnNumber: 38
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1621,
-        columnNumber: 13
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${view === "gacha" ? "active" : ""}`, onClick: () => {
-        setView("gacha");
-        setShowMobileMore(false);
-        playSound("menu_click", 0.2);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Clover, { size: 22 }, void 0, false, {}),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "Recruit" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1625,
-          columnNumber: 38
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1624,
-        columnNumber: 13
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: `nav-item ${showMobileMore ? "active" : ""}`, onClick: () => {
-        setShowMobileMore(!showMobileMore);
-        playSound("menu_click", 0.1);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(MoreHorizontal, { size: 22 }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1628,
-          columnNumber: 15
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "nav-label-text", children: "More" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1628,
-          columnNumber: 44
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1627,
-        columnNumber: 13
-      })
-    ] }, void 0, true, {
-      fileName: "<stdin>",
-      lineNumber: 1608,
-      columnNumber: 11
-    }) }, void 0, false, {
-      fileName: "<stdin>",
-      lineNumber: 1529,
-      columnNumber: 7
-    }),
-    isMobile && showMobileMore && /* @__PURE__ */ jsxDEV("div", { className: "mobile-more-overlay", onClick: () => setShowMobileMore(false), children: /* @__PURE__ */ jsxDEV("div", { className: "mobile-more-panel", onClick: (e) => e.stopPropagation(), children: [
-      /* @__PURE__ */ jsxDEV("div", { className: "more-menu-item", onClick: () => {
-        setView("roster");
-        setShowMobileMore(false);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Users, { size: 24, color: "var(--primary)" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1639,
-          columnNumber: 18
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "more-menu-label", children: "Roster" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1639,
-          columnNumber: 60
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1638,
-        columnNumber: 15
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: "more-menu-item", onClick: () => {
-        setView("lounge");
-        setShowMobileMore(false);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Heart, { size: 24, color: "#f472b6" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1642,
-          columnNumber: 18
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "more-menu-label", children: "Lounge" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1642,
-          columnNumber: 53
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1641,
-        columnNumber: 15
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: "more-menu-item", onClick: () => {
-        if (unlockedFeatures.includes("events")) {
-          setView("events");
-          setShowMobileMore(false);
-        } else createFloatingText("Reach Street Gym Rank 2 to unlock", true);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Sparkles, { size: 24, color: "#a855f7" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1648,
-          columnNumber: 18
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "more-menu-label", children: "Events" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1648,
-          columnNumber: 56
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1644,
-        columnNumber: 15
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: "more-menu-item", onClick: () => {
-        if (unlockedFeatures.includes("trials")) {
-          setView("trials");
-          setShowMobileMore(false);
-        } else createFloatingText("Reach Street Gym Rank 2 to unlock", true);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Star, { size: 24, color: "#facc15" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1654,
-          columnNumber: 18
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "more-menu-label", children: "Trials" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1654,
-          columnNumber: 52
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1650,
-        columnNumber: 15
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: "more-menu-item", onClick: () => {
-        if (unlockedFeatures.includes("missions")) {
-          setView("missions");
-          setShowMobileMore(false);
-        } else createFloatingText("Reach Street Gym Rank 3 to unlock", true);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Trophy, { size: 24, color: "#fb923c" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1660,
-          columnNumber: 18
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "more-menu-label", children: "Jobs" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1660,
-          columnNumber: 54
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1656,
-        columnNumber: 15
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: "more-menu-item", onClick: () => {
-        setView("inventory");
-        setShowMobileMore(false);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(LayoutGrid, { size: 24, color: "#94a3b8" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1666,
-          columnNumber: 18
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "more-menu-label", children: "Stash" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1666,
-          columnNumber: 58
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1662,
-        columnNumber: 15
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: "more-menu-item", onClick: () => {
-        setView("shop");
-        setShowMobileMore(false);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(ShoppingBag, { size: 24, color: "#22d3ee" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1672,
-          columnNumber: 18
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "more-menu-label", children: "Shop" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1672,
-          columnNumber: 59
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1668,
-        columnNumber: 15
-      }),
-      /* @__PURE__ */ jsxDEV("div", { className: "more-menu-item", style: { gridColumn: "span 3" }, onClick: () => {
-        setView("settings");
-        setShowMobileMore(false);
-      }, children: [
-        /* @__PURE__ */ jsxDEV(Settings, { size: 20 }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1675,
-          columnNumber: 18
-        }),
-        " ",
-        /* @__PURE__ */ jsxDEV("span", { className: "more-menu-label", children: "System Settings" }, void 0, false, {
-          fileName: "<stdin>",
-          lineNumber: 1675,
-          columnNumber: 40
-        })
-      ] }, void 0, true, {
-        fileName: "<stdin>",
-        lineNumber: 1674,
-        columnNumber: 15
-      })
-    ] }, void 0, true, {
-      fileName: "<stdin>",
-      lineNumber: 1637,
-      columnNumber: 12
-    }) }, void 0, false, {
-      fileName: "<stdin>",
-      lineNumber: 1636,
-      columnNumber: 9
-    }),
+    /* @__PURE__ */ jsxDEV(NavSidebar, { isMobile, view, setView, characters, selectedCharIndex, unlockedFeatures, createFloatingText, showMobileMore, setShowMobileMore }, void 0, false, {}),
     /* @__PURE__ */ jsxDEV("main", { className: "content-area", children: [
       /* @__PURE__ */ jsxDEV("div", { className: "resource-header", children: [
         /* @__PURE__ */ jsxDEV("div", { className: "resource-pill", style: { color: "#facc15", borderColor: "rgba(250, 204, 21, 0.3)" }, children: [
@@ -2608,7 +2309,7 @@ Data: { ${promptLines} }`;
         lineNumber: 1696,
         columnNumber: 29
       }),
-      (view === "train" || view === "abilities" || view === "social") && /* @__PURE__ */ jsxDEV(CharacterDetailView, { selectedCharIndex, char: characters[selectedCharIndex], characters, setSelectedCharIndex, handleTrain, isShaking, activeDialogue, isTypingDialogue, setIsTypingDialogue, setCharacters, triggerDialogue, setView, stamina, maxStamina, appearanceTags, heroVibes, autoTrainLevel, setAutoTrainLevel, credits, setCredits, gems, setGems, aura, setAura, auraUpgrades, setStamina, createFloatingText, unlockedIds, combo, hypeMeter, isHype, totalAccountLevel, heroMoods, setHeroMoods, triggerVisualEffect, inventory, removeFromInventory, skills, materials, setMaterials, essence, setEssence, totalPWR, items, gearInventory, setGearInventory }, void 0, false, {
+      (view === "train" || view === "abilities" || view === "social") && /* @__PURE__ */ jsxDEV(CharacterDetailView, { selectedCharIndex, char: characters[selectedCharIndex], characters, setSelectedCharIndex, handleTrain, isShaking, activeDialogue, isTypingDialogue, setIsTypingDialogue, setCharacters, triggerDialogue, setView, stamina, maxStamina, appearanceTags, heroVibes, autoTrainLevel, setAutoTrainLevel, credits, setCredits, gems, setGems, aura, setAura, auraUpgrades, setStamina, createFloatingText, unlockedIds, combo, hypeMeter, isHype, totalAccountLevel, heroMoods, setHeroMoods, triggerVisualEffect, inventory, removeFromInventory, skills, materials, setMaterials, essence, setEssence, totalPWR, items, gearInventory, setGearInventory, abilityShards, setAbilityShards }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1697,
         columnNumber: 77
@@ -2628,7 +2329,7 @@ Data: { ${promptLines} }`;
         lineNumber: 1700,
         columnNumber: 33
       }),
-      view === "events" && /* @__PURE__ */ jsxDEV(EventsView, { characters, unlockedIds, squadIds, setSquadIds, setShowSquadBuilder, credits, setCredits, gems, setGems, aura, setAura, stamina, setStamina, createFloatingText, triggerVisualEffect, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, skills, materials, setMaterials, essence, setEssence, addToInventory, auraUpgrades, eventTokens, setEventTokens, setUnlockedIds, totalAccountLevel, setCharacters, eventPurchases, setEventPurchases, setEventTheme, onWorldTimeStop, gearInventory, setGearInventory }, void 0, false, {
+      view === "events" && /* @__PURE__ */ jsxDEV(EventsView, { characters, unlockedIds, squadIds, setSquadIds, setShowSquadBuilder, credits, setCredits, gems, setGems, aura, setAura, stamina, setStamina, createFloatingText, triggerVisualEffect, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, skills, materials, setMaterials, essence, setEssence, addToInventory, auraUpgrades, eventTokens, setEventTokens, setUnlockedIds, totalAccountLevel, setCharacters, eventPurchases, setEventPurchases, setEventTheme, onWorldTimeStop, gearInventory, setGearInventory, cameoId }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1701,
         columnNumber: 31
@@ -2643,12 +2344,12 @@ Data: { ${promptLines} }`;
         lineNumber: 1703,
         columnNumber: 30
       }),
-      view === "trials" && /* @__PURE__ */ jsxDEV(TrialsView, { characters, unlockedIds, createFloatingText, squadIds, setSquadIds, setShowSquadBuilder, clearedTrials, setClearedTrials, setGems, setAura, stamina, setStamina, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, triggerVisualEffect, endlessFloor, setEndlessFloor, arenaRank, setArenaRank, setCredits, setMaterials, setEssence, skills, auraUpgrades, setCharacters, onWorldTimeStop }, void 0, false, {
+      view === "trials" && /* @__PURE__ */ jsxDEV(TrialsView, { characters, unlockedIds, createFloatingText, squadIds, setSquadIds, setShowSquadBuilder, clearedTrials, setClearedTrials, setGems, setAura, stamina, setStamina, setBattleMusicActive, setIsVictoryMusic, setIsHardBattle, triggerVisualEffect, endlessFloor, setEndlessFloor, arenaRank, setArenaRank, setCredits, setMaterials, setEssence, skills, auraUpgrades, setCharacters, onWorldTimeStop, cameoId, abilityShards, setAbilityShards, gearInventory, setGearInventory }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1704,
         columnNumber: 31
       }),
-      view === "shop" && /* @__PURE__ */ jsxDEV(ShopView, { credits, setCredits, gems, setGems, aura, setAura, essence, setEssence, materials, setMaterials, addToInventory, setStamina, maxStamina, setCharacters, selectedCharIndex, createFloatingText, characters, unlockedIds, setUnlockedIds, unlockedFeatures, setUnlockedFeatures, totalAccountLevel, auraUpgrades, setAuraUpgrades, setShards, items }, void 0, false, {
+      view === "shop" && /* @__PURE__ */ jsxDEV(ShopView, { credits, setCredits, gems, setGems, aura, setAura, essence, setEssence, materials, setMaterials, addToInventory, setStamina, maxStamina, setCharacters, selectedCharIndex, createFloatingText, characters, unlockedIds, setUnlockedIds, unlockedFeatures, setUnlockedFeatures, totalAccountLevel, auraUpgrades, setAuraUpgrades, setShards, items, triggerVisualEffect, inventory }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 1705,
         columnNumber: 29
@@ -2768,6 +2469,16 @@ Data: { ${promptLines} }`;
       lineNumber: 1731,
       columnNumber: 9
     }),
+    // Save status indicator: a small persistent HUD pill (always mounted,
+    // regardless of active view) that animates through saving/saved/error
+    // states -- previously autosave (the dominant save path in normal play,
+    // firing every few seconds per saveGame's own comment) had ZERO visual
+    // feedback anywhere, and manual saves only got a one-off floating-text
+    // toast easy to miss mid-battle.
+    saveStatus !== "idle" && /* @__PURE__ */ jsxDEV("div", { className: `save-indicator save-indicator-${saveStatus}`, children: [
+      saveStatus === "saving" && /* @__PURE__ */ jsxDEV("span", { className: "save-indicator-spinner" }, void 0, false, {}),
+      /* @__PURE__ */ jsxDEV("span", { children: saveStatus === "saving" ? "Saving…" : saveStatus === "error" ? "Save failed" : "Saved" }, void 0, false, {})
+    ] }, void 0, true, {}),
     particles.map((p) => /* @__PURE__ */ jsxDEV(Particle, { p }, p.id, false, {
       fileName: "<stdin>",
       lineNumber: 1753,

@@ -189,5 +189,131 @@
   "tier": "SS",
   "element": "DARK",
   "stats": { "hp": 900, "atk": 105, "def": 58, "speed": 88, "luck": 24, "magic atk": 60, "magic def": 50 }
+ },
+ {
+  "export_id": 9018,
+  "name": "Jim Hawkins",
+  "franchise": "Treasure Planet",
+  "imageUrl": "portraits/jimhawkings.png",
+  "tier": "S+",
+  "element": "WIND",
+  "stats": { "hp": 720, "atk": 88, "def": 42, "speed": 85, "luck": 28, "magic atk": 30, "magic def": 34 }
+ },
+ {
+  "export_id": 9019,
+  "name": "John Silver",
+  "franchise": "Treasure Planet",
+  "imageUrl": "portraits/johnsilver.png",
+  "tier": "S+",
+  "element": "FIRE",
+  "stats": { "hp": 830, "atk": 98, "def": 62, "speed": 50, "luck": 18, "magic atk": 15, "magic def": 40 }
+ },
+ {
+  "export_id": 9020,
+  "name": "Captain Amelia",
+  "franchise": "Treasure Planet",
+  "imageUrl": "portraits/captainamelia.png",
+  "tier": "S",
+  "element": "LIGHT",
+  "stats": { "hp": 740, "atk": 78, "def": 48, "speed": 74, "luck": 26, "magic atk": 40, "magic def": 44 }
+ },
+ {
+  "export_id": 9021,
+  "name": "Delbert Doppler",
+  "franchise": "Treasure Planet",
+  "imageUrl": "portraits/delbertdoppler.png",
+  "tier": "A+",
+  "element": "WATER",
+  "stats": { "hp": 660, "atk": 35, "def": 38, "speed": 48, "luck": 34, "magic atk": 85, "magic def": 58 }
+ },
+ {
+  "export_id": 9022,
+  "name": "Mr. House",
+  "franchise": "Fallout: New Vegas",
+  "imageUrl": "portraits/mrhouse.png",
+  "tier": "SS",
+  "element": "NEUTRAL",
+  "stats": { "hp": 780, "atk": 35, "def": 60, "speed": 40, "luck": 55, "magic atk": 100, "magic def": 95 }
+ },
+ {
+  "export_id": 9023,
+  "name": "Sunny Smiles",
+  "franchise": "Fallout: New Vegas",
+  "imageUrl": "portraits/sunnysmiles.png",
+  "tier": "A+",
+  "element": "EARTH",
+  "stats": { "hp": 650, "atk": 72, "def": 38, "speed": 70, "luck": 42, "magic atk": 35, "magic def": 36 }
+ },
+ {
+  "export_id": 9024,
+  "name": "Cass",
+  "franchise": "Fallout: New Vegas",
+  "imageUrl": "portraits/caass.png",
+  "tier": "S",
+  "element": "FIRE",
+  "stats": { "hp": 700, "atk": 85, "def": 40, "speed": 68, "luck": 48, "magic atk": 30, "magic def": 34 }
+ },
+ {
+  "export_id": 9025,
+  "name": "Boone",
+  "franchise": "Fallout: New Vegas",
+  "imageUrl": "portraits/boone.png",
+  "tier": "S+",
+  "element": "NEUTRAL",
+  "stats": { "hp": 690, "atk": 100, "def": 42, "speed": 66, "luck": 35, "magic atk": 25, "magic def": 32 }
+ },
+ {
+  "export_id": 9026,
+  "name": "Dr. Fox",
+  "franchise": "Unikitty!",
+  "imageUrl": "portraits/drfox.png",
+  "tier": "SS",
+  "element": "LIGHT",
+  "stats": { "hp": 720, "atk": 40, "def": 45, "speed": 65, "luck": 50, "magic atk": 105, "magic def": 80 }
+ },
+ {
+  "export_id": 9027,
+  "name": "Jeff Andonuts",
+  "franchise": "EarthBound",
+  "imageUrl": "portraits/jeff.png",
+  "tier": "S+",
+  "element": "NEUTRAL",
+  "stats": { "hp": 700, "atk": 95, "def": 45, "speed": 55, "luck": 38, "magic atk": 20, "magic def": 30 }
+ },
+ {
+  "export_id": 9028,
+  "name": "Paula",
+  "franchise": "EarthBound",
+  "imageUrl": "portraits/paula.png",
+  "tier": "SS",
+  "element": "LIGHT",
+  "stats": { "hp": 620, "atk": 30, "def": 32, "speed": 58, "luck": 40, "magic atk": 100, "magic def": 62 }
+ },
+ {
+  "export_id": 9029,
+  "name": "Orange Kid",
+  "franchise": "EarthBound",
+  "imageUrl": "portraits/orangekid.png",
+  "tier": "A",
+  "element": "NEUTRAL",
+  "stats": { "hp": 600, "atk": 25, "def": 35, "speed": 45, "luck": 45, "magic atk": 70, "magic def": 50 }
+ },
+ {
+  "export_id": 9030,
+  "name": "Noelle Holiday",
+  "franchise": "Deltarune",
+  "imageUrl": "placeholder_char.png",
+  "tier": "SS",
+  "element": "WATER",
+  "stats": { "hp": 700, "atk": 25, "def": 35, "speed": 55, "luck": 45, "magic atk": 115, "magic def": 70 }
+ },
+ {
+  "export_id": 9031,
+  "name": "Marceline Abadeer",
+  "franchise": "Adventure Time",
+  "imageUrl": "placeholder_char.png",
+  "tier": "S+",
+  "element": "DARK",
+  "stats": { "hp": 780, "atk": 70, "def": 45, "speed": 75, "luck": 35, "magic atk": 90, "magic def": 55 }
  }
 ]

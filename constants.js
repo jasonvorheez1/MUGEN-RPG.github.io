@@ -138,7 +138,64 @@ export const AUDIO_URLS = {
   act_sonic_boom: 'sfx_new/ACT_FLYSONICBOOM.wav',
   act_steam: 'sfx_new/ACT_STEAM1.wav',
   act_grow: 'sfx_new/ACT_GROW.wav',
-  act_ninja_swipe: 'sfx_new/ACT_NINJASWIPE1.wav'
+  act_ninja_swipe: 'sfx_new/ACT_NINJASWIPE1.wav',
+
+  // --- PROSPECTOR'S DIG (new minigame, HomeView.js) -- the previously-unused
+  // digging/mining/reveal half of the ACT_ pack, finally given a home. ---
+  dig_shovel1: 'sfx_new/ACT_DIGDIRT1.wav',
+  dig_shovel2: 'sfx_new/ACT_DIGDIRT2.wav',
+  dig_shovel3: 'sfx_new/ACT_DIGDIRT3.wav',
+  dig_jackhammer_in: 'sfx_new/ACT_JACKHAMMER_IN.wav',
+  dig_jackhammer_out: 'sfx_new/ACT_JACKHAMMER_OUT.wav',
+  dig_ratchet1: 'sfx_new/ACT_WRENCH_RATCHET_01.wav',
+  dig_ratchet2: 'sfx_new/ACT_WRENCH_RATCHET_02.wav',
+  dig_ratchet3: 'sfx_new/ACT_WRENCH_RATCHET_03.wav',
+  dig_wrench_in: 'sfx_new/ACT_WRENCH_IN.wav',
+  dig_wrench_out: 'sfx_new/ACT_WRENCH_OUT.wav',
+  dig_pry1: 'sfx_new/ACT_MINESTONE1.wav',
+  dig_pry2: 'sfx_new/ACT_MINESTONE2.wav',
+  dig_pry3: 'sfx_new/ACT_MINESTONE3.wav',
+  dig_pry4: 'sfx_new/ACT_MINESTONE4.wav',
+  dig_pry5: 'sfx_new/ACT_MINESTONE5.wav',
+  dig_pry6: 'sfx_new/ACT_MINESTONE6.wav',
+  dig_pry7: 'sfx_new/ACT_MINESTONE7.wav',
+  dig_trap1: 'sfx_new/ACT_TEETHSNAPLRG1.wav',
+  dig_trap2: 'sfx_new/ACT_TEETHSNAPLRG2.wav',
+  dig_trap3: 'sfx_new/ACT_TEETHSNAPLRG3.wav',
+  dig_trap4: 'sfx_new/ACT_TEETHSNAPLRG4.wav',
+  dig_detector: 'sfx_new/BM_SSUIT_DETECT.wav',
+  dig_scratch1: 'sfx_new/ACT_SCRATCH_1.wav',
+  dig_scratch2: 'sfx_new/ACT_SCRATCH_2.wav',
+  dig_scratch3: 'sfx_new/ACT_SCRATCH_3.wav',
+  dig_clap1: 'sfx_new/CLAP_01.wav',
+  dig_clap2: 'sfx_new/CLAP_02.wav',
+  dig_clap3: 'sfx_new/CLAP_03.wav',
+  dig_fanfare: 'sfx_new/pSE_HORN_K_STD.wav',
+  dig_jackpot_boom: 'sfx_new/ACT_STONEBIGFIGGROUNDEXP1.wav',
+  dig_build_correct: 'sfx_new/M_BUILD_CORRECT.wav',
+  dig_build_fail: 'sfx_new/M_BUILD_FAIL.wav',
+
+  // --- cast-anim batch 2 stings (see combat/battleHelpers.js CAST_ANIM_SOUND) ---
+  act_jump_double: 'sfx_new/ACT_JUMPDOUBLE.wav',
+  act_ninja_swishes1: 'sfx_new/ACT_NINJASWISHES1.wav',
+  cheer_shot1: 'sfx_new/Cheer_Shot1.ny.32.wav',
+  act_swipe_big1: 'sfx_new/ACT_SWIPEBIG1.wav',
+  act_swim_return1: 'sfx_new/ACT_SWIMRTRN_1.wav',
+  act_wing_flap1: 'sfx_new/ACT_WINGFLAPLRG1.wav',
+  act_bounce_hi: 'sfx_new/ACT_BOUNCEHI.wav',
+  snd_tuning_fork: 'sfx_new/snd_tuning_fork.wav',
+  act_grab_chain: 'sfx_new/ACT_GRABCHAIN.wav',
+  act_steam2: 'sfx_new/ACT_STEAM2.wav',
+  act_pushblock: 'sfx_new/ACT_PUSHBLOCK_START.wav',
+  act_double_swish2: 'sfx_new/ACT_DOUBLESWISH_2.wav',
+  act_twirl_pole1: 'sfx_new/ACT_TWIRLPOLESWING1.wav',
+  snd_organ_so: 'sfx_new/snd_organ_so.wav',
+  act_skateboard_trick1: 'sfx_new/ACT_SKATEBOARD_TRICK1.wav',
+  cheer_shot2: 'sfx_new/Cheer_Shot2.ny.32.wav',
+  act_swipe_double_lrg1: 'sfx_new/ACT_SWIPEDOUBLELRG1.wav',
+  act_putaway: 'sfx_new/ACT_PUTAWAY.wav',
+  act_acrobat_swipe: 'sfx_new/ACT_ACROBATSWIPE.wav',
+  act_umbrella_open: 'sfx_new/ACT_UMBRELLA_OPEN.wav'
 };
 
 export const CHARACTER_DATA_URL = "https://raw.githubusercontent.com/jasonvorheez1/websimgame1234/main/mugen-meta-export-2025-12-28.json";
@@ -374,22 +431,49 @@ export const COSMETICS = {
 // Hard cap on how many times a character can Ascend (post-level-100 rank-ups).
 export const MAX_ASCENSION = 5;
 
-// BOSS ROSTER: real, named bosses (portraits in boss/) used by Trials + Events
-// instead of generic reskinned enemies. Each has its own signature (see
-// signature_skills.json, owner = boss name) and is paired into a duo -- when
-// both members of a pair are alive on the same side, their signature escalates
-// into a team-up attack (CombatSystem.js META.duo_partner/duo_bonus).
+// Auto-clear: once a squad's PWR clears a stage/trial's recommended power by
+// this multiple, they're so overpowered the fight is a foregone conclusion --
+// an "AUTO CLEAR" button skips the battle and grants full rewards instantly.
+// Not offered everywhere: Events' last two live slots (crisis/wildcard) and
+// the Elemental/Series Trials are meant to always be played out by hand.
+export const AUTO_CLEAR_PWR_MULT = 3;
+
+// BOSS ROSTER: real, named bosses/enemies (portraits in boss/) used by Trials +
+// Events instead of generic reskinned enemies. Each has its own signature (see
+// signature_skills.json, owner = boss name), if any, and is paired into a duo --
+// when both members of a pair are alive on the same side, their signature
+// escalates into a team-up attack (CombatSystem.js META.duo_partner/duo_bonus).
+// `archetype` doubles as the stat-scaling key passed straight into
+// getEnemyStatsFromCP (utils.js) -- boss/minion/elite/glass/tank/support -- so
+// each named entry actually fights like what it is (Whispy Woods tanks, Radroach
+// folds instantly) instead of every trial boss sharing one flat stat curve.
+// `franchise` groups entries for flavor/UI (e.g. TrialsMenu) and duo pairing.
 export const BOSS_ROSTER = [
-  { id: "boss_aboleth", name: "Aboleth", img: "boss/Aboleth.jpeg", element: "WATER", archetype: "tank", duoPartner: "Elder Brain", desc: "An ancient, mind-warping horror from the deep." },
-  { id: "boss_elder_brain", name: "Elder Brain", img: "boss/Elder Brain.jpeg", element: "DARK", archetype: "glass", duoPartner: "Aboleth", desc: "A pulsing hive-mind that commands lesser horrors." },
-  { id: "boss_balhannoth", name: "Balhannoth", img: "boss/Balhannoth.jpeg", element: "DARK", archetype: "elite", duoPartner: "Flumph", desc: "Drags the unwary into a lightless void." },
-  { id: "boss_flumph", name: "Flumph", img: "boss/Flumph.png", element: "LIGHT", archetype: "support", duoPartner: "Balhannoth", desc: "A gentle drifting oddity -- deceptively dangerous allied to darker things." },
-  { id: "boss_alpha_wolf", name: "Alpha Wolf", img: "boss/Alpha Wolf.webp", element: "EARTH", archetype: "elite", duoPartner: "Bangaa Pirate", desc: "Leads the pack; strikes fastest and hardest." },
-  { id: "boss_bangaa_pirate", name: "Bangaa Pirate", img: "boss/Bangaa Pirate.webp", element: "FIRE", archetype: "glass", duoPartner: "Alpha Wolf", desc: "A reckless blade-for-hire, all offense." },
-  { id: "boss_brainpan", name: "Brainpan", img: "boss/BrainpanBrainpan.webp", element: "NEUTRAL", archetype: "tank", duoPartner: "Gargantua", desc: "A cobbled-together construct, built to endure." },
-  { id: "boss_gargantua", name: "Gargantua", img: "boss/Gargantua.png", element: "EARTH", archetype: "boss", duoPartner: "Brainpan", desc: "A towering engine of destruction." },
-  { id: "boss_feyr", name: "Feyr", img: "boss/Feyr.jpeg", element: "WIND", archetype: "glass", duoPartner: "The Demogorgon", desc: "A fey predator, quick and merciless." },
-  { id: "boss_demogorgon", name: "The Demogorgon", img: "boss/The Demogorgon.jpeg", element: "DARK", archetype: "boss", duoPartner: "Feyr", desc: "A two-minded apex hunter from beyond." }
+  { id: "boss_aboleth", name: "Aboleth", img: "boss/Aboleth.jpeg", element: "WATER", archetype: "tank", franchise: "Dark Fantasy", duoPartner: "Elder Brain", desc: "An ancient, mind-warping horror from the deep." },
+  { id: "boss_elder_brain", name: "Elder Brain", img: "boss/Elder Brain.jpeg", element: "DARK", archetype: "glass", franchise: "Dark Fantasy", duoPartner: "Aboleth", desc: "A pulsing hive-mind that commands lesser horrors." },
+  { id: "boss_balhannoth", name: "Balhannoth", img: "boss/Balhannoth.jpeg", element: "DARK", archetype: "elite", franchise: "Dark Fantasy", duoPartner: "Flumph", desc: "Drags the unwary into a lightless void." },
+  { id: "boss_flumph", name: "Flumph", img: "boss/Flumph.png", element: "LIGHT", archetype: "support", franchise: "Dark Fantasy", duoPartner: "Balhannoth", desc: "A gentle drifting oddity -- deceptively dangerous allied to darker things." },
+  { id: "boss_alpha_wolf", name: "Alpha Wolf", img: "boss/Alpha Wolf.webp", element: "EARTH", archetype: "elite", franchise: "Dark Fantasy", duoPartner: "Bangaa Pirate", desc: "Leads the pack; strikes fastest and hardest." },
+  { id: "boss_bangaa_pirate", name: "Bangaa Pirate", img: "boss/Bangaa Pirate.webp", element: "FIRE", archetype: "glass", franchise: "Dark Fantasy", duoPartner: "Alpha Wolf", desc: "A reckless blade-for-hire, all offense." },
+  { id: "boss_brainpan", name: "Brainpan", img: "boss/BrainpanBrainpan.webp", element: "NEUTRAL", archetype: "tank", franchise: "Dark Fantasy", duoPartner: "Gargantua", desc: "A cobbled-together construct, built to endure." },
+  { id: "boss_gargantua", name: "Gargantua", img: "boss/Gargantua.png", element: "EARTH", archetype: "boss", franchise: "Dark Fantasy", duoPartner: "Brainpan", desc: "A towering engine of destruction." },
+  { id: "boss_feyr", name: "Feyr", img: "boss/Feyr.jpeg", element: "WIND", archetype: "glass", franchise: "Dark Fantasy", duoPartner: "The Demogorgon", desc: "A fey predator, quick and merciless." },
+  { id: "boss_demogorgon", name: "The Demogorgon", img: "boss/The Demogorgon.jpeg", element: "DARK", archetype: "boss", franchise: "Dark Fantasy", duoPartner: "Feyr", desc: "A two-minded apex hunter from beyond." },
+  // --- Franchise enemies (added alongside Ness/EarthBound roster additions) ---
+  { id: "boss_motorbug", name: "Motorbug", img: "boss/motorbug.png", element: "NEUTRAL", archetype: "minion", franchise: "Sonic the Hedgehog", duoPartner: "Balla", desc: "A stubby Badnik that just rolls straight at you, engine screaming." },
+  { id: "boss_starman_junior", name: "Starman Junior", img: "boss/starmanjunior.png", element: "LIGHT", archetype: "elite", franchise: "EarthBound", duoPartner: "Glowing One", desc: "A chrome alien menace, sent ahead by its masters to soften up Earth." },
+  { id: "boss_mighty_bear", name: "Mighty Bear", img: "boss/mightybear.png", element: "EARTH", archetype: "tank", franchise: "EarthBound", duoPartner: "Attack Slug", desc: "A feral zoo escapee, all claws and bad temper." },
+  { id: "boss_attack_slug", name: "Attack Slug", img: "boss/attackslug.png", element: "WATER", archetype: "glass", franchise: "EarthBound", duoPartner: "Mighty Bear", desc: "Slow, slimy, and surprisingly willing to pick a fight." },
+  { id: "boss_whispy_woods", name: "Whispy Woods", img: "boss/whispywoods.png", element: "EARTH", archetype: "tank", franchise: "Kirby", duoPartner: "Batty", desc: "An ancient tree with a temper, and a mouth full of apples." },
+  { id: "boss_bubbles_kirby", name: "Bubbles (Kirby)", img: "boss/bubbles.png", element: "WATER", archetype: "support", franchise: "Kirby", duoPartner: "Beanbot", desc: "A drifting jellyfish that shocks anything careless enough to touch it." },
+  { id: "boss_beanbot", name: "Beanbot", img: "boss/beanbot.png", element: "FIRE", archetype: "glass", franchise: "Kirby", duoPartner: "Bubbles (Kirby)", desc: "A wind-up robot that beelines for you and detonates on contact." },
+  { id: "boss_batty", name: "Batty", img: "boss/batty.png", element: "DARK", archetype: "glass", franchise: "Kirby", duoPartner: "Whispy Woods", desc: "An erratic cave bat, hard to pin down and quick to swarm." },
+  { id: "boss_cha_cha", name: "Cha Cha", img: "boss/chacha.png", element: "WIND", archetype: "minion", franchise: "Kirby", duoPartner: "Radroach", desc: "A sprinting little cat enemy, more a nuisance than a threat -- usually." },
+  { id: "boss_radroach", name: "Radroach", img: "boss/radroach.png", element: "EARTH", archetype: "minion", franchise: "Fallout", duoPartner: "Cha Cha", desc: "An irradiated cockroach the size of a dinner plate. There's never just one." },
+  { id: "boss_ant", name: "Ant", img: "boss/ant.png", element: "FIRE", archetype: "glass", franchise: "Fallout", duoPartner: "Super Mutant", desc: "A giant fire ant, swarming fast and spraying flame from its mandibles." },
+  { id: "boss_glowing_one", name: "Glowing One", img: "boss/glowingone.png", element: "DARK", archetype: "elite", franchise: "Fallout", duoPartner: "Starman Junior", desc: "A ghoul gone past feral, radiating enough rads to cook you from ten feet off." },
+  { id: "boss_super_mutant", name: "Super Mutant", img: "boss/supermutant.png", element: "NEUTRAL", archetype: "tank", franchise: "Fallout", duoPartner: "Ant", desc: "Eight feet of FEV-warped muscle, swinging whatever's heaviest nearby." },
+  { id: "boss_balla", name: "Balla", img: "boss/balla.png", element: "DARK", archetype: "elite", franchise: "Grand Theft Auto", duoPartner: "Motorbug", desc: "A Ballas gang enforcer, rolling deep and quick to open fire." }
 ];
 
 // EQUIPMENT: replaces the old "collect every cosmetic for stats" grind. Three
@@ -414,6 +498,9 @@ export const EQUIP_GACHA_COST = { single: 150, ten: 1350 };
 //  - elem_resist { element, val }: -val% damage taken from that element.
 //  - status_resist { status, val }: -val% chance of `status` landing on you
 //    (status matches an effect `type`, e.g. "stun", "freeze", "burn", "poison").
+//  - cdr { val }: +val% ability charge speed, permanently, just from having
+//    the piece equipped (see getCooldownGain in CombatSystem.js) -- an
+//    always-on version of the same lever the "haste" status pulls temporarily.
 // Enemies/bosses/arena opponents roll from this exact same catalog (see
 // rollEnemyGear in utils.js) so a scouted opponent's passives read identically
 // to a player's.
@@ -432,7 +519,9 @@ export const EQUIPMENT = {
     { id: "genesis_blade", name: "Genesis Blade", rarity: "Mythic", bonuses: { atk: 0.65, "magic atk": 0.35, speed: 0.15 }, gachaOnly: true, passives: [{ type: "elem_boost", element: "FIRE", val: 0.3 }] },
     { id: "apex_predator_fang", name: "Apex Predator's Fang", rarity: "Mythic", bonuses: { atk: 0.7, luck: 0.25 }, gachaOnly: true, passives: [{ type: "status_resist", status: "freeze", val: 0.5 }] },
     { id: "reality_splitter", name: "Reality Splitter", rarity: "Mythic", bonuses: { atk: 0.55, "magic atk": 0.55 }, gachaOnly: true, passives: [{ type: "elem_resist", element: "DARK", val: 0.3 }] },
-    { id: "rift_shard_blade", name: "Rift Shard Blade", rarity: "Legendary", bonuses: { atk: 0.35, speed: 0.15 }, eventOnly: true, passives: [{ type: "status_resist", status: "stun", val: 0.35 }] }
+    { id: "rift_shard_blade", name: "Rift Shard Blade", rarity: "Legendary", bonuses: { atk: 0.35, speed: 0.15 }, eventOnly: true, passives: [{ type: "status_resist", status: "stun", val: 0.35 }] },
+    { id: "temporal_edge", name: "Temporal Edge", rarity: "Mythic", bonuses: { atk: 0.6, speed: 0.25 }, gachaOnly: true, passives: [{ type: "cdr", val: 0.25 }] },
+    { id: "overclock_talons", name: "Overclock Talons", rarity: "Mythic", bonuses: { atk: 0.45, "magic atk": 0.3, speed: 0.2 }, gachaOnly: true, passives: [{ type: "cdr", val: 0.2 }, { type: "elem_boost", element: "WIND", val: 0.2 }] }
   ],
   armor: [
     { id: "flak_vest", name: "Flak Vest", rarity: "Common", bonuses: { hp: 0.08 }, cost: { credits: 15000 } },
@@ -448,7 +537,8 @@ export const EQUIPMENT = {
     { id: "voidheart_carapace", name: "Voidheart Carapace", rarity: "Mythic", bonuses: { hp: 0.75, def: 0.4, "magic def": 0.4 }, gachaOnly: true, passives: [{ type: "elem_resist", element: "DARK", val: 0.35 }, { type: "status_resist", status: "poison", val: 0.4 }] },
     { id: "absolute_zero_plate", name: "Absolute Zero Plate", rarity: "Mythic", bonuses: { hp: 0.6, def: 0.55 }, gachaOnly: true, passives: [{ type: "elem_resist", element: "WATER", val: 0.35 }, { type: "status_resist", status: "freeze", val: 0.5 }] },
     { id: "primordial_husk", name: "Primordial Husk", rarity: "Mythic", bonuses: { hp: 0.9, "magic def": 0.4 }, gachaOnly: true, passives: [{ type: "elem_resist", element: "EARTH", val: 0.35 }, { type: "status_resist", status: "burn", val: 0.4 }] },
-    { id: "rift_woven_plate", name: "Rift-Woven Plate", rarity: "Legendary", bonuses: { hp: 0.4, def: 0.22 }, eventOnly: true, passives: [{ type: "elem_resist", element: "WIND", val: 0.2 }] }
+    { id: "rift_woven_plate", name: "Rift-Woven Plate", rarity: "Legendary", bonuses: { hp: 0.4, def: 0.22 }, eventOnly: true, passives: [{ type: "elem_resist", element: "WIND", val: 0.2 }] },
+    { id: "kinetic_bastion_plate", name: "Kinetic Bastion Plate", rarity: "Mythic", bonuses: { hp: 0.65, def: 0.45 }, gachaOnly: true, passives: [{ type: "cdr", val: 0.18 }, { type: "status_resist", status: "stun", val: 0.35 }] }
   ],
   trinket: [
     { id: "lucky_coin", name: "Lucky Coin", rarity: "Common", bonuses: { luck: 0.1 }, cost: { credits: 15000 } },
@@ -463,7 +553,8 @@ export const EQUIPMENT = {
     { id: "chrono_shard", name: "Chrono Shard", rarity: "Legendary", bonuses: { speed: 0.35, luck: 0.25 }, cost: { gems: 450, essence: 45 }, passives: [{ type: "status_resist", status: "stun", val: 0.4 }] },
     { id: "singularity_heart", name: "Singularity Heart", rarity: "Mythic", bonuses: { atk: 0.3, "magic atk": 0.3, hp: 0.3, def: 0.3, speed: 0.3, luck: 0.3 }, gachaOnly: true, passives: [{ type: "elem_boost", element: "LIGHT", val: 0.25 }, { type: "status_resist", status: "stun", val: 0.35 }] },
     { id: "godslayer_relic", name: "Godslayer Relic", rarity: "Mythic", bonuses: { atk: 0.5, "magic atk": 0.5, luck: 0.35 }, gachaOnly: true, passives: [{ type: "elem_boost", element: "DARK", val: 0.3 }] },
-    { id: "rift_bound_charm", name: "Rift-Bound Charm", rarity: "Legendary", bonuses: { luck: 0.25, speed: 0.2 }, eventOnly: true, passives: [{ type: "elem_boost", element: "LIGHT", val: 0.18 }] }
+    { id: "rift_bound_charm", name: "Rift-Bound Charm", rarity: "Legendary", bonuses: { luck: 0.25, speed: 0.2 }, eventOnly: true, passives: [{ type: "elem_boost", element: "LIGHT", val: 0.18 }] },
+    { id: "chronarch_beacon", name: "Chronarch Beacon", rarity: "Mythic", bonuses: { speed: 0.35, luck: 0.3 }, gachaOnly: true, passives: [{ type: "cdr", val: 0.3 }] }
   ]
 };
 
@@ -757,7 +848,7 @@ export const CAMPAIGN_CONTENT = [
         stages: [
           { id: 40, name: "Kernel Panic", enemy: "Root Administrator", element: "WIND", cpReq: 1043000000, rewards: { credits: 2000000, gems: 5700 }, bg: "background_void.png", requiredElement: "WIND", minAvgLevel: 60 },
           { id: 41, name: "Buffer Overflow", enemy: "Memory Leak", element: "WATER", cpReq: 1446000000, rewards: { credits: 2300000, gems: 6300 }, bg: "background_void.png", requiredRelType: "Friend" },
-          { id: 42, name: "System Override", enemy: "The Architect", element: "LIGHT", cpReq: 2006000000, rewards: { credits: 2700000, gems: 7000 }, bg: "background_void.png", requiredElement: "DARK", squadSizeReq: 5 }
+          { id: 42, name: "System Override", enemy: "The Architect", element: "LIGHT", cpReq: 2006000000, rewards: { credits: 2700000, gems: 7000 }, bg: "background_void.png", requiredElement: "DARK", squadSizeReq: 4 }
         ]
       }
     ]
@@ -775,7 +866,7 @@ export const CAMPAIGN_CONTENT = [
         stages: [
           { id: 43, name: "Gravity Well", enemy: "Event Horizon", element: "DARK", cpReq: 2782000000, rewards: { credits: 3200000, gems: 7800 }, bg: "background_citadel.png", requiredElement: "LIGHT" },
           { id: 44, name: "Solar Flare", enemy: "Primordial Sun", element: "FIRE", cpReq: 3858000000, rewards: { credits: 3700000, gems: 8600 }, bg: "background_citadel.png", requiredRelType: "Comrade", minAvgLevel: 70 },
-          { id: 45, name: "Omni Reality", enemy: "True Creator", element: "NEUTRAL", cpReq: 5352000000, rewards: { credits: 4300000, gems: 9500 }, bg: "background_citadel.png", squadSizeReq: 5 }
+          { id: 45, name: "Omni Reality", enemy: "True Creator", element: "NEUTRAL", cpReq: 5352000000, rewards: { credits: 4300000, gems: 9500 }, bg: "background_citadel.png", squadSizeReq: 4 }
         ]
       }
     ]
@@ -825,8 +916,8 @@ export const CAMPAIGN_CONTENT = [
         name: "Hall of Records",
         desc: "Information is the ultimate weapon.",
         stages: [
-          { id: 50, name: "Filing Chaos", enemy: "Librarian Drone", element: "WIND", cpReq: 27471000000, rewards: { credits: 9200000, gems: 16000 }, bg: "background_citadel.png", requiredFranchise: "Kirby", minAvgLevel: 95, squadSizeReq: 5 },
-          { id: 51, name: "The Lost Scroll", enemy: "Data Archon", element: "LIGHT", cpReq: 38102000000, rewards: { credits: 11000000, gems: 18000 }, bg: "background_citadel.png", requiredFranchise: "Final Fantasy", minAvgLevel: 95, squadSizeReq: 5 }
+          { id: 50, name: "Filing Chaos", enemy: "Librarian Drone", element: "WIND", cpReq: 27471000000, rewards: { credits: 9200000, gems: 16000 }, bg: "background_citadel.png", requiredFranchise: "Kirby", minAvgLevel: 95, squadSizeReq: 4 },
+          { id: 51, name: "The Lost Scroll", enemy: "Data Archon", element: "LIGHT", cpReq: 38102000000, rewards: { credits: 11000000, gems: 18000 }, bg: "background_citadel.png", requiredFranchise: "Final Fantasy", minAvgLevel: 95, squadSizeReq: 4 }
         ]
       }
     ]
@@ -911,7 +1002,7 @@ export const CAMPAIGN_CONTENT = [
         desc: "Finality awaits.",
         stages: [
           { id: 60, name: "Reality Collapse", enemy: "Endgame Shadow", element: "NEUTRAL", cpReq: 723823000000, rewards: { credits: 43000000, gems: 45000 }, bg: "background_citadel.png", requiredElement: "NEUTRAL", minAvgLevel: 100, requiredRelType: 'Romantic Partner' },
-          { id: 61, name: "Mugen Eternal", enemy: "The True Summoner", element: "NEUTRAL", cpReq: 1003943000000, rewards: { credits: 50000000, gems: 50000 }, bg: "background_citadel.png", requiredFranchise: "Sonic the Hedgehog", minAvgLevel: 100, squadSizeReq: 5 }
+          { id: 61, name: "Mugen Eternal", enemy: "The True Summoner", element: "NEUTRAL", cpReq: 1003943000000, rewards: { credits: 50000000, gems: 50000 }, bg: "background_citadel.png", requiredFranchise: "Sonic the Hedgehog", minAvgLevel: 100, squadSizeReq: 4 }
         ]
       }
     ]

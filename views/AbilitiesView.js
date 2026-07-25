@@ -5,9 +5,10 @@ import {
   Info
 } from "lucide-react";
 import { ELEMENTS, SKILL_RARITY_CONFIG } from "../constants.js";
-import { getAbilityColor, playSound, getLeaderSkill, getSkillTags, calculateStat, SIGNATURE_BONUS, SPECIAL_STATS, SPECIAL_CAP } from "../utils.js";
+import { getAbilityColor, playSound, getLeaderSkill, getSkillTags, calculateStat, calculateSubStat, SIGNATURE_BONUS, SPECIAL_STATS, SPECIAL_CAP } from "../utils.js";
+import { describeEffect } from "../CombatSystem.js";
 
-const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacters, selectedCharIndex, createFloatingText, minimalMode = false, gems, setGems, essence, setEssence, skills, auraUpgrades = {} }) => {
+const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacters, selectedCharIndex, createFloatingText, minimalMode = false, gems, setGems, essence, setEssence, skills, auraUpgrades = {}, abilityShards = {}, setAbilityShards }) => {
   if (!char) return null;
   const signature = (skills || []).find((s) => s.signature && s.owner === char.name);
   const SIG_REQ_LEVEL = 70;
@@ -71,7 +72,55 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
     // actually resolves to right now, mirroring the exact priority order the
     // combat resolver uses (CombatSystem.js): maxed-all-10 ultimate > curated
     // dual-stat combos > single dominant stat > baseline.
-    const dynamicArchetypeText = (() => {
+    // Human-readable one-liner for a single status-effect object, so signature
+    // cards can spell out what "buff_spd val 0.25" actually DOES instead of just
+    // showing a bare label. Mirrors the effect math in CombatSystem's getBattleStats.
+    const describeFx = (e) => {
+      if (!e || !e.type) return null;
+      const pct = Math.round((e.val || 0) * 100);
+      const ramp = e.ramp ? `, +${Math.round(e.ramp * 100)}%/turn` : "";
+      const dur = e.duration ? ` · ${e.duration}t` : "";
+      const map = {
+        haste: `Skills charge +${pct}% faster${ramp}`,
+        buff_atk: `ATK & Magic ATK +${pct}%`,
+        buff_def: `DEF +${pct}%`,
+        buff_spd: `Speed +${pct}%`,
+        buff_crit: `Crit chance +${pct}%`,
+        buff_evasion: `Evasion +${pct}%`,
+        buff_elemdmg: `Elemental damage +${pct}%`,
+        regen: `Heal ${pct}% max HP/turn`,
+        shield: `Shield worth ${pct}% max HP`,
+        debuff_atk: `Enemy ATK −${pct}%`,
+        debuff_def: `Enemy DEF −${pct}%`,
+        debuff_spd: `Enemy Speed −${pct}%`,
+        burn: `Burn: ${pct}% HP/turn`,
+        poison: `Poison: ${pct}% HP/turn`,
+        static: `Static: ${pct}% HP/turn + evasion cut`,
+        freeze: `Freeze — target loses turns`,
+        stun: `Stun — target skips a turn`,
+        sleep: `Sleep — target skips turns`,
+        overheat: `OVERHEAT — rising ATK +${pct}%${ramp}`,
+        precision: `PRECISION — rising Crit +${pct}%${ramp}`,
+        fortify: `FORTIFY — rising DEF +${pct}%${ramp}`,
+        charm: `CHARM — rising Luck +${pct}%${ramp}`,
+        overclock: `OVERCLOCK — rising Magic ATK +${pct}%${ramp}`,
+        crushed: `CRUSHED — DEF −${pct}%${ramp}`,
+        broken: `BREAK — stagger, takes extra damage`,
+        tethered: `Tethered — locked to caster`,
+        truesight: `Truesight — attacks can't be dodged`
+      };
+      // Unmapped types fall back to the SAME describeEffect() combat uses for its
+      // in-battle tooltips (CombatSystem.js) instead of a second hand-maintained
+      // guess, so this list can't silently drift from what the effect actually
+      // does in a real fight. (describeEffect's .full already appends its own
+      // duration suffix, so only the mapped/curated branch needs `dur` here.)
+      if (map[e.type]) return map[e.type] + dur;
+      return describeEffect(e).full;
+    };
+    // Resolve which dynamic_special archetype the CURRENT SPECIAL build maps to
+    // (or null). Shared by the live "current form" panel below and the dynamic
+    // description. Mirrors the resolver priority in CombatSystem.js exactly.
+    const resolveDynForm = () => {
       const ds = m.dynamic_special;
       if (!ds || !char.special) return null;
       const baseline = ds.baseline || 1;
@@ -93,9 +142,40 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
         }
       }
       const archetype = key ? ds.archetypes?.[key] : null;
-      if (!archetype) return ds.baseMsg ? `Current form: ${ds.baseMsg} (no SPECIAL points invested yet)` : null;
-      const dm = archetype.dmgMult ? `×${archetype.dmgMult} power` : null;
-      return `Current form: ${archetype.msg || key.toUpperCase()}${dm ? ` (${dm})` : ""}`;
+      const hits = m.hits_per_special ? Math.max(1, special[m.hits_per_special] || baseline) : null;
+      return { ds, key, archetype, baseline, hits, isMaxedAll };
+    };
+    const dynForm = resolveDynForm();
+    // DYNAMIC DESCRIPTION: for dynamic_special sigs (Courier), the displayed
+    // description changes with the current SPECIAL build — spelling out this
+    // exact form's hits, damage multiplier, targeting, and every status it lays
+    // down right now, on top of the static lore.
+    const dynDescNode = (() => {
+      if (!dynForm) return null;
+      const { ds, key, archetype, hits, isMaxedAll } = dynForm;
+      const rows = [];
+      if (hits != null) rows.push(`Fires ${hits} bullet${hits === 1 ? "" : "s"} this build`);
+      if (!archetype) {
+        return h("div", { style: { fontSize: "0.72rem", color: "#00d2ff", marginBottom: 10, padding: "8px 10px", background: "rgba(0,210,255,0.08)", borderRadius: 8, borderLeft: "3px solid #00d2ff" } },
+          h("div", { style: { fontWeight: 900, marginBottom: 2 } }, `CURRENT FORM — ${ds.baseMsg || "BASELINE"}`),
+          h("div", { style: { opacity: 0.85 } }, rows.length ? rows.join(" · ") : "No SPECIAL points invested — plain revolver shot. Invest SPECIAL points to reshape this move."));
+      }
+      const formName = archetype.msg || key.toUpperCase();
+      if (archetype.dmgMult) rows.push(`×${archetype.dmgMult} power`);
+      if (archetype.target) rows.push(archetype.target === "all_enemies" ? "hits ALL enemies" : archetype.target === "all_allies" ? "aids ALL allies" : String(archetype.target).replace("_", " "));
+      if (archetype.damageType) rows.push(`${archetype.damageType} damage`);
+      if (archetype.bonus) rows.push(`${String(archetype.bonus).toUpperCase()} rider`);
+      if (archetype.heal_pct) rows.push(`heals team ${Math.round(archetype.heal_pct * 100)}%`);
+      if (archetype.burst) rows.push(`+${archetype.burst} team Burst`);
+      const fxLines = []
+        .concat((archetype.self_effects || []).map((e) => `SELF: ${describeFx(e)}`))
+        .concat((archetype.team_effects || []).map((e) => `TEAM: ${describeFx(e)}`))
+        .concat((archetype.enemy_effects || []).map((e) => `ENEMY: ${describeFx(e)}`));
+      return h("div", { style: { fontSize: "0.72rem", color: "#00d2ff", marginBottom: 10, padding: "8px 10px", background: "rgba(0,210,255,0.08)", borderRadius: 8, borderLeft: "3px solid #00d2ff" } },
+        h("div", { style: { fontWeight: 900, marginBottom: 3, letterSpacing: 0.5 } }, `${isMaxedAll ? "★ MAXED FORM" : "CURRENT FORM"} — ${formName}`),
+        rows.length ? h("div", { style: { opacity: 0.9, marginBottom: fxLines.length ? 4 : 0 } }, rows.join(" · ")) : null,
+        fxLines.length ? h("div", { style: { display: "flex", flexDirection: "column", gap: 2 } }, fxLines.map((l, i) => h("div", { key: i, style: { fontSize: "0.66rem", color: "#a5f3fc" } }, "• " + l))) : null,
+        h("div", { style: { fontSize: "0.6rem", color: "#67e8f9", opacity: 0.75, marginTop: 4, fontStyle: "italic" } }, "Reshapes live as you spend SPECIAL points in the character screen."));
     })();
     // RESONANCE PANEL (Cheer Bear-specific): her power comes from the other Care
     // Bears in the roster, not from her own stats. List every other owned bear,
@@ -151,6 +231,53 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
     if (m.wish_cycle) metaTags.push("✨ WISH CYCLE (3 MODES)");
     const targetLabel = { single_enemy: "Single", all_enemies: "All Enemies", all_allies: "All Allies", self: "Self", lowest_ally: "Ally", random_enemies: "Random" }[signature.target] || signature.target;
     const chip = (txt, bg, col) => h("span", { key: txt, style: { fontSize: "0.55rem", fontWeight: 900, padding: "2px 7px", borderRadius: 5, background: bg, color: col, letterSpacing: 0.5 } }, txt);
+    // Concrete output number for this signature at its current level (every sig),
+    // so the card shows an actual "≈ 12.4K damage" figure, not just "PWR ×1.5".
+    const sigLevel = char.abilityLevels?.[signature.id] || 1;
+    const sigOut = estimateSkillOutput(signature, sigLevel, char.abilityAwaken?.[signature.id] || 0);
+    // Full status/mechanic breakdown for NON-dynamic sigs (dynamic ones get the
+    // live current-form panel above, whose effects change with the SPECIAL build).
+    const staticFx = [];
+    if (!dynForm) {
+      (signature.statusEffects || []).forEach((e) => { const d = describeFx(e); if (d) staticFx.push([e.type && String(e.type).startsWith("debuff") ? "ENEMY" : "", d, e]); });
+      (m.self_effects || []).forEach((e) => { const d = describeFx(e); if (d) staticFx.push(["SELF", d, e]); });
+      (m.team_effects || []).forEach((e) => { const d = describeFx(e); if (d) staticFx.push(["TEAM", d, e]); });
+      (m.enemy_effects || []).forEach((e) => { const d = describeFx(e); if (d) staticFx.push(["ENEMY", d, e]); });
+    }
+    const fxTagColor = (e) => e && (String(e.type).startsWith("debuff") || ["burn", "poison", "static", "freeze", "stun", "sleep", "crushed", "broken"].includes(e.type)) ? "#fca5a5" : "#7dd3fc";
+    // The equip/unlock action used to be buried at the very bottom of this card,
+    // below the unlock-gate readout, dynamic-form panel, franchise resonance
+    // panel, meta badges, damage estimate, and static-effects list -- the single
+    // most common action on this screen required scrolling past 200+ lines of
+    // read-only info first. Computed once here and rendered right after the
+    // name/flavor header instead.
+    const actionZone = !sigUnlocked
+      ? h("div", { style: { marginBottom: 12 } },
+          h("div", { style: { display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" } },
+            h("span", { style: { fontSize: "0.62rem", fontWeight: 800, color: char.level >= SIG_REQ_LEVEL ? "#4ade80" : "#f87171" } }, (char.level >= SIG_REQ_LEVEL ? "✓" : "✗") + " Level " + char.level + "/" + SIG_REQ_LEVEL),
+            h("span", { style: { fontSize: "0.62rem", fontWeight: 800, color: char.bondLevel >= SIG_REQ_BOND ? "#4ade80" : "#f87171" } }, (char.bondLevel >= SIG_REQ_BOND ? "✓" : "✗") + " Bond " + char.bondLevel + "/" + SIG_REQ_BOND)
+          ),
+          h("button", { onClick: unlockSignature, disabled: !reqMet,
+            style: { width: "100%", padding: "12px", border: "none", borderRadius: 10, cursor: reqMet ? "pointer" : "not-allowed",
+              fontWeight: 900, fontSize: "0.85rem", letterSpacing: 1, color: reqMet ? "#000" : "#666",
+              background: reqMet ? "linear-gradient(135deg,#ffd700,#daa520)" : "rgba(255,255,255,0.08)",
+              boxShadow: reqMet ? "0 0 18px rgba(255,215,0,0.5)" : "none" } },
+            "AWAKEN SIGNATURE — " + SIG_COST_GEMS + "💎 + " + SIG_COST_ESSENCE + " ESSENCE + " + SIG_COST_CREDITS.toLocaleString() + "₢"),
+          h("div", { style: { fontSize: "0.58rem", color: "var(--text-muted)", textAlign: "center", marginTop: 6 } }, "Bond with and train " + char.name + " to unlock their true power.")
+        )
+      : h("div", { style: { marginBottom: 12 } },
+          h("div", { style: { fontSize: "0.62rem", fontWeight: 900, color: gold, marginBottom: 8, letterSpacing: 1 } }, sigEquipped ? "✓ EQUIPPED & ACTIVE IN BATTLE" : "UNLOCKED — equip it to a skill slot"),
+          h("div", { style: { display: "flex", gap: 8 } },
+            h("button", { onClick: () => equipSignature(1), disabled: char.skillId === signature.id,
+              style: { flex: 1, padding: "10px", border: "1px solid " + gold, borderRadius: 8, cursor: "pointer", fontWeight: 900, fontSize: "0.72rem",
+                background: char.skillId === signature.id ? gold : "transparent", color: char.skillId === signature.id ? "#000" : gold } },
+              char.skillId === signature.id ? "IN SLOT 1" : "EQUIP → SLOT 1"),
+            h("button", { onClick: () => equipSignature(2), disabled: char.skillId2 === signature.id || char.level < 50,
+              style: { flex: 1, padding: "10px", border: "1px solid " + gold, borderRadius: 8, cursor: char.level < 50 ? "not-allowed" : "pointer", fontWeight: 900, fontSize: "0.72rem",
+                background: char.skillId2 === signature.id ? gold : "transparent", color: char.skillId2 === signature.id ? "#000" : (char.level < 50 ? "#666" : gold), opacity: char.level < 50 ? 0.5 : 1 } },
+              char.skillId2 === signature.id ? "IN SLOT 2" : "EQUIP → SLOT 2")
+          )
+        );
     return h("div", { style: {
         marginBottom: 22, padding: 2, borderRadius: 16,
         background: "linear-gradient(135deg, #ffd700, #b8860b 40%, #fff8dc 60%, #daa520)",
@@ -163,44 +290,31 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
         h("div", { style: { fontSize: "1.35rem", fontWeight: 900, color: "#fff", textShadow: "0 0 12px rgba(255,215,0,0.6)", marginTop: 2 } }, signature.name),
         signature.flavor ? h("div", { style: { fontSize: "0.7rem", fontStyle: "italic", color: gold, opacity: 0.85, marginBottom: 6 } }, '"' + signature.flavor + '"') : null,
         h("p", { style: { fontSize: "0.78rem", color: "#e5e7eb", lineHeight: 1.4, margin: "6px 0 10px" } }, signature.desc),
-        dynamicArchetypeText ? h("div", { style: { fontSize: "0.7rem", fontWeight: 800, color: "#00d2ff", marginBottom: 10, padding: "6px 10px", background: "rgba(0,210,255,0.08)", borderRadius: 8, borderLeft: "3px solid #00d2ff" } }, dynamicArchetypeText) : null,
+        actionZone,
+        h("div", { style: { fontSize: "0.55rem", fontWeight: 900, letterSpacing: 1, color: gold, opacity: 0.6, margin: "14px 0 8px", borderTop: "1px solid rgba(255,215,0,0.15)", paddingTop: 10 } }, "MECHANICS"),
+        dynDescNode,
         resonancePanel,
         // stat chips
         h("div", { style: { display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 } },
           chip(signature.type === "heal" ? "HEAL ×" + signature.power : signature.type === "buff" ? "SUPPORT" : "PWR ×" + signature.power, "rgba(74,222,128,0.15)", "#4ade80"),
           chip("CD " + signature.cooldown, "rgba(96,165,250,0.15)", "#60a5fa"),
           chip(targetLabel, "rgba(168,85,247,0.15)", "#c084fc"),
+          chip("Scales " + (statMap => statMap[signature.scalingStat] || (signature.damageType === "magical" ? "Magic ATK" : "ATK"))({ atk: "ATK", magic_atk: "Magic ATK", def: "DEF", speed: "Speed", hp: "HP", luck: "Luck" }), "rgba(96,165,250,0.15)", "#60a5fa"),
           ...metaTags.map((t) => chip(t, "rgba(255,215,0,0.15)", gold)),
           ...effTags.map((t) => chip(t, "rgba(239,68,68,0.12)", "#fca5a5"))
         ),
-        // action zone
-        !sigUnlocked
-          ? h("div", null,
-              h("div", { style: { display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" } },
-                h("span", { style: { fontSize: "0.62rem", fontWeight: 800, color: char.level >= SIG_REQ_LEVEL ? "#4ade80" : "#f87171" } }, (char.level >= SIG_REQ_LEVEL ? "✓" : "✗") + " Level " + char.level + "/" + SIG_REQ_LEVEL),
-                h("span", { style: { fontSize: "0.62rem", fontWeight: 800, color: char.bondLevel >= SIG_REQ_BOND ? "#4ade80" : "#f87171" } }, (char.bondLevel >= SIG_REQ_BOND ? "✓" : "✗") + " Bond " + char.bondLevel + "/" + SIG_REQ_BOND)
-              ),
-              h("button", { onClick: unlockSignature, disabled: !reqMet,
-                style: { width: "100%", padding: "12px", border: "none", borderRadius: 10, cursor: reqMet ? "pointer" : "not-allowed",
-                  fontWeight: 900, fontSize: "0.85rem", letterSpacing: 1, color: reqMet ? "#000" : "#666",
-                  background: reqMet ? "linear-gradient(135deg,#ffd700,#daa520)" : "rgba(255,255,255,0.08)",
-                  boxShadow: reqMet ? "0 0 18px rgba(255,215,0,0.5)" : "none" } },
-                "AWAKEN SIGNATURE — " + SIG_COST_GEMS + "💎 + " + SIG_COST_ESSENCE + " ESSENCE + " + SIG_COST_CREDITS.toLocaleString() + "₢"),
-              h("div", { style: { fontSize: "0.58rem", color: "var(--text-muted)", textAlign: "center", marginTop: 6 } }, "Bond with and train " + char.name + " to unlock their true power.")
-            )
-          : h("div", null,
-              h("div", { style: { fontSize: "0.62rem", fontWeight: 900, color: gold, marginBottom: 8, letterSpacing: 1 } }, sigEquipped ? "✓ EQUIPPED & ACTIVE IN BATTLE" : "UNLOCKED — equip it to a skill slot"),
-              h("div", { style: { display: "flex", gap: 8 } },
-                h("button", { onClick: () => equipSignature(1), disabled: char.skillId === signature.id,
-                  style: { flex: 1, padding: "10px", border: "1px solid " + gold, borderRadius: 8, cursor: "pointer", fontWeight: 900, fontSize: "0.72rem",
-                    background: char.skillId === signature.id ? gold : "transparent", color: char.skillId === signature.id ? "#000" : gold } },
-                  char.skillId === signature.id ? "IN SLOT 1" : "EQUIP → SLOT 1"),
-                h("button", { onClick: () => equipSignature(2), disabled: char.skillId2 === signature.id || char.level < 50,
-                  style: { flex: 1, padding: "10px", border: "1px solid " + gold, borderRadius: 8, cursor: char.level < 50 ? "not-allowed" : "pointer", fontWeight: 900, fontSize: "0.72rem",
-                    background: char.skillId2 === signature.id ? gold : "transparent", color: char.skillId2 === signature.id ? "#000" : (char.level < 50 ? "#666" : gold), opacity: char.level < 50 ? 0.5 : 1 } },
-                  char.skillId2 === signature.id ? "IN SLOT 2" : "EQUIP → SLOT 2")
-              )
-            )
+        // Concrete output number — turns "PWR ×1.5" into a real figure.
+        sigOut ? h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "7px 10px", borderRadius: 8, background: sigOut.kind === "HEAL" ? "rgba(74,222,128,0.08)" : "rgba(239,68,68,0.08)", border: "1px solid rgba(255,215,0,0.25)" } },
+          h("span", { style: { fontSize: "0.55rem", fontWeight: 900, letterSpacing: 1, color: "var(--text-muted)" } }, sigOut.kind === "HEAL" ? "HEALS" : "HITS FOR"),
+          h("span", { style: { fontSize: "1.15rem", fontWeight: 900, color: sigOut.kind === "HEAL" ? "#4ade80" : "#fca5a5" } }, "≈ " + fmtNum(sigOut.val)),
+          h("span", { style: { fontSize: "0.5rem", color: "var(--text-muted)", marginLeft: "auto" } }, `at LV.${sigLevel}${sigOut.kind === "HEAL" ? "" : " · before enemy DEF"}`)) : null,
+        // What every buff/debuff actually DOES (static sigs; dynamic sigs show it live above).
+        staticFx.length ? h("div", { style: { marginBottom: 12, padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" } },
+          h("div", { style: { fontSize: "0.55rem", fontWeight: 900, letterSpacing: 1, color: gold, opacity: 0.8, marginBottom: 5 } }, "EFFECTS"),
+          h("div", { style: { display: "flex", flexDirection: "column", gap: 3 } }, staticFx.map(([who, txt, e], i) =>
+            h("div", { key: i, style: { display: "flex", alignItems: "baseline", gap: 6, fontSize: "0.66rem", color: "#e5e7eb" } },
+              who ? h("span", { style: { fontSize: "0.5rem", fontWeight: 900, color: who === "ENEMY" ? "#fca5a5" : "#7dd3fc", minWidth: 34 } }, who) : h("span", { style: { minWidth: 34 } }, ""),
+              h("span", { style: { color: fxTagColor(e) } }, "• " + txt))))) : null
       )
     );
   };
@@ -221,8 +335,10 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
   const skill2 = char.skillId2 ? (skills || []).find((s) => s.id === char.skillId2) : null;
   const level1 = char.abilityLevels?.[skill1.id] || 1;
   const level2 = skill2 ? char.abilityLevels?.[skill2.id] || 1 : 0;
+  const MAX_SKILL_LEVEL = 1000;
   const upgrade = (skillId, costType) => {
     const currentLevel = char.abilityLevels?.[skillId] || 1;
+    if (currentLevel >= MAX_SKILL_LEVEL) { createFloatingText("MAX SKILL LV.1000", true); playSound("error"); return; }
     const cost = costType === "sp" ? 1 : 500 * (currentLevel + 1);
     if (costType === "sp" && (char.skillPoints || 0) < 1) return;
     if (costType === "credits" && credits < cost) return;
@@ -243,9 +359,11 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
   // Cost per level is 500*(level+1), so it ramps — MAX just spends the whole wallet.
   const upgradeBulk = (skillId, times) => {
     let lvl = char.abilityLevels?.[skillId] || 1;
+    if (lvl >= MAX_SKILL_LEVEL) { createFloatingText("MAX SKILL LV.1000", true); playSound("error"); return; }
     let budget = credits;
     let bought = 0;
     for (let i = 0; i < times; i++) {
+      if (lvl >= MAX_SKILL_LEVEL) break;
       const c = 500 * (lvl + 1);
       if (budget < c) break;
       budget -= c;
@@ -301,6 +419,41 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
     });
     playSound("summon_reveal");
     createFloatingText(slot === 2 && !char.skillId2 ? "SECOND SLOT UNLOCKED!" : "SKILL REROLLED!", false, "#00d2ff");
+  };
+  // ============================ SHARD BOOST ============================
+  // What Ability Shards (farmed from Grind Dungeons) actually do: burn them to
+  // instantly push an EQUIPPED skill's level up, for free, no credits. Only
+  // works on a skill you already have on slot 1/2 -- shards reward playing an
+  // ability you've chosen, they don't hand you a new one for free.
+  const SHARDS_PER_LEVEL = { Common: 3, Uncommon: 4, Rare: 6, Epic: 10, Legendary: 16 };
+  const shardBoost = (skill) => {
+    const cost = SHARDS_PER_LEVEL[skill.rarity] || 5;
+    const owned = abilityShards[skill.id] || 0;
+    if (owned < cost) { createFloatingText(`Need ${cost} ${skill.name} shards (have ${owned})`, true); playSound("error"); return; }
+    if (typeof setAbilityShards === "function") setAbilityShards((prev) => ({ ...prev, [skill.id]: (prev[skill.id] || 0) - cost }));
+    setCharacters((prev) => {
+      const next = [...prev];
+      const c = { ...next[selectedCharIndex] };
+      c.abilityLevels = { ...(c.abilityLevels || {}) };
+      c.abilityLevels[skill.id] = Math.min(MAX_SKILL_LEVEL, (c.abilityLevels[skill.id] || 1) + 1);
+      next[selectedCharIndex] = c;
+      return next;
+    });
+    playSound("upgrade");
+    createFloatingText(`SHARD BOOST! ${skill.name} LV UP`, false, "#00d2ff");
+  };
+  const renderShardBoost = (skill) => {
+    if (!skill || skill.signature) return null;
+    const owned = abilityShards[skill.id] || 0;
+    if (!owned) return null;
+    const h = React.createElement;
+    const cost = SHARDS_PER_LEVEL[skill.rarity] || 5;
+    const ready = owned >= cost;
+    return h("button", {
+      className: "upgrade-btn", disabled: !ready, style: { background: ready ? "linear-gradient(135deg,#00d2ff,#0891b2)" : undefined, opacity: ready ? 1 : 0.6 },
+      onClick: () => shardBoost(skill),
+      title: `Spend ${cost} shards for an instant level`
+    }, `⚡ ${owned} SHARDS`);
   };
   const awaken = (skillId) => {
     const rank = char.abilityAwaken?.[skillId] || 0;
@@ -391,7 +544,8 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
     def: calculateStat(char.baseStats?.def || 0, char.level, char, characters, "def"),
     hp: calculateStat(char.baseStats?.hp || 0, char.level, char, characters, "hp"),
     speed: calculateStat(char.baseStats?.speed || 0, char.level, char, characters, "speed"),
-    luck: calculateStat(char.baseStats?.luck || 10, char.level, char, characters, "luck")
+    luck: calculateStat(char.baseStats?.luck || 10, char.level, char, characters, "luck"),
+    technique: calculateSubStat(char, characters, "technique", skills, auraUpgrades)
   };
   const estimateSkillOutput = (skill, level, awaken = 0) => {
     if (!skill || skill.type === "buff") return null;
@@ -412,7 +566,11 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
     else if (s.includes("magic")) offense = cStats.magicAtk;
     else if (s.includes("atk")) offense = cStats.atk;
     const sigMult = skill.signature ? SIGNATURE_BONUS.DAMAGE : 1;
-    const skillPower = (skill.power || 1) * (1 + (level - 1) * 0.05) * (1 + awaken * 0.1) * sigMult;
+    // Technique bonus mirrors executeCombatSkill's skillPower multiplier exactly
+    // (see CombatSystem.js) so this preview number doesn't silently drift from
+    // what the skill will actually do in a real battle.
+    const techMult = 1 + Math.min(0.6, (cStats.technique || 0) / 400);
+    const skillPower = (skill.power || 1) * (1 + (level - 1) * 0.05) * (1 + awaken * 0.1) * sigMult * techMult;
     const dmg = Math.floor(offense * skillPower * 0.85);
     return { kind: "DMG", val: dmg };
   };
@@ -485,7 +643,8 @@ const AbilitiesView = ({ char, characters = [], credits, setCredits, setCharacte
             fileName: "<stdin>",
             lineNumber: 1214,
             columnNumber: 13
-          })
+          }),
+          renderShardBoost(skill)
         ] }, void 0, true, {
           fileName: "<stdin>",
           lineNumber: 1212,

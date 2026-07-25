@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Sparkles, ShoppingBag, Star, Gem, Database, Plus, ChevronLeft, Zap } from "lucide-react";
-import { BattleUnit, executeCombatSkill, TacticalStanceRow, getBattleStats, applyStatusTick, resolveBasicAttack, getCastAnimMs, getLungeMs, getBasicAttackMs, HITSTOP_BUFFER_MS, ProjectileLayer } from "../CombatSystem.js";
-import { ELEMENTS, BOSS_ROSTER, EQUIPMENT } from "../constants.js";
-import { calculateStat, playSound, calculateSubStat, getEnemyStatsFromCP, applyLeaderBonus, applyMitigation, incrementCourierFieldBattles, getGaugeGain, rollEnemyGear, getActiveEvents, getGimmick, makeGearInstanceId } from "../utils.js";
+import { BattleUnit, executeCombatSkill, TacticalStanceRow, getBattleStats, applyStatusTick, resolveBasicAttack, getCastAnimMs, getCastAnimSound, getLungeMs, getBasicAttackMs, getCooldownGain, getFlurryHitSound, HITSTOP_BUFFER_MS, ProjectileLayer, TurnOrderStrip } from "../CombatSystem.js";
+import { ELEMENTS, BOSS_ROSTER, EQUIPMENT, AUTO_CLEAR_PWR_MULT } from "../constants.js";
+import { calculateStat, playSound, calculateSubStat, getEnemyStatsFromCP, applyLeaderBonus, applyCrewChemistry, applyMitigation, incrementCourierFieldBattles, getGaugeGain, rollEnemyGear, getActiveEvents, getGimmick, makeGearInstanceId, INITIAL_GAUGE_RANGE } from "../utils.js";
 import { CampaignIntro } from "./ViewShared.js";
 
 // EVENTS -- full rewrite. Multiple events run CONCURRENTLY (see
@@ -38,6 +38,7 @@ const STAGE_COUNT = 6;
 
 const EventsView = ({
   onWorldTimeStop,
+  cameoId = null,
   characters = [],
   unlockedIds = [],
   squadIds = [],
@@ -121,11 +122,91 @@ const EventsView = ({
   // simulation for exactly as long as the current cast's animation plays, so
   // nothing else can act (or even fill gauge) mid-ability.
   const hitStopUntil = useRef(0);
+  // COMBO CHAIN -- see CampaignView's identical mechanic. Every ally hit
+  // extends it, any enemy action breaks it; the multiplier feeds resolveBasicAttack
+  // (comboMult) AND executeCombatSkill (extraPowerMult), and the raw count also
+  // feeds the melee flurry's own comboAmp (resolveBasicAttack's comboCount) so a
+  // live chain snowballs into bigger, more air-heavy combos, not just more damage.
+  const comboRef = useRef({ count: 0 });
+  const [comboDisplay, setComboDisplay] = useState(0);
+  const comboMult = () => 1 + Math.min(0.4, comboRef.current.count * 0.02);
+  const bumpCombo = (n = 1) => {
+    comboRef.current.count += n;
+    setComboDisplay(comboRef.current.count);
+  };
+  const breakCombo = () => {
+    if (comboRef.current.count > 0) {
+      comboRef.current.count = 0;
+      setComboDisplay(0);
+    }
+  };
   const battleSceneRef = useRef(null);
+  // Combat SFX + skill-name banner -- parity with Campaign so Event battles
+  // aren't silent. soundCastTs gates the "a skill just fired" sting; the SFX map
+  // gates per-landed-hit sounds so each resolved action pops exactly once.
+  const [activeSkillBanner, setActiveSkillBanner] = useState(null);
+  const soundCastTs = useRef(0);
+  const handledSfxTimes = useRef(/* @__PURE__ */ new Map());
   const [playerElement, setPlayerElement] = useState("FIRE");
   const [autoBattle, setAutoBattle] = useState(true);
   const [combatSpeed, setCombatSpeed] = useState(1.5);
   const [floatingDamages, setFloatingDamages] = useState([]);
+
+  // CAMEO / GUEST SUMMON -- ported from CampaignView so guest abilities work
+  // in every battle mode. Same rules: 2 uses/battle, ~60s between uses, first
+  // use available immediately, auto-fires while Auto is on (tick loop below).
+  const cameoData = useMemo(() => {
+    if (!cameoId) return null;
+    const c = (characters || []).find((x) => String(x.export_id) === String(cameoId));
+    if (!c) return null;
+    const sig = (skills || []).find((s) => s.signature && s.owner === c.name);
+    if (!sig) return null;
+    if (!(c.signatureUnlocked || (c.abilityLevels && c.abilityLevels[sig.id]))) return null;
+    return { sigId: sig.id, img: c.imageUrl, name: c.name, element: c.element, sigName: sig.name };
+  }, [cameoId, characters, skills]);
+  const cameoRef = useRef({ usesLeft: 2, lastUsed: 0 });
+  const [cameoCutin, setCameoCutin] = useState(null);
+  const triggerCameo = () => {
+    if (battleState !== "ACTIVE" || !cameoData) return;
+    if (Date.now() < hitStopUntil.current) return;
+    if (cameoRef.current.usesLeft <= 0) return;
+    if (Date.now() - cameoRef.current.lastUsed < 60000) return;
+    setCombatants((prev) => {
+      const next = [...prev];
+      const allies = next.filter((u) => !u.isEnemy && !u.dead);
+      if (!allies.length) return prev;
+      const idx = next.findIndex((u) => u.id === allies.reduce((best, u) => (u.gauge || 0) > (best.gauge || 0) ? u : best, allies[0]).id);
+      const caster = next[idx];
+      const orig = { skillId2: caster.skillId2, skillCd2: caster.skillCd2, maxSkillCd2: caster.maxSkillCd2, abilityLevel2: caster.abilityLevel2, skillCd: caster.skillCd, maxSkillCd: caster.maxSkillCd };
+      caster.skillId2 = cameoData.sigId;
+      caster.maxSkillCd2 = 0;
+      caster.skillCd2 = 0;
+      caster.abilityLevel2 = caster.abilityLevel2 || 1;
+      caster.maxSkillCd = 999999;
+      caster.skillCd = 0;
+      const ns = executeCombatSkill({ combatants: next, attackerId: caster.id, skills, playerElement, isLimitBreak: false });
+      ns.forEach((s, i) => next[i] = s);
+      const after = next[idx];
+      after.skillId2 = orig.skillId2;
+      after.skillCd2 = orig.skillCd2;
+      after.maxSkillCd2 = orig.maxSkillCd2;
+      after.abilityLevel2 = orig.abilityLevel2;
+      after.skillCd = orig.skillCd;
+      after.maxSkillCd = orig.maxSkillCd;
+      after._cameoImg = cameoData.img;
+      after._cameoRevertAt = Date.now() + 1600;
+      cameoRef.current.usesLeft -= 1;
+      cameoRef.current.lastUsed = Date.now();
+      setCameoCutin({ guest: cameoData.name, sig: cameoData.sigName, user: after.name, img: cameoData.img, element: cameoData.element });
+      hitStopUntil.current = Math.max(hitStopUntil.current, Date.now() + 260);
+      playSound("mugen_super", 0.5);
+      setTimeout(() => setCameoCutin(null), 2200);
+      return next;
+    });
+  };
+  React.useEffect(() => {
+    if (battleState === "ACTIVE") cameoRef.current = { usesLeft: 2, lastUsed: 0 };
+  }, [battleState]);
 
   const extractFranchise = (c) => c ? String(c.franchise || "Unknown").trim() : "Unknown";
 
@@ -283,6 +364,60 @@ const EventsView = ({
     setBattleMusicActive?.(false); setIsVictoryMusic?.(false); setEventTheme(null);
   };
 
+  // AUTO-CLEAR: once the squad's PWR clears a stage's recommended power by
+  // AUTO_CLEAR_PWR_MULT, skip the battle and grant rewards instantly. Only
+  // offered on the DAILY SPOTLIGHT event -- the last two live slots (the
+  // WEEKLY CRISIS and the SURGE/WEEKEND event) are deliberately excluded and
+  // always have to be played out by hand, no matter how overpowered the squad is.
+  const totalSquadPWR = useMemo(() => (squadIds || []).reduce((sum, id) => {
+    const c = characters.find((ch) => String(ch.export_id) === String(id));
+    return sum + (c ? calculateSubStat(c, characters, "pwr", skills, auraUpgrades) : 0);
+  }, 0), [squadIds, characters, skills, auraUpgrades]);
+  const canAutoClearEventStage = (stage) => {
+    if (!stage) return false;
+    const evt = liveEvents.find((e) => e.uid === stage.eventUid);
+    if (!evt || evt.id !== "spotlight") return false;
+    return totalSquadPWR >= stage.cp * AUTO_CLEAR_PWR_MULT;
+  };
+  const autoClearEventStage = (stage) => {
+    if (!stage || !canAutoClearEventStage(stage)) return;
+    if (stamina < stage.stamina) { createFloatingText(`Need ${stage.stamina} Stamina!`, true); return; }
+    if (squadIds.length === 0) { createFloatingText("Squad is empty!", true); setShowSquadBuilder(true); return; }
+    setStamina((s) => s - stage.stamina);
+    const squad = characters.filter((c) => squadIds.map(String).includes(String(c.export_id)));
+    incrementCourierFieldBattles(setCharacters, squad.map((c) => ({ isEnemy: false, name: c.name })));
+    bumpProgress(stage.eventUid, stage.id);
+    const r = stage.rewards || {};
+    const rewardMult = stage.isBoss ? 2 : 1;
+    if (r.credits) setCredits((c) => c + Math.floor(r.credits * rewardMult));
+    if (r.gems) setGems((g) => g + Math.floor(r.gems * rewardMult));
+    if (r.essence) {
+      const addE = Math.floor(r.essence * rewardMult);
+      setEssence((e) => e + addE);
+      const curE = parseInt(localStorage.getItem("mugen_essence") || "0", 10);
+      localStorage.setItem("mugen_essence", String(curE + addE));
+    }
+    if (r.tokens) {
+      const earned = Math.floor(r.tokens * rewardMult);
+      setEventTokens((t) => t + earned);
+      setLedger((prev) => {
+        const nextProgress = prev.progress + earned;
+        localStorage.setItem("mugen_event_ledger_progress", String(nextProgress));
+        return { ...prev, progress: nextProgress };
+      });
+    }
+    if (r.grantsEventGear && (progressMap[stage.eventUid] || 0) < stage.id && typeof setGearInventory === "function") {
+      const itemId = EVENT_GEAR_POOL[Math.abs(stage.eventUid.length + stage.id) % EVENT_GEAR_POOL.length];
+      let slot = "weapon";
+      for (const s of ["weapon", "armor", "trinket"]) { if ((EQUIPMENT[s] || []).some((it) => it.id === itemId)) { slot = s; break; } }
+      const item = (EQUIPMENT[slot] || []).find((it) => it.id === itemId);
+      setGearInventory((prev) => [...prev, { instanceId: makeGearInstanceId(), slot, itemId, level: 1 }]);
+      createFloatingText(`EVENT REWARD: ${item?.name || itemId}!`, false, "#4ade80");
+    }
+    setPendingStage(null);
+    createFloatingText(`AUTO-CLEARED: ${stage.name}!`, false, "#00d2ff");
+    playSound("success");
+  };
   const startBattle = (stage) => {
     if (stamina < stage.stamina) { createFloatingText(`Need ${stage.stamina} Stamina!`, true); return; }
     if (squadIds.length === 0) { createFloatingText("Squad is empty!", true); setShowSquadBuilder(true); return; }
@@ -296,6 +431,11 @@ const EventsView = ({
     setIsHardBattle?.(stage.isBoss || stage.id >= 4);
     setFloatingDamages([]);
     stormTickRef.current = 0;
+    comboRef.current.count = 0;
+    setComboDisplay(0);
+    // Reset SFX gates so the new battle's first cast/hit isn't swallowed.
+    soundCastTs.current = 0;
+    handledSfxTimes.current = new Map();
     const gimmick = stage.gimmick;
     const isGlassCannon = gimmick === "glass_cannon";
     const squad = characters.filter((c) => squadIds.map(String).includes(String(c.export_id)));
@@ -324,15 +464,20 @@ const EventsView = ({
         isEnemy: false,
         special: c.special,
         equipSlots: c.equipSlots,
-        gauge: Math.random() * 30,
+        gauge: Math.random() * INITIAL_GAUGE_RANGE,
         burst: 0,
-        effects: gimmick === "regen_field" ? [{ type: "regen", duration: 9999, val: 0.02, label: "REGEN FIELD" }] : [],
+        effects: [
+          ...(gimmick === "regen_field" ? [{ type: "regen", duration: 9999, val: 0.02, label: "REGEN FIELD" }] : gimmick === "crit_surge" ? [{ type: "buff_crit", duration: 9999, val: 0.3, label: "BLOOD MOON" }] : []),
+          ...(c.name === "Jimmy Neutron" ? [{ type: "aggro", duration: 3, val: 0, label: "NOT LIKE THIS..." }] : [])
+        ],
         dead: false,
         critRate: calculateSubStat(c, characters, "crit_rate", skills, auraUpgrades) / 100,
+        technique: calculateSubStat(c, characters, "technique", skills, auraUpgrades),
         evasion: calculateSubStat(c, characters, "evasion", skills, auraUpgrades) / 100
       };
     });
     const leaderChar = squadIds[0] ? characters.find((c) => String(c.export_id) === String(squadIds[0])) : null;
+    allies.forEach((a) => applyCrewChemistry(a, squad));
     allies.forEach((a) => applyLeaderBonus(leaderChar, a, squad));
     const na = Math.max(1, allies.length);
     const avgAlly = {
@@ -378,7 +523,7 @@ const EventsView = ({
       let bossSkillId2 = isBossUnit ? pickElite(i + 133) : null;
       if (bossRosterDef) { const sig = findBossSig(bossRosterDef.name); if (sig) bossSkillId2 = sig.id; }
       if (champ) { const sig = findBossSig(champ.name); if (sig) bossSkillId2 = sig.id; }
-      const sigChance = isBossUnit ? (stage.id >= 5 ? 0.85 : 0.35) : 0.15;
+      const sigChance = isBossUnit ? (stage.id >= 5 ? 0.85 : 0.5) : 0.25;
       if (!bossRosterDef && !champ && Math.random() < sigChance) {
         const signaturePool = (skills || []).filter((s) => s.signature);
         const elementSignatures = signaturePool.filter((s) => { const owner = characters.find((c) => c.name === s.owner); return owner && owner.element === template.element; });
@@ -392,7 +537,7 @@ const EventsView = ({
         img: champ ? champ.imageUrl : bossRosterDef ? bossRosterDef.img : (stage.isBoss ? "boss_void_executioner.png" : template.imageUrl),
         ...stats,
         element: champ ? champ.element : bossRosterDef ? bossRosterDef.element : template.element,
-        franchise: champ ? stage.franchise : bossRosterDef ? "Bosses" : template.franchise,
+        franchise: champ ? stage.franchise : bossRosterDef ? (bossRosterDef.franchise || "Bosses") : template.franchise,
         level: Math.min(100, 20 + stage.id * 10),
         _equippedGear: rollEnemyGear(isBossUnit ? Math.min(4, 1 + Math.floor(stage.id / 2)) : Math.min(3, Math.floor(stage.id / 2))),
         skillId: isBossUnit ? pickElite(i + 77) : template.skillId,
@@ -403,10 +548,13 @@ const EventsView = ({
         skillCd: 0, skillCd2: 0, maxSkillCd2: 60,
         isEnemy: true, isBoss: isBossUnit,
         maxStagger: isBossUnit ? 2400 : 600, stagger: 0,
-        gauge: 60 + Math.random() * 40, burst: 0,
+        // Fair-start fix: this used to seed 60-100 (could start almost full),
+        // giving events' enemies a near-guaranteed first move. Same range as allies now.
+        gauge: Math.random() * INITIAL_GAUGE_RANGE, burst: 0,
         effects: [
           ...(isBossUnit ? [{ type: "buff_atk", duration: 99, val: bossAtkBuff, label: "EVENT FURY" }, { type: "shield", duration: 99, val: 0.2, label: "VOID ARMOR" }] : []),
-          ...(gimmick === "regen_field" ? [{ type: "regen", duration: 9999, val: 0.02, label: "REGEN FIELD" }] : [])
+          ...(gimmick === "regen_field" ? [{ type: "regen", duration: 9999, val: 0.02, label: "REGEN FIELD" }] : []),
+          ...(gimmick === "crit_surge" ? [{ type: "buff_crit", duration: 9999, val: 0.3, label: "BLOOD MOON" }] : [])
         ],
         dead: false
       };
@@ -417,6 +565,12 @@ const EventsView = ({
   React.useEffect(() => {
     if (battleState !== "ACTIVE") return;
     const timer = setInterval(() => {
+      // Guest summon, auto-piloted -- fires the instant it's ready while Auto
+      // is on (see CampaignView's identical hook for why).
+      if (autoBattle && cameoData && Date.now() >= hitStopUntil.current) {
+        const cameoReady = cameoRef.current.usesLeft > 0 && Date.now() - cameoRef.current.lastUsed >= 60000;
+        if (cameoReady) triggerCameo();
+      }
       setCombatants((prev) => {
         if (!prev || prev.length === 0) return prev;
         // HIT-STOP: freeze the simulation for a beat while a cast animation
@@ -437,12 +591,16 @@ const EventsView = ({
         }
         const battleSpeeds = next.filter((u) => !u.dead).map((u) => getBattleStats(u, playerElement, u.activeSynergies || []).speed);
         const gaugeMult = gimmick === "double_gauge" ? 1.4 : 1;
-        next.forEach((u) => {
+        // Fair-start fix: shuffle scan order each tick so same-tick gauge-100 ties
+        // aren't always won by enemies (see CampaignView.js for the full rationale).
+        const scanOrder = [...next].sort(() => Math.random() - 0.5);
+        scanOrder.forEach((u) => {
           if (u.dead) return;
+          // HIT-STUN -- see CombatSystem's getHitstunMs/applyHitstun.
+          if (Date.now() < (u._hitstunUntil || 0)) return;
           const stats = getBattleStats(u, playerElement, u.activeSynergies || []);
           u.gauge += getGaugeGain(stats.speed, battleSpeeds, combatSpeed) * gaugeMult;
-          if (u.skillCd < u.maxSkillCd) u.skillCd += 1;
-          if (u.skillId2 && u.skillCd2 < u.maxSkillCd2) u.skillCd2 += 1;
+          { const cdg = getCooldownGain(u); if (u.skillCd < u.maxSkillCd) u.skillCd = Math.min(u.maxSkillCd, u.skillCd + cdg); if (u.skillId2 && u.skillCd2 < u.maxSkillCd2) u.skillCd2 = Math.min(u.maxSkillCd2, u.skillCd2 + cdg); }
           if (u.gauge >= 100) {
             // Same-tick guard -- see CampaignView's identical check for why.
             if (Date.now() < hitStopUntil.current) return;
@@ -467,7 +625,7 @@ const EventsView = ({
             const s1Ready = u.skillCd >= u.maxSkillCd;
             const s2Ready = u.skillId2 && u.skillCd2 >= u.maxSkillCd2;
             if ((u.isEnemy || autoBattle) && (s1Ready || s2Ready || isBurstReady)) {
-              const nextState = executeCombatSkill({ combatants: next, attackerId: u.id, skills, playerElement, isLimitBreak: isBurstReady });
+              const nextState = executeCombatSkill({ combatants: next, attackerId: u.id, skills, playerElement, isLimitBreak: isBurstReady, extraPowerMult: u.isEnemy ? 1 : comboMult() });
               nextState.forEach((ns, ni) => next[ni] = ns);
               const casterAfter = next.find((n) => n.id === u.id);
               if (casterAfter?._triggeredTimeStopAt && timeStopHandledRef.current[u.id] !== casterAfter._triggeredTimeStopAt) {
@@ -475,15 +633,30 @@ const EventsView = ({
                 if (typeof onWorldTimeStop === "function") onWorldTimeStop(casterAfter._timeStopMusicMs || 5000);
               }
               const castMs = getCastAnimMs(casterAfter?.lastCastAnim);
-              if (castMs) hitStopUntil.current = Date.now() + castMs + HITSTOP_BUFFER_MS;
+              // BUG FIX: must match BattleUnit's speed-scaled animMs (see
+              // battleUI.jsx) or the sim idles after the visual animation
+              // (now shorter at 1.5x/2x) finishes.
+              if (castMs) hitStopUntil.current = Date.now() + Math.max(200, Math.round(castMs / (combatSpeed || 1))) + HITSTOP_BUFFER_MS;
+              if (u.isEnemy) breakCombo(); else bumpCombo(2);
               return;
             }
-            const result = resolveBasicAttack({ attacker: u, allUnits: next, playerElement });
+            const result = resolveBasicAttack({ attacker: u, allUnits: next, playerElement, comboMult, comboCount: comboRef.current.count, skills });
             if (result) {
-              hitStopUntil.current = Date.now() + getBasicAttackMs(result.meleeAir) + HITSTOP_BUFFER_MS;
+              hitStopUntil.current = Date.now() + Math.max(200, Math.round(getBasicAttackMs(result.meleeAir) / (combatSpeed || 1))) + HITSTOP_BUFFER_MS;
+              if (u.isEnemy) breakCombo(); else bumpCombo(result.meleeHits || 1);
               if (!result.missed) {
                 if (!u.isEnemy) { u._battleDamage = (u._battleDamage || 0) + result.amount; u._battleBestHit = Math.max(u._battleBestHit || 0, result.amount); }
-                setFloatingDamages((prev2) => [...prev2, { id: Math.random(), targetId: result.targetId, amount: result.amount, type: "normal" }]);
+                // One number per flurry strike (staggered + self-removing), each
+                // with its own hit sound, so the combo reads AND sounds like a
+                // real chain. Air combos get an extra whoosh on the launching hit.
+                const splits = result.hitSplits && result.hitSplits.length ? result.hitSplits : [result.amount];
+                splits.forEach((d, hi) => setTimeout(() => {
+                  const fid = Math.random();
+                  setFloatingDamages((prev2) => [...prev2, { id: fid, targetId: result.targetId, amount: d, type: hi === splits.length - 1 && splits.length > 1 ? "crit" : "normal" }]);
+                  setTimeout(() => setFloatingDamages((prev2) => prev2.filter((x) => x.id !== fid)), 1e3);
+                  playSound(getFlurryHitSound(hi, splits.length, result.meleeAir), hi === splits.length - 1 ? 0.4 : 0.22);
+                  if (hi === 0 && result.meleeAir) playSound(["spin0", "spin1", "spin2"][Math.floor(Math.random() * 3)], 0.35);
+                }, hi * 105));
               }
             }
           }
@@ -493,6 +666,53 @@ const EventsView = ({
     }, 50);
     return () => clearInterval(timer);
   }, [battleState, combatSpeed, activeStage]);
+
+  // Combat SFX + skill banner -- mirrors CampaignView so Event battles sound
+  // (and read) like the rest of the game. Watches combatants AFTER each
+  // resolution: a fresh cast (lastSkillTime past the gate) plays a
+  // type-appropriate M.U.G.E.N sting and flashes the skill name; each landed
+  // action pops a hit sound exactly once (keyed by lastAction.time).
+  React.useEffect(() => {
+    if (battleState !== "ACTIVE") return;
+    const recentCaster = combatants.find((c) => (c.lastSkillTime || 0) > soundCastTs.current);
+    if (recentCaster) {
+      soundCastTs.current = recentCaster.lastSkillTime;
+      const sid = (recentCaster.lastSkillIds && recentCaster.lastSkillIds[0]) || recentCaster.skillId;
+      const skill = (skills || []).find((s) => s.id === sid);
+      if (skill) {
+        setActiveSkillBanner({ name: skill.name, user: recentCaster.name });
+        setTimeout(() => setActiveSkillBanner(null), 1500);
+        if (skill.type === "heal") playSound("heal_spell");
+        else if (skill.id === "taunt") playSound("mugen_taunt");
+        else if (skill.type === "buff" || skill.id === "guard") { playSound("shield_up"); playSound("mugen_guard0", 0.5); }
+        else if (skill.damageType === "magical") playSound("magic_blast");
+        else if (skill.power >= 2.5) playSound("slash_heavy");
+        else playSound("attack");
+        playSound(["mugen_hit_a", "mugen_hit_b", "mugen_hit_c", "mugen_hit_d", "mugen_hit_e"][Math.floor(Math.random() * 5)], 0.3);
+        if (skill.signature) { playSound("knife_swing", 0.5); playSound("mugen_super", 0.45); }
+        else if (skill.power >= 2.5) playSound("knife_swing", 0.5);
+        else if (skill.type === "atk" || skill.type === "combo") {
+          playSound("spin" + Math.floor(Math.random() * 3), 0.4);
+          playSound("mugen_atk" + Math.floor(Math.random() * 5), 0.3);
+        }
+        // Bespoke sting for the newer anime-flavored castAnim set (see
+        // CAST_ANIM_SOUND) -- layers on TOP of the generic picks above rather
+        // than replacing them; returns null (no-op) for every older castAnim.
+        const animSting = getCastAnimSound((skill.meta || {}).castAnim);
+        if (animSting) playSound(animSting, 0.4);
+      }
+    }
+    combatants.forEach((u) => {
+      if (u.lastAction && handledSfxTimes.current.get(u.id) !== u.lastAction.time) {
+        handledSfxTimes.current.set(u.id, u.lastAction.time);
+        const t = u.lastAction.type;
+        if (t === "heal") playSound("heal_spell", 0.5);
+        else if (t === "crit" || u.lastAction.crit) playSound("crit_hit", 0.35);
+        else if (t === "limit_break") playSound("explosion", 0.5);
+        else if (["normal", "magic", "basic", "shield_break"].includes(t)) playSound("attack", 0.2);
+      }
+    });
+  }, [combatants, battleState]);
 
   // --- RENDER ---
   const RARITY_COLOR = { Common: "#94a3b8", Rare: "#38bdf8", Epic: "#a855f7", Legendary: "#facc15", Mythic: "#ff2ecb" };
@@ -603,11 +823,15 @@ const EventsView = ({
       h("button", { className: "upgrade-btn", style: { padding: "10px 20px" }, onClick: () => setPendingStage(null) }, "BACK")),
     h("div", { style: { background: "rgba(0,0,0,0.3)", padding: 15, borderRadius: 16, marginBottom: 20 } },
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
-        h("h3", { style: { margin: 0, fontSize: "0.9rem", fontWeight: 900 } }, `MISSION SQUAD (${squadIds.length}/5)`),
+        h("h3", { style: { margin: 0, fontSize: "0.9rem", fontWeight: 900 } }, `MISSION SQUAD (${squadIds.length}/4)`),
         h("div", { style: { display: "flex", gap: 8 } },
           h("button", { className: "upgrade-btn", style: { fontSize: "0.7rem" }, onClick: () => setShowSquadBuilder(true) }, "EDIT SQUAD"),
-          h("button", { className: "train-btn", style: { width: "auto", padding: "8px 24px", background: "#22c55e" }, disabled: squadIds.length === 0, onClick: () => startBattle(pendingStage) }, "COMMENCE OPERATION"))),
-      h("div", { className: "squad-slots-row", style: { gridTemplateColumns: "repeat(5, 1fr)" } }, Array.from({ length: 5 }).map((_, i) => {
+          h("button", { className: "train-btn", style: { width: "auto", padding: "8px 24px", background: "#22c55e" }, disabled: squadIds.length === 0, onClick: () => startBattle(pendingStage) }, "COMMENCE OPERATION"),
+          canAutoClearEventStage(pendingStage) ? h("button", {
+            className: "train-btn", style: { width: "auto", padding: "8px 24px", background: "linear-gradient(135deg,#00d2ff,#0891b2)", color: "#000" },
+            onClick: () => autoClearEventStage(pendingStage)
+          }, "⚡ AUTO CLEAR") : null)),
+      h("div", { className: "squad-slots-row", style: { gridTemplateColumns: "repeat(4, 1fr)" } }, Array.from({ length: 4 }).map((_, i) => {
         const heroId = squadIds[i];
         const c = heroId ? characters.find((hh) => String(hh.export_id) === String(heroId)) : null;
         return h("div", { key: i, className: `squad-member-slot ${c ? "active" : "empty"}`, onClick: () => setShowSquadBuilder(true) }, c ? h("img", { src: c.imageUrl }) : h(Plus, { size: 20, opacity: 0.2 }));
@@ -648,18 +872,40 @@ const EventsView = ({
         h("div", { style: { fontSize: "0.7rem", color: "var(--text-muted)" } }, ["STANCE_SYNC: ", h("span", { key: "s", style: { color: ELEMENTS[playerElement].color } }, playerElement)])),
       h("div", { style: { display: "flex", gap: 8 } },
         h("button", { onClick: () => setCombatSpeed((s) => s === 1 ? 1.5 : s === 1.5 ? 2 : 1), className: "train-btn", style: { padding: "8px 12px", fontSize: "0.7rem", width: "auto", background: combatSpeed > 1 ? "var(--primary)" : "#334155" } }, `${combatSpeed}x`),
+        cameoData ? (() => {
+          const cdLeft = Math.max(0, 60000 - (Date.now() - cameoRef.current.lastUsed));
+          const ready = cameoRef.current.usesLeft > 0 && cdLeft <= 0;
+          return h("button", {
+            key: "cameo", onClick: triggerCameo, disabled: !ready, className: "train-btn",
+            style: { padding: "8px 12px", fontSize: "0.7rem", width: "auto", background: ready ? "linear-gradient(135deg,#00d2ff,#0891b2)" : "#334155", color: ready ? "#000" : "#94a3b8" },
+            title: cameoRef.current.usesLeft <= 0 ? "No guest summons left" : !ready ? `Recharging (${Math.ceil(cdLeft / 1000)}s)` : `Summon ${cameoData.name}`
+          }, ready ? "SUMMON" : cameoRef.current.usesLeft <= 0 ? "SPENT" : `${Math.ceil(cdLeft / 1000)}s`);
+        })() : null,
         h("button", { className: "train-btn", style: { width: "auto", padding: "8px 20px", background: "#ef4444" }, onClick: () => { setBattleState("IDLE"); setActiveStage(null); setBattleMusicActive(false); setEventTheme(null); } }, "ABORT OP"))),
     h("div", { className: "unified-stance-display" }, h(TacticalStanceRow, { currentStance: playerElement, onStanceChange: changePlayerElement })),
     h("div", { ref: battleSceneRef, className: "battle-scene" },
       h(ProjectileLayer, { combatants, containerRef: battleSceneRef }),
       h("div", { className: "battle-background-layer", style: { backgroundImage: `url(${activeStage.isBoss ? "background_void.png" : "background_battle.png"})` } }),
-      h("div", { className: "battle-formation enemy-row" }, combatants.filter((c) => c.isEnemy).map((u) => h(BattleUnit, { key: u.id, unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id) }))),
-      h("div", { className: "battle-formation hero-row" }, combatants.filter((c) => !c.isEnemy).map((u) => h(BattleUnit, { key: u.id, unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id) })))),
+      h(TurnOrderStrip, { key: "turn-strip", combatants, playerElement, combatSpeed }),
+      activeSkillBanner ? h("div", { className: "skill-banner" },
+        h("div", { className: "skill-banner-text" }, activeSkillBanner.name),
+        h("div", { className: "skill-banner-sub" }, ["USED BY ", activeSkillBanner.user])) : null,
+      comboDisplay >= 2 ? h("div", { className: `combo-counter ${comboDisplay >= 20 ? "combo-tier-3" : comboDisplay >= 10 ? "combo-tier-2" : "combo-tier-1"}` },
+        h("div", { key: "h", className: "combo-hits" }, [comboDisplay, " HITS"]),
+        h("div", { key: "b", className: "combo-bonus" }, ["+", Math.round(Math.min(40, comboDisplay * 2)), "% DMG"])) : null,
+      h("div", { className: "battle-formation enemy-row" }, combatants.filter((c) => c.isEnemy).map((u) => h(BattleUnit, { key: u.id, unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id), combatSpeed }))),
+      h("div", { className: "battle-formation hero-row" }, combatants.filter((c) => !c.isEnemy).map((u) => h(BattleUnit, { key: u.id, unit: u, floatingDamages: floatingDamages.filter((d) => d.targetId === u.id), combatSpeed })))),
     battleState === "INTRO" ? h(CampaignIntro, {
       activeBattle: { name: activeStage.name, enemy: combatants.find((c) => c.isEnemy && c.isBoss)?.name || combatants.find((c) => c.isEnemy)?.name || "ANOMALY", element: combatants.find((c) => c.isEnemy)?.element || "NEUTRAL", bg: activeStage.isBoss ? "THE VOID" : "RIFT DISTRICT" },
       squad: characters.filter((c) => squadIds.map(String).includes(String(c.export_id))),
       bossImg: combatants.find((c) => c.isEnemy && c.isBoss)?.img || combatants.find((c) => c.isEnemy)?.img || "boss_void_executioner.png",
-      onComplete: () => { setBattleState("ACTIVE"); playSound("spar"); }
+      onComplete: () => {
+        setBattleState("ACTIVE");
+        // Match Campaign's fight-start sting so Events open the same way.
+        playSound("mugen_land", 0.4);
+        playSound(["mugen_round", "mugen_round2", "mugen_round3"][Math.floor(Math.random() * 3)], 0.6);
+        setTimeout(() => playSound("mugen_fight", 0.6), 550);
+      }
     }) : null,
     battleState === "WIN" ? h("div", { className: "battle-result-overlay" },
       h("h1", { className: "win-text", style: { fontSize: "5rem" } }, "OP SUCCESS"),

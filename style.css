@@ -26,6 +26,60 @@
     50% { box-shadow: 0 0 40px var(--accent-glow), 0 0 60px rgba(233, 69, 96, 0.2); transform: scale(1.02); }
 }
 
+/* Save status indicator -- small persistent HUD pill (see saveStatus in
+   App.js). Slides in from the top-right, spins while saving, pops green on
+   success, shakes red on failure. This is new: there was previously no
+   always-visible save feedback anywhere in the UI, only a one-off toast on
+   manual saves. */
+.save-indicator {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 9500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    background: rgba(10, 10, 16, 0.85);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    pointer-events: none;
+    animation: save-indicator-slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes save-indicator-slide-in {
+    from { transform: translateY(-14px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.save-indicator-saving { border-color: rgba(0, 210, 255, 0.4); color: #00d2ff; }
+.save-indicator-saved { border-color: rgba(74, 222, 128, 0.45); color: #4ade80; animation: save-indicator-slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1), save-indicator-pop 0.4s ease-out 0.35s; }
+.save-indicator-error { border-color: rgba(239, 68, 68, 0.5); color: #ef4444; animation: save-indicator-slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1), shake 0.4s ease-in-out 0.35s; }
+
+@keyframes save-indicator-pop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.12); }
+    100% { transform: scale(1); }
+}
+
+.save-indicator-spinner {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 210, 255, 0.25);
+    border-top-color: #00d2ff;
+    animation: save-indicator-spin 0.7s linear infinite;
+}
+
+@keyframes save-indicator-spin {
+    to { transform: rotate(360deg); }
+}
+
 @keyframes frenzy-bg {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
@@ -898,6 +952,48 @@ body::after {
     height: 100%;
     background: linear-gradient(90deg, #3b82f6, #60a5fa);
     box-shadow: 0 0 10px #3b82f6;
+}
+
+/* Chapter-card progress bar: chapters used to show only a bare "2/12 STAGES"
+   count with no bar, while area cards right below them got a real fill bar --
+   an inconsistent presentation for the same "progress" concept one level up.
+   Reuses the same track look as .tech-progress-bar but animates its own fill
+   growing in from 0 on mount instead of snapping straight to width. */
+.chapter-progress-bar {
+    width: 100%;
+    height: 5px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 3px;
+    margin: 6px 0;
+    border: 1px solid rgba(255,255,255,0.08);
+    overflow: hidden;
+}
+
+.chapter-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #e94560, #ff8a9e);
+    box-shadow: 0 0 10px #e94560;
+    transform-origin: left;
+    animation: chapter-progress-grow 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes chapter-progress-grow {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
+/* Stage-cleared pop: fires once, the moment a stage transitions from
+   "next up" to "completed" within the current session (see justClearedStageId
+   in CampaignView.js), so clearing a stage reads as a distinct beat instead of
+   the list item just quietly re-rendering with a new border color. */
+.tech-stage-item.just-cleared {
+    animation: stage-cleared-pop 1.3s cubic-bezier(0.2, 1.4, 0.3, 1);
+}
+
+@keyframes stage-cleared-pop {
+    0% { transform: scale(1); box-shadow: none; }
+    25% { transform: scale(1.025); box-shadow: 0 0 24px rgba(34, 197, 94, 0.55); border-color: #22c55e; }
+    100% { transform: scale(1); box-shadow: none; }
 }
 
 .progress-text {
@@ -2104,6 +2200,19 @@ select.search-bar {
         font-size: 0.7rem;
         font-weight: 900;
         text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .more-menu-item.locked-nav {
+        opacity: 0.55;
+        position: relative;
+    }
+
+    .more-menu-item .nav-rank-req {
+        margin-left: 0;
+        font-size: 0.55rem;
+        font-weight: 900;
+        color: #facc15;
         letter-spacing: 0.5px;
     }
 
@@ -4401,6 +4510,14 @@ select.search-bar {
 .rarity-uncommon { border-color: #4ade80; box-shadow: inset 0 0 10px rgba(74, 222, 128, 0.1); }
 .rarity-rare { border-color: #3b82f6; box-shadow: inset 0 0 10px rgba(59, 130, 246, 0.1); }
 .rarity-epic { border-color: #a855f7; box-shadow: 0 0 15px rgba(168, 85, 247, 0.2); }
+/* Was entirely missing -- legendary items (the highest-value catalog entries)
+   rendered with no tier border/glow at all, visually indistinguishable from a
+   plain card. */
+.rarity-legendary { border-color: #facc15; box-shadow: 0 0 20px rgba(250, 204, 21, 0.35); animation: legendary-shimmer 2.5s ease-in-out infinite; }
+@keyframes legendary-shimmer {
+    0%, 100% { box-shadow: 0 0 20px rgba(250, 204, 21, 0.35); }
+    50% { box-shadow: 0 0 30px rgba(250, 204, 21, 0.6); }
+}
 
 .item-rarity-glow {
     position: absolute;
@@ -4413,6 +4530,19 @@ select.search-bar {
 
 .rarity-rare { --glow-color: rgba(59, 130, 246, 0.4); }
 .rarity-epic { --glow-color: rgba(168, 85, 247, 0.5); }
+.rarity-legendary { --glow-color: rgba(250, 204, 21, 0.5); }
+
+/* "Just used/sold/salvaged" flash -- a brief scale+brightness pulse so an
+   action on an inventory card reads as having actually happened, matching the
+   Gear Forge's existing "just upgraded" flash pattern for visual consistency. */
+.inventory-card-flash {
+    animation: inventory-card-flash-pop 0.6s cubic-bezier(0.2, 1.4, 0.3, 1) !important;
+}
+@keyframes inventory-card-flash-pop {
+    0% { transform: scale(1); filter: brightness(1); }
+    30% { transform: scale(1.06); filter: brightness(1.5); box-shadow: 0 0 25px rgba(255, 255, 255, 0.5); }
+    100% { transform: scale(1); filter: brightness(1); }
+}
 
 .shop-card-premium {
     background: linear-gradient(135deg, rgba(22, 33, 62, 0.9), rgba(15, 52, 96, 0.9));
@@ -5032,6 +5162,234 @@ select.search-bar {
     text-overflow: ellipsis;
     text-transform: uppercase;
 }
+
+/* Guest Summon picker: a proper full-screen overlay (not an inline sidebar
+   expansion, which used to get clipped to near-zero height by the squad
+   builder's fixed-height 320px column once a real list of eligible guests
+   needed to render -- see the note above cameoBlock in CombatSystem.js). */
+.cameo-picker-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5100;
+    background: rgba(5, 5, 8, 0.82);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.cameo-picker-panel {
+    width: 100%;
+    max-width: 640px;
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(160deg, rgba(20, 20, 28, 0.98), rgba(8, 8, 12, 0.98));
+    border: 1px solid rgba(0, 210, 255, 0.35);
+    border-radius: 16px;
+    box-shadow: 0 0 40px rgba(0, 210, 255, 0.2), 0 20px 60px rgba(0, 0, 0, 0.6);
+    padding: 18px;
+}
+
+.cameo-picker-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.cameo-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 120px;
+    padding-right: 4px;
+}
+
+.cameo-picker-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 4px;
+    padding: 10px 8px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.12s;
+}
+
+.cameo-picker-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(0, 210, 255, 0.3);
+}
+
+.cameo-picker-card.selected {
+    background: linear-gradient(160deg, rgba(255, 0, 127, 0.14), rgba(0, 210, 255, 0.1));
+    border-color: #00d2ff;
+    box-shadow: 0 0 12px rgba(0, 210, 255, 0.35);
+}
+
+.cameo-picker-card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.cameo-picker-card-name {
+    font-size: 0.68rem;
+    font-weight: 900;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.cameo-picker-card-sig {
+    font-size: 0.56rem;
+    color: #00d2ff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.cameo-picker-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 24px;
+    font-size: 0.7rem;
+    color: #666;
+}
+
+/* PROSPECTOR'S DIG -- new HomeView minigame overlay */
+.dig-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5100;
+    background: rgba(10, 6, 2, 0.85);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.dig-panel {
+    width: 100%;
+    max-width: 420px;
+    background: linear-gradient(160deg, rgba(60, 38, 16, 0.98), rgba(20, 12, 6, 0.98));
+    border: 1px solid rgba(163, 112, 58, 0.5);
+    border-radius: 18px;
+    box-shadow: 0 0 40px rgba(163, 112, 58, 0.3), 0 20px 60px rgba(0, 0, 0, 0.6);
+    padding: 22px;
+    text-align: center;
+}
+
+.dig-panel-title {
+    font-weight: 900;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    color: #e0a95e;
+    margin-bottom: 16px;
+}
+
+.dig-step-track {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.dig-step-pip {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.2s;
+}
+
+.dig-step-pip.active {
+    background: #e0a95e;
+    box-shadow: 0 0 10px #e0a95e;
+    transform: scale(1.2);
+}
+
+.dig-step-pip.done {
+    background: #4ade80;
+    border-color: #4ade80;
+}
+
+.dig-flash {
+    color: #f87171;
+    font-weight: 900;
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+    animation: popIn 0.3s ease-out;
+}
+
+.dig-action-btn {
+    width: 100%;
+    padding: 20px 12px;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #d99a52, #a3703a 60%, #7c4a1e);
+    border-bottom: 4px solid #5c360f;
+    color: #fff;
+    font-weight: 900;
+    font-size: 1rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: transform 0.12s, filter 0.12s;
+}
+
+.dig-action-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.dig-action-btn:active { transform: translateY(2px); }
+
+.dig-waiting {
+    padding: 20px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.dig-result {
+    border: 1px solid;
+    border-radius: 14px;
+    padding: 18px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.dig-result-title {
+    font-weight: 900;
+    font-size: 1.3rem;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    text-shadow: 0 0 20px currentColor;
+}
+
+.dig-result-rewards {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-weight: 800;
+    font-size: 0.9rem;
+    color: #fff;
+    margin-bottom: 18px;
+}
+
+.dig-result-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.dig-result-actions .train-btn { flex: 1; }
 
 .sb-hero-row-el {
     font-size: 0.6rem;
@@ -5814,6 +6172,108 @@ select.search-bar {
     white-space: nowrap;
 }
 
+/* Fires once, only when a shield's pool actually empties -- distinct from the
+   generic shield-hit flash that plays on every absorbed hit whether or not the
+   shield survives, so a broken shield finally reads differently from one that
+   just tanked a hit and is still up. */
+.shield-pop-flash {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #7dd3fc;
+    font-size: 0.6rem;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 6px #38bdf8, 0 0 12px #38bdf8;
+    white-space: nowrap;
+    z-index: 30;
+    animation: shield-pop-flash-anim 0.7s ease-out forwards;
+    pointer-events: none;
+}
+@keyframes shield-pop-flash-anim {
+    0% { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.8); }
+    25% { opacity: 1; transform: translateX(-50%) translateY(-4px) scale(1.1); }
+    70% { opacity: 1; transform: translateX(-50%) translateY(-10px) scale(1); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-18px) scale(1); }
+}
+
+/* CUT-IN SYSTEM: a reactive strike/buff/debuff a unit fires off on its OWN
+   initiative, mid-someone-else's-action, once armed by certain
+   signatures/legendaries. Deliberately built to look nothing like a normal
+   cast (kf-cast-*) or a hit-flash -- a diagonal manga-style speedline slash
+   sweeps across the whole unit, a ghost duplicate of the reacting unit's own
+   portrait bursts in from the side and snaps back out, and a bold interrupt
+   label flashes over it, so "someone just butted in" reads instantly. */
+.cut-in-overlay {
+    position: absolute;
+    inset: -20% -30%;
+    pointer-events: none;
+    z-index: 40;
+    overflow: visible;
+}
+.cut-in-slash {
+    position: absolute;
+    top: 50%;
+    left: -60%;
+    width: 220%;
+    height: 14%;
+    background: linear-gradient(90deg, transparent, #fff 15%, #ffd700 50%, #fff 85%, transparent);
+    box-shadow: 0 0 18px 4px rgba(255, 215, 0, 0.85);
+    transform: translateY(-50%) rotate(-18deg) scaleX(0);
+    transform-origin: left center;
+    animation: cut-in-slash-sweep 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes cut-in-slash-sweep {
+    0% { transform: translateY(-50%) rotate(-18deg) scaleX(0); opacity: 0; }
+    15% { opacity: 1; }
+    55% { transform: translateY(-50%) rotate(-18deg) scaleX(1); opacity: 1; }
+    100% { transform: translateY(-50%) rotate(-18deg) scaleX(1); opacity: 0; }
+}
+.cut-in-portrait-ghost {
+    position: absolute;
+    top: 10%;
+    right: -10%;
+    width: 55%;
+    height: 55%;
+    border-radius: 10px;
+    border: 2px solid #ffd700;
+    object-fit: cover;
+    box-shadow: 0 0 24px rgba(255, 215, 0, 0.8);
+    filter: saturate(1.3) contrast(1.1);
+    animation: cut-in-portrait-burst 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes cut-in-portrait-burst {
+    0% { transform: translateX(120%) rotate(8deg) scale(0.6); opacity: 0; }
+    30% { transform: translateX(0%) rotate(-4deg) scale(1.15); opacity: 1; }
+    45% { transform: translateX(0%) rotate(0deg) scale(1); opacity: 1; }
+    80% { transform: translateX(0%) rotate(0deg) scale(1); opacity: 1; }
+    100% { transform: translateX(60%) rotate(6deg) scale(0.8); opacity: 0; }
+}
+.cut-in-text {
+    position: absolute;
+    bottom: -6%;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #fff;
+    background: linear-gradient(135deg, #ffd700, #b8860b);
+    padding: 3px 10px;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+    animation: cut-in-text-pop 0.95s ease-out forwards;
+}
+@keyframes cut-in-text-pop {
+    0% { opacity: 0; transform: translateX(-50%) scale(0.6); }
+    25% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+    40% { transform: translateX(-50%) scale(1); }
+    85% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(-50%) scale(1); }
+}
+
 .staggered-unit {
     filter: sepia(1) brightness(0.7) saturate(2) !important;
     animation: shake 0.1s infinite !important;
@@ -5839,6 +6299,56 @@ select.search-bar {
     filter: grayscale(1) brightness(0.5);
     opacity: 0.5;
     transform: scale(0.9);
+}
+
+/* JIMMY NEUTRON GORE FINALE: he dies constantly, and every time it's treated
+   like the biggest event of the fight -- a violent shudder, a blinding red
+   flash-burst standing in for the explosion, then a slow settle into the same
+   grayscale dead state everyone else gets. Deliberately much longer than a
+   normal death (2.8s vs instant) since it's meant to read as dramatic, not
+   just another KO. Gated behind reducedFx like every other juice effect.
+   His death-burst signature buffs the squad regardless of whether this plays. */
+.battle-unit.dead.gore-finale {
+    z-index: 45;
+    animation: gore-finale-shake 0.45s ease-in-out;
+}
+.battle-unit.dead.gore-finale .unit-avatar-wrapper {
+    animation: gore-finale-burst 2.8s cubic-bezier(0.3, 0, 0.2, 1) both;
+}
+.battle-unit.dead.gore-finale::before {
+    content: "";
+    position: absolute;
+    inset: -20%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(220, 38, 38, 0.85), rgba(153, 27, 27, 0.3) 55%, transparent 75%);
+    pointer-events: none;
+    z-index: -1;
+    animation: gore-finale-splash 2.8s ease-out both;
+}
+@keyframes gore-finale-shake {
+    0%, 100% { transform: translate(0, 0); }
+    10% { transform: translate(-6px, -3px); }
+    20% { transform: translate(6px, 3px); }
+    30% { transform: translate(-8px, 2px); }
+    40% { transform: translate(8px, -2px); }
+    50% { transform: translate(-4px, 4px); }
+    60% { transform: translate(4px, -4px); }
+    70% { transform: translate(-2px, 2px); }
+    80%, 100% { transform: translate(0, 0); }
+}
+@keyframes gore-finale-burst {
+    0%   { transform: scale(1) rotate(0deg); opacity: 1; filter: none; }
+    8%   { transform: scale(1.4) rotate(-4deg); opacity: 1; filter: brightness(2.5) drop-shadow(0 0 30px #ff1a1a); }
+    16%  { transform: scale(0.25) rotate(10deg); opacity: 0.15; filter: brightness(3.5) drop-shadow(0 0 60px #ff0000); }
+    26%  { transform: scale(1.08) rotate(-3deg); opacity: 1; filter: brightness(1.4) drop-shadow(0 0 20px #dc2626); }
+    40%  { transform: scale(0.96) rotate(1deg); opacity: 1; filter: brightness(1.1); }
+    100% { transform: scale(0.9) rotate(0deg); opacity: 0.5; filter: grayscale(1) brightness(0.5); }
+}
+@keyframes gore-finale-splash {
+    0%   { opacity: 0; transform: scale(0.3); }
+    12%  { opacity: 1; transform: scale(1.3); }
+    30%  { opacity: 0.7; transform: scale(1.1); }
+    100% { opacity: 0; transform: scale(1.4); }
 }
 
 .battle-unit.acting {
@@ -5904,6 +6414,20 @@ select.search-bar {
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     overflow: hidden;
+}
+/* Shields as secondary HP: this bar was rendered in the JSX with zero matching
+   CSS before, so it never actually appeared -- players had no visual for "how
+   much shield is left" beyond the numeric chip. Layers above .hp-fill so a
+   shielded unit visibly reads as HP-bar-plus-a-cyan-cap-on-top. */
+.shield-bar-segment {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #38bdf8, #7dd3fc);
+    z-index: 3;
+    transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
 }
 .hp-text-overlay {
     position: absolute;
@@ -7384,7 +7908,8 @@ select.search-bar {
     pointer-events: auto;
 }
 
-.date-choices-row { display: flex; gap: 10px; }
+.date-choices-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.date-choices-row .date-choice-btn { min-width: 100px; }
 .date-choice-btn {
     position: relative;
     flex: 1;
@@ -7412,6 +7937,7 @@ select.search-bar {
 .date-choice-btn.bold { background: linear-gradient(180deg, #ff5fb8, #ff007f 60%, #b8005c); border-bottom: 3px solid #7a0040; color: #fff; box-shadow: 0 3px 10px rgba(255, 0, 127, 0.4); }
 .date-choice-btn.chill { background: linear-gradient(180deg, #5fd4ff, #00d2ff 60%, #008cb3); border-bottom: 3px solid #00637d; color: #06222b; box-shadow: 0 3px 10px rgba(0, 210, 255, 0.4); }
 .date-choice-btn.listen { background: linear-gradient(180deg, #c98bff, #a855f7 60%, #7b21d6); border-bottom: 3px solid #5414a0; color: #fff; box-shadow: 0 3px 10px rgba(168, 85, 247, 0.4); }
+.date-choice-btn.gesture { background: linear-gradient(180deg, #ffd166, #facc15 60%, #b8860b); border-bottom: 3px solid #7a5c05; color: #1a1400; box-shadow: 0 3px 10px rgba(250, 204, 21, 0.4); }
 
 .date-choice-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
 .date-choice-btn:active { transform: translateY(1px); }
@@ -7535,6 +8061,38 @@ select.search-bar {
     20%, 80% { transform: translate3d(6px, 0, 0); }
     30%, 50%, 70% { transform: translate3d(-8px, 0, 0); }
     40%, 60% { transform: translate3d(8px, 0, 0); }
+}
+
+/* DAZED -- plays for the whole hit-stun window (not just the instant of
+   impact), so a locked-down target visibly reels/staggers for as long as it
+   can't act. Slower and looser than unit-impact-shake, which still fires on
+   top of this for each individual hit. */
+.battle-unit.is-dazed .unit-avatar-wrapper {
+    animation: unit-dazed-wobble 0.6s ease-in-out infinite;
+    filter: brightness(0.88) saturate(0.8);
+}
+.battle-unit.is-dazed::after {
+    content: "";
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    margin-left: -5px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fde047, #facc15);
+    box-shadow: 0 0 8px #facc15;
+    animation: unit-dazed-star-orbit 1.1s linear infinite;
+    pointer-events: none;
+    z-index: 5;
+}
+@keyframes unit-dazed-wobble {
+    0%, 100% { transform: rotate(-3deg) translateX(-2px); }
+    50% { transform: rotate(3deg) translateX(2px); }
+}
+@keyframes unit-dazed-star-orbit {
+    0%   { transform: translate(14px, 0) rotate(0deg) translateX(14px) rotate(0deg); opacity: 1; }
+    100% { transform: translate(14px, 0) rotate(360deg) translateX(14px) rotate(-360deg); opacity: 1; }
 }
 
 .battle-unit.dead {
@@ -7976,6 +8534,21 @@ select.search-bar {
    Recruit hub (merged Gacha + Lucky 7s)
    ============================================================ */
 .recruit-hub { height: 100%; display: flex; flex-direction: column; }
+.recruit-hub-currency-strip {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 0 0 10px;
+    flex-shrink: 0;
+}
+.recruit-hub-currency-pill {
+    font-size: 0.65rem;
+    font-weight: 900;
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+}
 .recruit-hub-tabs {
     display: flex;
     gap: 8px;
@@ -8145,6 +8718,55 @@ select.search-bar {
 }
 .arena-fight-btn { width: auto; padding: 10px 34px; font-size: 0.85rem; letter-spacing: 1px; }
 .arena-gate-panel { border: 1px dashed color-mix(in srgb, var(--tier-color, #facc15) 50%, transparent); }
+.arena-gate-panel.promotion-ready {
+    border-style: solid;
+    background: radial-gradient(ellipse at top, color-mix(in srgb, var(--tier-color, #facc15) 20%, transparent), rgba(0,0,0,0.35));
+    box-shadow: inset 0 0 36px color-mix(in srgb, var(--tier-color, #facc15) 14%, transparent), 0 0 24px color-mix(in srgb, var(--tier-color, #facc15) 24%, transparent);
+}
+.arena-promotion-banner,
+.arena-promotion-card-label {
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: #111;
+    background: linear-gradient(90deg, #fff2a0, var(--tier-color, #facc15), #fff2a0);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--tier-color, #facc15) 55%, transparent);
+}
+.arena-promotion-banner {
+    display: inline-block;
+    padding: 6px 14px;
+    margin: -24px 0 14px;
+    clip-path: polygon(7% 0, 93% 0, 100% 50%, 93% 100%, 7% 100%, 0 50%);
+    animation: arena-promotion-flare 1.8s ease-in-out infinite;
+}
+.promotion-card {
+    position: relative;
+    overflow: hidden;
+    border-color: var(--tier-color, #facc15);
+    background: linear-gradient(125deg, color-mix(in srgb, var(--tier-color, #facc15) 16%, #101014), #09090c 55%);
+}
+.promotion-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(115deg, transparent 28%, rgba(255,255,255,0.18) 50%, transparent 72%);
+    transform: translateX(-120%);
+    animation: arena-promotion-shine 2.8s ease-in-out infinite;
+}
+.arena-promotion-card-label {
+    margin: -16px -18px 10px;
+    padding: 6px 12px;
+    text-align: center;
+}
+@keyframes arena-promotion-flare {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.05); filter: brightness(1.18); }
+}
+@keyframes arena-promotion-shine {
+    0%, 45% { transform: translateX(-120%); }
+    75%, 100% { transform: translateX(120%); }
+}
 
 /* Signature cut-in: full-width diagonal stripe with portrait, CRK-style. */
 .sig-cutin {
@@ -8256,6 +8878,18 @@ select.search-bar {
 .battle-unit.is-crushed .unit-avatar-wrapper {
     animation: crush-shackle 0.9s ease-in-out infinite;
     border-radius: 12px;
+}
+
+/* STATIC status: a CALM electric-blue glow that breathes slowly. Replaces the
+   old strobing arcane.gif, which flickered fast enough to read as a seizure
+   risk. Deliberately a long, gentle 2s cycle -- never a rapid flash. */
+.battle-unit.is-static .unit-avatar-wrapper {
+    animation: static-breathe 2s ease-in-out infinite;
+    border-radius: 12px;
+}
+@keyframes static-breathe {
+    0%, 100% { box-shadow: inset 0 0 10px rgba(56,189,248,0.35), 0 0 8px rgba(56,189,248,0.25); }
+    50%      { box-shadow: inset 0 0 18px rgba(56,189,248,0.6), 0 0 16px rgba(56,189,248,0.45); }
 }
 
 /* Status pips for the two new effects */
@@ -8662,6 +9296,30 @@ select.search-bar {
 .battle-unit.cast-crescendo .unit-avatar-wrapper { animation: kf-cast-crescendo 1.8s cubic-bezier(0.4, 1.2, 0.3, 1) both; }
 .battle-unit.cast-thunder .unit-avatar-wrapper { animation: kf-cast-thunder 1.55s linear both; }
 
+/* --- Batch 2: anime-flavored, condition/description-driven cast anims --- */
+.battle-unit.cast-comet .unit-avatar-wrapper    { animation: kf-cast-comet    1.55s cubic-bezier(0.6, 0, 0.2, 1) both; }
+.battle-unit.cast-mirage .unit-avatar-wrapper   { animation: kf-cast-mirage   1.4s steps(4, end) both; }
+.battle-unit.cast-bloom .unit-avatar-wrapper    { animation: kf-cast-bloom    1.6s ease-in-out both; }
+.battle-unit.cast-shatter .unit-avatar-wrapper  { animation: kf-cast-shatter  1.5s cubic-bezier(0.5, 0, 0.3, 1.4) both; }
+.battle-unit.cast-tidal .unit-avatar-wrapper    { animation: kf-cast-tidal    1.65s ease-in-out both; }
+.battle-unit.cast-gale .unit-avatar-wrapper     { animation: kf-cast-gale     1.45s linear both; }
+.battle-unit.cast-starfall .unit-avatar-wrapper { animation: kf-cast-starfall 1.7s cubic-bezier(0.5, 1.6, 0.3, 1) both; }
+.battle-unit.cast-halo .unit-avatar-wrapper     { animation: kf-cast-halo     1.75s ease-in-out both; }
+.battle-unit.cast-voidrip .unit-avatar-wrapper  { animation: kf-cast-voidrip  1.6s steps(6, end) both; }
+.battle-unit.cast-inferno .unit-avatar-wrapper  { animation: kf-cast-inferno  1.65s ease-out both; }
+.battle-unit.cast-tremor .unit-avatar-wrapper   { animation: kf-cast-tremor   1.55s cubic-bezier(0.5, 1.3, 0.3, 1) both; }
+.battle-unit.cast-riposte .unit-avatar-wrapper  { animation: kf-cast-riposte  1.35s cubic-bezier(0.7, 0, 0.2, 1) both; }
+.battle-unit.cast-cyclone .unit-avatar-wrapper  { animation: kf-cast-cyclone  1.5s linear both; }
+.battle-unit.cast-eclipse .unit-avatar-wrapper  { animation: kf-cast-eclipse  1.7s ease-in-out both; }
+.battle-unit.cast-runway .unit-avatar-wrapper   { animation: kf-cast-runway   1.6s ease-in-out both; }
+.battle-unit.cast-sparkle .unit-avatar-wrapper  { animation: kf-cast-sparkle  1.45s cubic-bezier(0.5, 1.5, 0.4, 1) both; }
+.battle-unit.cast-fracture .unit-avatar-wrapper { animation: kf-cast-fracture 1.3s cubic-bezier(0.6, 0, 0.2, 1.2) both; }
+.battle-unit.cast-phantom .unit-avatar-wrapper  { animation: kf-cast-phantom  1.45s ease-in-out both; }
+.battle-unit.cast-surge .unit-avatar-wrapper    { animation: kf-cast-surge    1.55s ease-in-out both; }
+.battle-unit.cast-finale .unit-avatar-wrapper   { animation: kf-cast-finale   2s cubic-bezier(0.4, 1.3, 0.3, 1) both; }
+.battle-unit.cast-starstorm .unit-avatar-wrapper { animation: kf-cast-starstorm 1.9s cubic-bezier(0.4, 1.4, 0.3, 1) both; }
+.battle-unit.cast-beam .unit-avatar-wrapper { animation: kf-cast-beam 1.8s cubic-bezier(0.3, 0, 0.15, 1) both; }
+
 @keyframes kf-cast-arcane {
     0%   { transform: translateY(0) scale(1); filter: none; }
     20%  { transform: translateY(calc(var(--cast-dir, -1) * 10px)) scale(1.06) rotate(-2deg); filter: drop-shadow(0 0 14px var(--cast-tint, #fff)) brightness(1.3); }
@@ -8820,6 +9478,195 @@ select.search-bar {
     62%  { transform: translateY(calc(var(--cast-dir, -1) * 64px)) scale(1.18); filter: drop-shadow(0 0 40px var(--cast-tint, #fff)) brightness(2.6); }
     76%  { transform: translateY(calc(var(--cast-dir, -1) * 42px)) scale(1.06); }
     100% { transform: translateY(0) scale(1); filter: none; }
+}
+
+/* --- Batch 2 keyframes (paired 1:1 with the .cast-* trigger rules above) --- */
+@keyframes kf-cast-comet {
+    0%   { transform: translate(0, 0) scale(1) rotate(0deg); filter: none; }
+    25%  { transform: translate(calc(var(--cast-dir, -1) * -60px), -120px) scale(0.85) rotate(-25deg); filter: brightness(1.4) drop-shadow(0 0 12px var(--cast-tint, #fff)); }
+    55%  { transform: translate(calc(var(--cast-dir, -1) * 90px), 20px) scale(1.2) rotate(35deg); filter: drop-shadow(0 0 34px var(--cast-tint, #fff)) brightness(2.2); }
+    72%  { transform: translate(calc(var(--cast-dir, -1) * 30px), -8px) scale(1.08) rotate(8deg); filter: drop-shadow(0 0 20px var(--cast-tint, #fff)) brightness(1.6); }
+    100% { transform: translate(0, 0) scale(1) rotate(0deg); filter: none; }
+}
+@keyframes kf-cast-mirage {
+    0%   { transform: translateX(0) scale(1); opacity: 1; filter: none; }
+    20%  { transform: translateX(calc(var(--cast-dir, -1) * -22px)) scale(1.02); opacity: 0.55; filter: brightness(1.3) blur(0.5px); }
+    40%  { transform: translateX(calc(var(--cast-dir, -1) * 26px)) scale(1.03); opacity: 0.5; filter: brightness(1.4) blur(0.5px); }
+    60%  { transform: translateX(calc(var(--cast-dir, -1) * -18px)) scale(1.05); opacity: 0.6; filter: brightness(1.6) blur(0.5px); }
+    80%  { transform: translateX(calc(var(--cast-dir, -1) * 40px)) scale(1.1); opacity: 1; filter: drop-shadow(0 0 24px var(--cast-tint, #fff)) brightness(1.8); }
+    100% { transform: translateX(0) scale(1); opacity: 1; filter: none; }
+}
+@keyframes kf-cast-bloom {
+    0%   { transform: scale(1) rotate(0deg); filter: none; }
+    30%  { transform: scale(0.92) rotate(-4deg); filter: brightness(1.1); }
+    55%  { transform: scale(1.18) rotate(6deg); filter: drop-shadow(0 0 30px var(--cast-tint, #fff)) brightness(1.7) saturate(1.4); }
+    75%  { transform: scale(1.28) rotate(-2deg); filter: drop-shadow(0 0 40px var(--cast-tint, #fff)) brightness(2) saturate(1.6); }
+    100% { transform: scale(1) rotate(0deg); filter: none; }
+}
+@keyframes kf-cast-shatter {
+    0%   { transform: scale(1); filter: none; }
+    22%  { transform: scale(0.9) rotate(-1deg); filter: brightness(1.4) drop-shadow(0 0 10px #b3ecff); }
+    40%  { transform: scale(1.04) rotate(1deg); filter: brightness(2.4) drop-shadow(0 0 28px #b3ecff); }
+    46%  { transform: scale(1.1) rotate(-2deg); filter: brightness(3) drop-shadow(0 0 36px #e6faff); }
+    58%  { transform: scale(0.96) rotate(1.5deg); filter: brightness(1.6); }
+    72%  { transform: scale(1.02) rotate(-0.5deg); filter: brightness(1.2); }
+    100% { transform: scale(1) rotate(0deg); filter: none; }
+}
+@keyframes kf-cast-tidal {
+    0%   { transform: translateY(0) scale(1); filter: none; }
+    18%  { transform: translateY(-14px) scale(1.03); filter: brightness(1.2); }
+    36%  { transform: translateY(10px) scale(0.98); filter: brightness(1.1); }
+    54%  { transform: translateY(-22px) scale(1.06); filter: drop-shadow(0 0 26px var(--cast-tint, #00d2ff)) brightness(1.5); }
+    72%  { transform: translateY(16px) scale(1.02); filter: drop-shadow(0 0 18px var(--cast-tint, #00d2ff)) brightness(1.3); }
+    100% { transform: translateY(0) scale(1); filter: none; }
+}
+@keyframes kf-cast-gale {
+    0%   { transform: translateX(0) rotate(0deg) scale(1); filter: none; }
+    20%  { transform: translateX(calc(var(--cast-dir, -1) * -16px)) rotate(-10deg) scale(1.02); filter: brightness(1.2); }
+    45%  { transform: translateX(calc(var(--cast-dir, -1) * 24px)) rotate(18deg) scale(1.08); filter: brightness(1.5) drop-shadow(0 0 18px var(--cast-tint, #4ade80)); }
+    70%  { transform: translateX(calc(var(--cast-dir, -1) * -10px)) rotate(-8deg) scale(1.04); filter: brightness(1.3); }
+    100% { transform: translateX(0) rotate(0deg) scale(1); filter: none; }
+}
+@keyframes kf-cast-starfall {
+    0%   { transform: translateY(0) scale(1) rotate(0deg); filter: none; }
+    20%  { transform: translateY(-70px) scale(0.9) rotate(-8deg); filter: brightness(1.3) drop-shadow(0 0 14px #fff6c8); }
+    45%  { transform: translateY(-80px) scale(0.92) rotate(-6deg); filter: brightness(1.5) drop-shadow(0 0 20px #fff6c8); }
+    62%  { transform: translateY(30px) scale(1.16) rotate(4deg); filter: drop-shadow(0 0 40px #fff6c8) brightness(2.4); }
+    78%  { transform: translateY(-6px) scale(1.04) rotate(-1deg); filter: brightness(1.4); }
+    100% { transform: translateY(0) scale(1) rotate(0deg); filter: none; }
+}
+/* STARSTORM: an unblockable multi-star bombardment -- three distinct impact
+   pulses instead of cast-starfall's single swell, so a true AOE "several
+   things are landing, not one" ultimate reads differently from a single-target
+   nova. Reusable by any future skill via meta.castAnim: "cast-starstorm", or
+   automatically for any name/desc matching /star ?storm|meteor shower|rain of
+   stars|falling stars|shower of/i (see deriveCastAnim in battleHelpers.js). */
+@keyframes kf-cast-starstorm {
+    0%   { transform: translateY(0) scale(1) rotate(0deg); filter: none; }
+    14%  { transform: translateY(-50px) scale(0.92) rotate(-6deg); filter: brightness(1.3) drop-shadow(0 0 16px #fff6c8); }
+    28%  { transform: translateY(-64px) scale(0.94) rotate(4deg); filter: brightness(1.5) drop-shadow(0 0 24px #fff6c8); }
+    42%  { transform: translateY(18px) scale(1.14) rotate(-3deg); filter: drop-shadow(0 0 36px #fff6c8) brightness(2.2); }
+    52%  { transform: translateY(-10px) scale(1.04) rotate(2deg); filter: brightness(1.4); }
+    64%  { transform: translateY(22px) scale(1.16) rotate(3deg); filter: drop-shadow(0 0 40px #fff6c8) brightness(2.4); }
+    76%  { transform: translateY(-6px) scale(1.05) rotate(-1deg); filter: brightness(1.4); }
+    88%  { transform: translateY(14px) scale(1.1) rotate(2deg); filter: drop-shadow(0 0 30px #fff6c8) brightness(2); }
+    100% { transform: translateY(0) scale(1) rotate(0deg); filter: none; }
+}
+/* BEAM: a charge-then-HOLD sustained line of fire -- unlike every other
+   ranged cast (a single throw/lunge), the caster locks in place at peak
+   brightness for a real stretch of the animation, reading as "still firing"
+   rather than "already released." Reusable via meta.castAnim: "cast-beam",
+   or automatically for any name/desc matching /beam|laser|ray|death ?ray/i
+   (see deriveCastAnim in battleHelpers.js). */
+@keyframes kf-cast-beam {
+    0%   { transform: scale(1) translateY(0); filter: none; }
+    18%  { transform: scale(0.94) translateY(6px); filter: brightness(0.8); }
+    30%  { transform: scale(1.06) translateY(-4px); filter: drop-shadow(0 0 20px var(--cast-tint, #fff)) brightness(1.8); }
+    38%  { transform: scale(1.08) translateY(-4px); filter: drop-shadow(0 0 34px var(--cast-tint, #fff)) brightness(2.3); }
+    70%  { transform: scale(1.08) translateY(-4px); filter: drop-shadow(0 0 34px var(--cast-tint, #fff)) brightness(2.3); }
+    82%  { transform: scale(1.04) translateY(-2px); filter: drop-shadow(0 0 18px var(--cast-tint, #fff)) brightness(1.5); }
+    100% { transform: scale(1) translateY(0); filter: none; }
+}
+@keyframes kf-cast-halo {
+    0%   { transform: translateY(0) scale(1); filter: none; }
+    30%  { transform: translateY(-26px) scale(1.05); filter: brightness(1.3) drop-shadow(0 0 20px #ffe9a8); }
+    55%  { transform: translateY(-30px) scale(1.08); filter: brightness(1.7) drop-shadow(0 0 34px #ffe9a8); }
+    80%  { transform: translateY(-10px) scale(1.03); filter: drop-shadow(0 0 26px #ffe9a8) brightness(1.5); }
+    100% { transform: translateY(0) scale(1); filter: none; }
+}
+@keyframes kf-cast-voidrip {
+    0%   { transform: skewX(0deg) scale(1); opacity: 1; filter: none; }
+    16%  { transform: skewX(-4deg) scale(0.97); opacity: 0.7; filter: brightness(0.5); }
+    32%  { transform: skewX(3deg) scale(1.02); opacity: 1; filter: brightness(0.7); }
+    48%  { transform: skewX(-5deg) scale(0.96); opacity: 0.6; filter: brightness(0.4); }
+    64%  { transform: skewX(2deg) scale(1.1); opacity: 1; filter: drop-shadow(0 0 30px #a855f7) brightness(1.8); }
+    100% { transform: skewX(0deg) scale(1); opacity: 1; filter: none; }
+}
+@keyframes kf-cast-inferno {
+    0%   { transform: scaleY(1) translateY(0); filter: none; }
+    25%  { transform: scaleY(1.08) translateY(-6px); filter: brightness(1.3) drop-shadow(0 0 14px #ff8a3d); }
+    50%  { transform: scaleY(1.18) translateY(-16px); filter: brightness(1.7) drop-shadow(0 0 26px #ff8a3d); }
+    68%  { transform: scaleY(1.1) translateY(-10px); filter: brightness(2.1) drop-shadow(0 0 38px #ffb066); }
+    100% { transform: scaleY(1) translateY(0); filter: none; }
+}
+@keyframes kf-cast-tremor {
+    0%   { transform: translate(0, 0) scale(1); filter: none; }
+    20%  { transform: translate(0, -8px) scale(1.03, 0.97); }
+    38%  { transform: translate(-6px, 4px) scale(1.06, 0.9); filter: brightness(1.4); }
+    46%  { transform: translate(6px, 4px) scale(1.06, 0.9); filter: drop-shadow(0 0 26px var(--cast-tint, #a97c50)) brightness(1.8); }
+    58%  { transform: translate(-4px, 0) scale(1, 1); }
+    100% { transform: translate(0, 0) scale(1); filter: none; }
+}
+@keyframes kf-cast-riposte {
+    0%   { transform: translateX(0) scale(1); filter: none; }
+    30%  { transform: translateX(calc(var(--cast-dir, -1) * 16px)) scale(0.94); filter: brightness(0.9); }
+    55%  { transform: translateX(calc(var(--cast-dir, -1) * -46px)) scale(1.12); filter: drop-shadow(0 0 24px var(--cast-tint, #fff)) brightness(2); }
+    75%  { transform: translateX(calc(var(--cast-dir, -1) * -10px)) scale(1.02); filter: brightness(1.2); }
+    100% { transform: translateX(0) scale(1); filter: none; }
+}
+@keyframes kf-cast-cyclone {
+    0%   { transform: rotate(0deg) scale(1); filter: none; }
+    25%  { transform: rotate(150deg) scale(1.05); filter: brightness(1.3); }
+    50%  { transform: rotate(320deg) scale(1.12); filter: drop-shadow(0 0 28px var(--cast-tint, #fff)) brightness(1.8); }
+    75%  { transform: rotate(470deg) scale(1.04); filter: brightness(1.3); }
+    100% { transform: rotate(720deg) scale(1); filter: none; }
+}
+@keyframes kf-cast-eclipse {
+    0%   { transform: scale(1); filter: none; }
+    35%  { transform: scale(0.96); filter: brightness(0.25) saturate(0.4); }
+    55%  { transform: scale(0.94); filter: brightness(0.15) saturate(0.2); }
+    62%  { transform: scale(1.16); filter: brightness(3.2) saturate(0.6) drop-shadow(0 0 44px #fff); }
+    78%  { transform: scale(1.04); filter: brightness(1.4); }
+    100% { transform: scale(1); filter: none; }
+}
+@keyframes kf-cast-runway {
+    0%   { transform: translateX(0) rotate(0deg) scale(1); filter: none; }
+    22%  { transform: translateX(calc(var(--cast-dir, -1) * -14px)) rotate(-3deg) scale(1.02); }
+    44%  { transform: translateX(calc(var(--cast-dir, -1) * 14px)) rotate(3deg) scale(1.04); filter: brightness(1.2); }
+    68%  { transform: translateX(0) rotate(-1deg) scale(1.1); filter: drop-shadow(0 0 26px var(--cast-tint, #fff)) brightness(1.5); }
+    85%  { transform: translateX(0) rotate(0deg) scale(1.03); filter: brightness(1.2); }
+    100% { transform: translateX(0) rotate(0deg) scale(1); filter: none; }
+}
+@keyframes kf-cast-sparkle {
+    0%   { transform: translateY(0) scale(1); filter: none; }
+    20%  { transform: translateY(-16px) scale(1.06); filter: brightness(1.4) drop-shadow(0 0 14px #fff); }
+    35%  { transform: translateY(0) scale(0.98); }
+    50%  { transform: translateY(-10px) scale(1.04); filter: brightness(1.6) drop-shadow(0 0 22px #fff); }
+    65%  { transform: translateY(0) scale(1); }
+    82%  { transform: translateY(-4px) scale(1.08); filter: drop-shadow(0 0 30px #fff) brightness(2); }
+    100% { transform: translateY(0) scale(1); filter: none; }
+}
+@keyframes kf-cast-fracture {
+    0%   { transform: scale(1); filter: none; }
+    28%  { transform: scale(1.1, 0.9); filter: brightness(1.3); }
+    42%  { transform: scale(0.9, 1.14); filter: drop-shadow(0 0 30px var(--cast-tint, #fff)) brightness(2.4); }
+    58%  { transform: scale(1.05, 0.96); filter: brightness(1.5); }
+    100% { transform: scale(1); filter: none; }
+}
+@keyframes kf-cast-phantom {
+    0%   { transform: translateX(0) scale(1); opacity: 1; filter: none; }
+    30%  { transform: translateX(calc(var(--cast-dir, -1) * -10px)) scale(0.96); opacity: 0.15; filter: brightness(0.6); }
+    32%  { transform: translateX(calc(var(--cast-dir, -1) * 30px)) scale(0.96); opacity: 0; }
+    58%  { transform: translateX(calc(var(--cast-dir, -1) * 30px)) scale(0.96); opacity: 0; }
+    60%  { transform: translateX(0) scale(1.1); opacity: 0.2; filter: drop-shadow(0 0 26px var(--cast-tint, #fff)) brightness(1.8); }
+    100% { transform: translateX(0) scale(1); opacity: 1; filter: none; }
+}
+@keyframes kf-cast-surge {
+    0%   { transform: scale(1); filter: none; }
+    25%  { transform: scale(1.03); filter: brightness(1.3) drop-shadow(0 0 12px var(--cast-tint, #fff)); }
+    45%  { transform: scale(0.98); filter: brightness(1.1); }
+    62%  { transform: scale(1.08); filter: brightness(1.7) drop-shadow(0 0 24px var(--cast-tint, #fff)); }
+    80%  { transform: scale(1.18); filter: drop-shadow(0 0 42px var(--cast-tint, #fff)) brightness(2.4); }
+    100% { transform: scale(1); filter: none; }
+}
+@keyframes kf-cast-finale {
+    0%   { transform: scale(1) translateY(0); filter: none; }
+    16%  { transform: scale(0.9) translateY(6px); filter: brightness(0.9); }
+    34%  { transform: scale(1.05) translateY(-18px); filter: brightness(1.4) drop-shadow(0 0 20px var(--cast-tint, #fff)); }
+    52%  { transform: scale(1.1) translateY(-22px); filter: brightness(1.8) drop-shadow(0 0 34px var(--cast-tint, #fff)); }
+    70%  { transform: scale(1.24) translateY(-8px); filter: drop-shadow(0 0 54px var(--cast-tint, #fff)) brightness(2.8); }
+    86%  { transform: scale(1.06) translateY(0); filter: brightness(1.5); }
+    100% { transform: scale(1) translateY(0); filter: none; }
 }
 
 /* --- CAMEO / GUEST SUMMON: the ally's portrait flashes into the guest's, casts,

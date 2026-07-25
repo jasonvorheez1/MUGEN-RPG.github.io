@@ -119,7 +119,9 @@ const BondView = ({
         next[idx] = {
           ...next[idx],
           relationship: relLabel,
-          bondPath: getBondPath(next[idx].bondLevel, relLabel)
+          bondPath: getBondPath(next[idx].bondLevel, relLabel),
+          pathSetAt: Date.now(),
+          anniversariesClaimed: []
         };
       }
       return next;
@@ -128,6 +130,109 @@ const BondView = ({
     playSound("sfx_ui_select");
     playSound("mugen_cursor_decide", 0.5);
     setShowPathChooser(false);
+  };
+  // ANNIVERSARY -- real-world days since the current relationship path was
+  // declared. Purely a calendar-time gate (not bond level), rewarding players
+  // who keep coming back over actual days/weeks.
+  const ANNIVERSARY_DAYS = [
+    { days: 7, label: "One Week", rewards: { gems: 100, credits: 5e3 } },
+    { days: 30, label: "One Month", rewards: { gems: 400, credits: 25e3 } },
+    { days: 100, label: "100 Days", rewards: { gems: 1200, credits: 1e5 } },
+    { days: 365, label: "One Year", rewards: { gems: 5e3, credits: 5e5 } }
+  ];
+  const daysSincePathSet = currentChar?.pathSetAt ? Math.floor((Date.now() - currentChar.pathSetAt) / 864e5) : null;
+  const claimAnniversary = (milestone) => {
+    if (!currentChar || daysSincePathSet == null || daysSincePathSet < milestone.days) return;
+    if ((currentChar.anniversariesClaimed || []).includes(milestone.days)) return;
+    setCharacters((prev) => {
+      const next = [...prev];
+      const idx = next.findIndex((c) => String(c.export_id) === String(currentChar.export_id));
+      if (idx !== -1) next[idx] = { ...next[idx], anniversariesClaimed: [...(next[idx].anniversariesClaimed || []), milestone.days] };
+      return next;
+    });
+    if (milestone.rewards.gems) setGems((g) => g + milestone.rewards.gems);
+    if (milestone.rewards.credits) setCredits((c) => c + milestone.rewards.credits);
+    createFloatingText(`${milestone.label} Anniversary! +${milestone.rewards.gems} Gems`, false, "#facc15");
+    playSound("levelUp");
+  };
+  // DAILY CHECK-IN -- a lightweight, cost-free interaction (unlike Actions/
+  // Dates which cost stamina+credits) meant to reward simply coming back every
+  // day. Streak resets if a day is missed; bond payout scales with streak.
+  const todayKey = () => new Date().toDateString();
+  const doCheckIn = () => {
+    if (!currentChar) return;
+    const today = todayKey();
+    if (currentChar.lastCheckinDate === today) {
+      createFloatingText("Already checked in today", true);
+      return;
+    }
+    const yesterday = new Date(Date.now() - 864e5).toDateString();
+    const continued = currentChar.lastCheckinDate === yesterday;
+    const newStreak = continued ? (currentChar.checkinStreak || 0) + 1 : 1;
+    const bondGain = 20 + Math.min(80, newStreak * 5);
+    setCharacters((prev) => {
+      const next = [...prev];
+      const idx = next.findIndex((c) => String(c.export_id) === String(currentChar.export_id));
+      if (idx === -1) return prev;
+      const c = { ...next[idx] };
+      c.lastCheckinDate = today;
+      c.checkinStreak = newStreak;
+      c.bondXp = (c.bondXp || 0) + Math.floor(bondGain * getBondMultiplier(c));
+      while (c.bondXp >= c.nextBondXp && c.bondLevel < 100) {
+        c.bondXp -= c.nextBondXp;
+        c.bondLevel++;
+        c.nextBondXp = 80 + c.bondLevel * 25;
+      }
+      next[idx] = c;
+      return next;
+    });
+    setHeroMoods((prev) => ({ ...prev, [currentChar.export_id]: Math.min(100, (prev[currentChar.export_id] || 50) + 5) }));
+    createFloatingText(`Day ${newStreak} streak! +${bondGain} Bond`, false, "#4ade80");
+    playSound("success");
+  };
+  // MARRIAGE -- the capstone beyond Soulmate. Requires Soulmate + Bond LV.50.
+  // Stored as its own `married` flag for the same reason `soulmate` is: never
+  // touch the `relationship` string other code keys off of. Stacks a further
+  // permanent stat nudge on top of Soulmate's.
+  const proposeMarriage = () => {
+    if (!currentChar || !currentChar.soulmate || currentChar.married) return;
+    if ((currentChar.bondLevel || 1) < 50) {
+      createFloatingText("Requires Bond LV.50", true);
+      playSound("error");
+      return;
+    }
+    setCharacters((prev) => {
+      const next = [...prev];
+      const idx = next.findIndex((c) => String(c.export_id) === String(currentChar.export_id));
+      if (idx !== -1) next[idx] = { ...next[idx], married: true };
+      return next;
+    });
+    createFloatingText(`You and ${currentChar.name} are married!`, false, "#facc15");
+    playSound("levelUp");
+    playSound("mugen_cursor_decide", 0.5);
+  };
+  // ROMANCE MILESTONE -- a one-time deepening for the Romantic path once bond
+  // is well-established (LV.25+). Deliberately stored as a separate `soulmate`
+  // flag rather than rewriting `relationship`, since every relType/isRomantic
+  // check elsewhere keys off the string containing "Romantic" -- flipping it
+  // to something else would silently break all the existing Romantic-flavored
+  // rewards/labels. Grants a small permanent stat nudge and a title upgrade.
+  const deepenRomance = () => {
+    if (!currentChar || !currentChar.relationship.includes("Romantic") || currentChar.soulmate) return;
+    if ((currentChar.bondLevel || 1) < 25) {
+      createFloatingText("Requires Bond LV.25", true);
+      playSound("error");
+      return;
+    }
+    setCharacters((prev) => {
+      const next = [...prev];
+      const idx = next.findIndex((c) => String(c.export_id) === String(currentChar.export_id));
+      if (idx !== -1) next[idx] = { ...next[idx], soulmate: true };
+      return next;
+    });
+    createFloatingText(`${currentChar.name} is now your Soulmate!`, false, "#f472b6");
+    playSound("levelUp");
+    playSound("mugen_cursor_decide", 0.5);
   };
   const getBondRewards = (relationship) => {
     const rel = (relationship || "").toLowerCase();
@@ -241,11 +346,18 @@ const BondView = ({
       btnChillSub: "Relax",
       btnListen: "LISTEN",
       btnListenSub: "Support",
+      btnGesture: "LEAN IN",
+      btnGestureSub: "Go for it",
       soundBold: "kiss",
       locArcade: "Fun Date",
       locPark: "Romantic Walk",
       locCafe: "Intimate Chat",
-      locArena: "Couple Spar"
+      locArena: "Couple Spar",
+      locRooftop: "Stargazing",
+      locMuseum: "Quiet Wander",
+      locKaraoke: "Duet Night",
+      locDiner: "Late-Night Diner",
+      locBeach: "Sunset Walk"
     },
     Friend: {
       actionLabel: "HANGOUT",
@@ -255,11 +367,18 @@ const BondView = ({
       btnChillSub: "Chill out",
       btnListen: "CHAT",
       btnListenSub: "Deep talk",
+      btnGesture: "SURPRISE",
+      btnGestureSub: "Do something nice",
       soundBold: "success",
       locArcade: "Gaming Session",
       locPark: "Hangout",
       locCafe: "Grab Coffee",
-      locArena: "Training"
+      locArena: "Training",
+      locRooftop: "Rooftop Hangout",
+      locMuseum: "Museum Trip",
+      locKaraoke: "Karaoke Night",
+      locDiner: "Diner Run",
+      locBeach: "Beach Day"
     },
     Comrade: {
       actionLabel: "COORDINATE",
@@ -269,11 +388,18 @@ const BondView = ({
       btnChillSub: "Plan move",
       btnListen: "INTEL",
       btnListenSub: "Scan data",
+      btnGesture: "COVER FIRE",
+      btnGestureSub: "Go all in",
       soundBold: "spar",
       locArcade: "Simulation",
       locPark: "Recon Patrol",
       locCafe: "Strategy Meet",
-      locArena: "War Games"
+      locArena: "War Games",
+      locRooftop: "Overwatch Point",
+      locMuseum: "Archive Dive",
+      locKaraoke: "Squad Karaoke",
+      locDiner: "Debrief",
+      locBeach: "Perimeter Sweep"
     },
     Enemy: {
       actionLabel: "CONFRONT",
@@ -283,11 +409,18 @@ const BondView = ({
       btnChillSub: "Cold shoulder",
       btnListen: "OBSERVE",
       btnListenSub: "Analyze",
+      btnGesture: "ESCALATE",
+      btnGestureSub: "Push it",
       soundBold: "attack_hit",
       locArcade: "Score Attack",
       locPark: "Neutral Ground",
       locCafe: "Tense Meeting",
-      locArena: "Grudge Match"
+      locArena: "Grudge Match",
+      locRooftop: "Standoff",
+      locMuseum: "Hostile Territory",
+      locKaraoke: "Forced Truce",
+      locDiner: "Uneasy Meeting",
+      locBeach: "No Man's Land"
     }
   };
   const ctx = contextConfig[relType];
@@ -295,7 +428,12 @@ const BondView = ({
     { id: "arcade", name: "Cyber Arcade", type: "fun", cost: 500, stamina: 15, bg: "background_casino.png", desc: "Loud, chaotic, and energetic." },
     { id: "park", name: "Neon Park", type: "nature", cost: 200, stamina: 10, bg: "background_gacha.png", desc: "Quiet paths under holographic trees." },
     { id: "cafe", name: "Starlight Caf\xE9", type: "chill", cost: 800, stamina: 5, bg: "background_hub.png", desc: "Premium drinks and privacy." },
-    { id: "arena", name: "Sparring Ring", type: "active", cost: 0, stamina: 30, bg: "background_gym.png", desc: "Physical exertion and combat." }
+    { id: "arena", name: "Sparring Ring", type: "active", cost: 0, stamina: 30, bg: "background_gym.png", desc: "Physical exertion and combat." },
+    { id: "rooftop", name: "Rooftop Stargazing", type: "romantic", cost: 300, stamina: 10, bg: "background_void.png", desc: "The city noise fades below. Just stars and skyline." },
+    { id: "museum", name: "Museum of Tomorrow", type: "culture", cost: 600, stamina: 10, bg: "background_citadel.png", desc: "Exhibits from futures that never quite happened." },
+    { id: "karaoke", name: "Neon Karaoke Lounge", type: "fun", cost: 400, stamina: 15, bg: "background_casino.png", desc: "A private room, a questionable song list, zero judgment." },
+    { id: "diner", name: "Retro Diner", type: "chill", cost: 350, stamina: 5, bg: "background_hub.png", desc: "Vinyl booths, milkshakes, a jukebox that only plays three songs." },
+    { id: "beach", name: "Boardwalk Pier", type: "nature", cost: 450, stamina: 20, bg: "background_gacha.png", desc: "Salt air, arcade games built into the pier, the tide rolling in." }
   ];
   const DATE_SCENARIOS = {
     arcade: [
@@ -321,6 +459,36 @@ const BondView = ({
       "A weight rack clatters somewhere behind you. Neither of you flinches.",
       "The scoreboard from the last round is still up. It's not close.",
       "Sweat, adrenaline, and absolutely no intention of going easy on each other."
+    ],
+    rooftop: [
+      "The skyline stretches out below, a thousand lit windows and none of them yours.",
+      "A satellite blinks across the sky. You both watch it in silence until it's gone.",
+      "The wind picks up. Someone's jacket ends up around someone else's shoulders.",
+      "Down below, a siren wails and fades. Up here, none of it matters."
+    ],
+    museum: [
+      "A retrofuturist exhibit promised flying cars by now. It got some things right.",
+      "An interactive display asks you to predict the next hundred years. You disagree on the answer.",
+      "A guide mispronounces something badly enough that you both have to look away to keep a straight face.",
+      "The lights dim for a projection show. The room goes quiet and blue."
+    ],
+    karaoke: [
+      "The song list is somehow both endless and completely useless. You pick anyway.",
+      "Someone's rendition of a power ballad draws applause from the next room over.",
+      "The mic keeps cutting out. It becomes the funniest thing that has ever happened.",
+      "A duet gets suggested. Nobody backs down."
+    ],
+    diner: [
+      "The jukebox loops back to the same song for the third time. Nobody complains.",
+      "A milkshake arrives with two straws whether you asked for it or not.",
+      "The waitress calls you both 'the regulars' even though this is a first.",
+      "Neon light flickers red through the window, painting everything the same color."
+    ],
+    beach: [
+      "The pier lights flicker on as the sun drops into the water.",
+      "A claw machine at the end of the pier eats every token you feed it.",
+      "Waves crash somewhere below the boards, steady and loud enough to talk over.",
+      "A stray firework goes off down the beach -- too early, too loud, perfect timing."
     ]
   };
   const getDateScenario = (locId, turn) => {
@@ -342,6 +510,15 @@ const BondView = ({
     if (char.growthType === "Swift" && location.id === "arcade") score += 1;
     if (char.relationship.includes("Enemy") && location.id === "arena") score += 2;
     if (char.relationship.includes("Romantic") && location.id === "cafe") score += 2;
+    if (char.element === "LIGHT" && location.id === "museum") score += 2;
+    if (char.element === "WATER" && location.id === "beach") score += 2;
+    if (char.element === "WIND" && location.id === "rooftop") score += 2;
+    if (char.element === "DARK" && location.id === "rooftop") score += 1;
+    if (char.element === "FIRE" && location.id === "karaoke") score += 1;
+    if (char.growthType === "Balanced" && location.id === "diner") score += 1;
+    if (char.relationship.includes("Romantic") && (location.id === "rooftop" || location.id === "beach")) score += 2;
+    if (char.relationship.includes("Friend") && (location.id === "karaoke" || location.id === "diner")) score += 1;
+    if (char.relationship.includes("Comrade") && location.id === "museum") score += 1;
     return Math.min(5, score);
   };
   const beginDate = (locationId) => {
@@ -381,6 +558,14 @@ const BondView = ({
     } else if (choice === "listening") {
       score = mood < 55 ? 18 : 8;
       playSound(relType === "Enemy" ? "click" : "headpat");
+    } else if (choice === "gesture") {
+      // GESTURE -- a high-variance wildcard, distinct from FLIRT/bold (which is
+      // mood-gated). Ignores mood entirely and just gambles: usually a strong
+      // payoff, occasionally a real flop, giving the mini-game a genuine risk
+      // beyond the safe LISTEN/CASUAL options.
+      const roll = Math.random();
+      score = roll < 0.2 ? -15 : roll < 0.5 ? 10 : roll < 0.85 ? 22 : 30;
+      playSound(score >= 22 ? ctx.soundBold : score < 0 ? "error" : "success");
     } else {
       score = 12;
       playSound("success");
@@ -401,7 +586,7 @@ const BondView = ({
     const effect = relType === "Romantic" ? "fx_heart.png" : relType === "Enemy" ? "fx_impact.png" : "fx_sparkle.png";
     if (score > 10) triggerVisualEffect2(effect, "50%", "40%", 1.5);
     else triggerVisualEffect2("fx_sparkle.png", "50%", "40%", 1);
-    const actionLabel = choice === "bold" ? ctx.btnBold : choice === "listening" ? ctx.btnListen : ctx.btnChill;
+    const actionLabel = choice === "bold" ? ctx.btnBold : choice === "listening" ? ctx.btnListen : choice === "gesture" ? ctx.btnGesture : ctx.btnChill;
     const reactionPrompt = `[Relationship: ${relType}] I chose to ${actionLabel} (Action: ${choice}). Mood was ${mood}%. Affinity Change: ${score > 0 ? "+" : ""}${score}.`;
     triggerDialogue(currentChar, reactionPrompt, true);
   };
@@ -849,10 +1034,8 @@ const BondView = ({
             /* @__PURE__ */ jsxDEV("div", { className: "date-locations-grid", children: LOCATIONS.map((loc) => {
               let flavorName = loc.name;
               let flavorDesc = loc.desc;
-              if (loc.id === "arcade") flavorName = ctx.locArcade;
-              if (loc.id === "park") flavorName = ctx.locPark;
-              if (loc.id === "cafe") flavorName = ctx.locCafe;
-              if (loc.id === "arena") flavorName = ctx.locArena;
+              const locKey = "loc" + loc.id.charAt(0).toUpperCase() + loc.id.slice(1);
+              if (ctx[locKey]) flavorName = ctx[locKey];
               return /* @__PURE__ */ jsxDEV("div", { className: "location-card", onClick: () => beginDate(loc.id), children: [
                 /* @__PURE__ */ jsxDEV("div", { className: "loc-img", style: { backgroundImage: `url(${loc.bg})` } }, void 0, false, {
                   fileName: "<stdin>",
@@ -1000,6 +1183,44 @@ const BondView = ({
               lineNumber: 6448,
               columnNumber: 41
             }),
+            jsxDEV("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, padding: 10, borderRadius: 10, background: currentChar.lastCheckinDate === todayKey() ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }, children: [
+              jsxDEV("div", { children: [
+                jsxDEV("div", { style: { fontSize: "0.68rem", fontWeight: 900, color: "#4ade80" }, children: "DAILY CHECK-IN" }, void 0, false, {}),
+                jsxDEV("div", { style: { fontSize: "0.6rem", color: "var(--text-muted)" }, children: currentChar.checkinStreak ? `${currentChar.checkinStreak} day streak` : "Start a streak today" }, void 0, false, {})
+              ] }, void 0, true, {}),
+              jsxDEV("button", { className: "sb-chip", disabled: currentChar.lastCheckinDate === todayKey(), style: { fontSize: "0.66rem", opacity: currentChar.lastCheckinDate === todayKey() ? 0.5 : 1, cursor: currentChar.lastCheckinDate === todayKey() ? "not-allowed" : "pointer" }, onClick: doCheckIn, children: currentChar.lastCheckinDate === todayKey() ? "✓ CHECKED IN" : "CHECK IN" }, void 0, false, {})
+            ] }, void 0, true, {}),
+            currentChar.relationship.includes("Romantic") ? (
+              currentChar.married
+                ? jsxDEV("div", { style: { textAlign: "center", marginBottom: 16, padding: 10, borderRadius: 10, background: "rgba(250,204,21,0.12)", border: "1px solid rgba(250,204,21,0.4)" }, children: [
+                    jsxDEV(Heart, { size: 16, fill: "#facc15", color: "#facc15" }, void 0, false, {}),
+                    jsxDEV("div", { style: { fontSize: "0.72rem", fontWeight: 900, color: "#facc15", marginTop: 4 }, children: "♛ MARRIED — permanent +15% All Stats" }, void 0, false, {})
+                  ] }, void 0, true, {})
+                : currentChar.soulmate
+                ? jsxDEV("div", { style: { textAlign: "center", marginBottom: 16, padding: 10, borderRadius: 10, background: "rgba(244,114,182,0.12)", border: "1px solid rgba(244,114,182,0.4)" }, children: [
+                    jsxDEV(Heart, { size: 16, fill: "#f472b6", color: "#f472b6" }, void 0, false, {}),
+                    jsxDEV("div", { style: { fontSize: "0.72rem", fontWeight: 900, color: "#f472b6", marginTop: 4 }, children: "★ SOULMATE — permanent +6% All Stats" }, void 0, false, {}),
+                    jsxDEV("div", { style: { fontSize: "0.66rem", color: "var(--text-muted)", marginTop: 8 }, children: currentChar.bondLevel >= 50 ? "Ready to take the next step." : `Reach Bond LV.50 to propose (now LV.${currentChar.bondLevel}).` }, void 0, false, {}),
+                    jsxDEV("button", { className: "sb-chip", disabled: currentChar.bondLevel < 50, style: { fontSize: "0.68rem", marginTop: 6, opacity: currentChar.bondLevel < 50 ? 0.5 : 1, cursor: currentChar.bondLevel < 50 ? "not-allowed" : "pointer" }, onClick: proposeMarriage, children: "♛ PROPOSE MARRIAGE" }, void 0, false, {})
+                  ] }, void 0, true, {})
+                : jsxDEV("div", { style: { textAlign: "center", marginBottom: 16, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(244,114,182,0.35)" }, children: [
+                    jsxDEV("div", { style: { fontSize: "0.68rem", color: "var(--text-muted)", marginBottom: 8 }, children: currentChar.bondLevel >= 25 ? "Your bond has grown deep enough to take this further." : `Reach Bond LV.25 to unlock (now LV.${currentChar.bondLevel}).` }, void 0, false, {}),
+                    jsxDEV("button", { className: "sb-chip", disabled: currentChar.bondLevel < 25, style: { fontSize: "0.68rem", opacity: currentChar.bondLevel < 25 ? 0.5 : 1, cursor: currentChar.bondLevel < 25 ? "not-allowed" : "pointer" }, onClick: deepenRomance, children: "★ BECOME SOULMATES" }, void 0, false, {})
+                  ] }, void 0, true, {})
+            ) : null,
+            currentChar.pathSetAt ? jsxDEV("div", { style: { marginBottom: 16, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }, children: [
+              jsxDEV("div", { style: { fontSize: "0.62rem", fontWeight: 900, color: "#facc15", letterSpacing: 1, marginBottom: 6 }, children: `ANNIVERSARY — DAY ${daysSincePathSet}` }, void 0, false, {}),
+              jsxDEV("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" }, children: ANNIVERSARY_DAYS.map((m) => {
+                const claimed = (currentChar.anniversariesClaimed || []).includes(m.days);
+                const ready = !claimed && daysSincePathSet >= m.days;
+                return jsxDEV("button", {
+                  key: m.days, className: "sb-chip", disabled: !ready,
+                  style: { fontSize: "0.6rem", opacity: claimed ? 0.6 : ready ? 1 : 0.4, cursor: ready ? "pointer" : "not-allowed", background: claimed ? "rgba(74,222,128,0.15)" : undefined },
+                  onClick: () => claimAnniversary(m),
+                  children: claimed ? `✓ ${m.label}` : ready ? `CLAIM: ${m.label}` : `${m.label} (${m.days}d)`
+                }, void 0, false, {});
+              }) }, void 0, false, {})
+            ] }, void 0, true, {}) : null,
             BOND_REWARDS.map((reward, idx) => {
               const isUnlocked = currentChar.bondLevel >= reward.level;
               return /* @__PURE__ */ jsxDEV("div", { className: `bond-perk-node ${isUnlocked ? "unlocked" : ""}`, children: [
@@ -1152,7 +1373,11 @@ const BondView = ({
             fileName: "<stdin>",
             lineNumber: 6494,
             columnNumber: 41
-          })
+          }),
+          /* @__PURE__ */ jsxDEV("button", { className: "date-choice-btn gesture", onClick: () => handleDateChoice("gesture"), children: [
+            /* @__PURE__ */ jsxDEV("div", { className: "choice-label", children: ctx.btnGesture }, void 0, false, {}),
+            /* @__PURE__ */ jsxDEV("div", { className: "choice-sub", children: ctx.btnGestureSub }, void 0, false, {})
+          ] }, void 0, true, {})
         ] }, void 0, true, {
           fileName: "<stdin>",
           lineNumber: 6485,

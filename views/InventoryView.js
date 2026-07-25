@@ -36,6 +36,13 @@ const InventoryView = ({
 }) => {
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("rarity");
+  const [itemSearch, setItemSearch] = useState("");
+  // "Just used/sold/salvaged" flash -- a timestamp-keyed map so any card can
+  // briefly pop/glow right after an action, matching the same pattern the
+  // Gear Forge already uses (a Date.now() stamp checked against "now" on
+  // render) instead of inventing a new feedback mechanism.
+  const [actionFlash, setActionFlash] = useState({ id: null, time: 0 });
+  const flashItem = (id) => setActionFlash({ id, time: Date.now() });
   const [lockedItems, setLockedItems] = useState(() => {
     try {
       const saved = localStorage.getItem("mugen_locked_items");
@@ -102,16 +109,23 @@ const InventoryView = ({
     }));
     playSound("scavenge");
     createFloatingText(`+${amount} Materials ${essenceGain > 0 ? `& +${essenceGain} Essence` : ""}`, false, "#94a3b8");
+    flashItem(itemId);
   };
+  // Sell price now reads the item's REAL sellPrice from the catalog instead of
+  // a coarse 4-bucket rarity guess -- items.json already carries a per-item
+  // sellPrice (e.g. a Reality Script sells for 500,000, not the same $2,500
+  // every other "epic+" item got lumped into), so honor it.
+  const sellPriceFor = (item) => item.sellPrice ?? (item.rarity === "common" ? 100 : item.rarity === "uncommon" ? 300 : item.rarity === "rare" ? 800 : 2500);
   const sellItem = (itemId, e) => {
     e.stopPropagation();
     const item = items?.[itemId];
     if (!item) return;
-    const sellPrice = item.rarity === "common" ? 100 : item.rarity === "uncommon" ? 300 : item.rarity === "rare" ? 800 : 2500;
+    const sellPrice = sellPriceFor(item);
     setCredits((c) => c + sellPrice);
     removeFromInventory(itemId, 1);
     playSound("sell_item");
     createFloatingText(`+$${sellPrice.toLocaleString()}`, false, "#facc15");
+    flashItem(itemId);
   };
   const sellAllJunk = () => {
     if (!inventory) return;
@@ -120,7 +134,7 @@ const InventoryView = ({
     Object.entries(inventory).forEach(([id, qty]) => {
       const item = items?.[id];
       if (item && item.type === "junk") {
-        const sellPrice = item.rarity === "common" ? 100 : item.rarity === "uncommon" ? 300 : item.rarity === "rare" ? 800 : 2500;
+        const sellPrice = sellPriceFor(item);
         totalCredits += sellPrice * qty;
         itemsToRemove.push({ id, qty });
       }
@@ -204,6 +218,7 @@ const InventoryView = ({
       createFloatingText(`+${estGain} Bond`, false, "#f472b6");
       removeFromInventory(itemId, 1);
       playSound("upgrade");
+      flashItem(itemId);
       return;
     }
     let consumed = true;
@@ -565,6 +580,7 @@ const InventoryView = ({
     if (consumed) {
       removeFromInventory(itemId, 1);
       playSound("upgrade");
+      flashItem(itemId);
     }
   };
   const inventoryItems = useMemo(
@@ -572,7 +588,7 @@ const InventoryView = ({
     [inventory, items]
   );
   const filteredItems = useMemo(
-    () => inventoryItems.filter((item) => !item ? false : filter === "all" || item.type === filter).sort((a, b) => {
+    () => inventoryItems.filter((item) => !item ? false : (filter === "all" || item.type === filter) && (!itemSearch || (item.name || "").toLowerCase().includes(itemSearch.toLowerCase()))).sort((a, b) => {
       if (sortBy === "rarity") {
         const order = { "legendary": 4, "epic": 3, "rare": 2, "uncommon": 1, "common": 0 };
         return (order[b.rarity] || 0) - (order[a.rarity] || 0);
@@ -580,7 +596,7 @@ const InventoryView = ({
       if (sortBy === "qty") return b.qty - a.qty;
       return (a.name || "").localeCompare(b.name || "");
     }),
-    [inventoryItems, filter, sortBy]
+    [inventoryItems, filter, sortBy, itemSearch]
   );
   const unlockedList = characters.filter((c) => unlockedIds.map(String).includes(String(c.export_id))).filter((c) => c.name.toLowerCase().includes(targetSearch.toLowerCase())).sort((a, b) => calculateSubStat(b, characters, "pwr", skills, auraUpgrades) - calculateSubStat(a, characters, "pwr", skills, auraUpgrades));
   return /* @__PURE__ */ jsxDEV("div", { className: "inventory-view animate-fadeIn", style: { padding: "10px 0" }, children: [
@@ -595,7 +611,7 @@ const InventoryView = ({
         lineNumber: 5788,
         columnNumber: 9
       }),
-      /* @__PURE__ */ jsxDEV("button", { className: `filter-chip ${filter === "material" ? "active" : ""}`, onClick: () => setFilter("material"), children: "CRAFT" }, void 0, false, {
+      /* @__PURE__ */ jsxDEV("button", { className: `filter-chip ${filter === "special" ? "active" : ""}`, onClick: () => setFilter("special"), children: "RARE" }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 5789,
         columnNumber: 9
@@ -603,6 +619,18 @@ const InventoryView = ({
       /* @__PURE__ */ jsxDEV("button", { className: `filter-chip ${filter === "junk" ? "active" : ""}`, onClick: () => setFilter("junk"), children: "JUNK" }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 5790,
+        columnNumber: 9
+      }),
+      /* @__PURE__ */ jsxDEV("input", {
+        type: "text",
+        placeholder: "Search items...",
+        value: itemSearch,
+        onChange: (e) => setItemSearch(e.target.value),
+        className: "inventory-search-input",
+        style: { padding: "7px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: "0.75rem", width: 150 }
+      }, void 0, false, {
+        fileName: "<stdin>",
+        lineNumber: 5791,
         columnNumber: 9
       }),
       /* @__PURE__ */ jsxDEV(
@@ -660,9 +688,15 @@ const InventoryView = ({
       lineNumber: 5786,
       columnNumber: 7
     }),
-    /* @__PURE__ */ jsxDEV("div", { className: "inventory-grid", children: filteredItems.map((item) => {
+    /* @__PURE__ */ jsxDEV("div", { className: "inventory-grid", children: filteredItems.map((item, idx) => {
       const isLocked = lockedItems.includes(item.id);
-      return /* @__PURE__ */ jsxDEV("div", { className: `inventory-card rarity-${item.rarity} ${isLocked ? "locked" : ""} roster-card-animated`, children: [
+      // Just-acted flash: pops/glows for ~600ms right after use/sell/salvage,
+      // same timestamp-check pattern as the Gear Forge's "just upgraded" flash.
+      const justActed = actionFlash.id === item.id && Date.now() - actionFlash.time < 600;
+      return /* @__PURE__ */ jsxDEV("div", {
+        className: `inventory-card rarity-${item.rarity} ${isLocked ? "locked" : ""} ${justActed ? "inventory-card-flash" : ""}`,
+        style: { animationDelay: `${Math.min(idx, 30) * 0.03}s` },
+        children: [
         /* @__PURE__ */ jsxDEV("div", { className: "item-qty", children: [
           "x",
           item.qty
@@ -739,7 +773,12 @@ const InventoryView = ({
             columnNumber: 17
           }),
           !isLocked && /* @__PURE__ */ jsxDEV(Fragment, { children: [
-            ["xp_scroll", "xp_tome", "xp_ultra_tome"].includes(item.id) && /* @__PURE__ */ jsxDEV("button", { className: "use-item-btn", style: { flex: 1, background: "#a855f7", opacity: 0.8 }, onClick: (e) => {
+            // Was hardcoded to 3 specific XP item ids -- every OTHER stackable
+            // consumable (bond gifts, catalysts, cook_* items, stamina
+            // potions...) had no bulk-use affordance despite useItem already
+            // being generically callable per-id. Now any item with qty > 1
+            // gets the same x10 shortcut.
+            item.type !== "junk" && item.qty > 1 && /* @__PURE__ */ jsxDEV("button", { className: "use-item-btn", style: { flex: 1, background: "#a855f7", opacity: 0.8 }, onClick: (e) => {
               e.stopPropagation();
               if (confirm(`Use up to 10 ${item.name}s?`)) {
                 let q = item.qty;

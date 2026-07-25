@@ -75,10 +75,13 @@ const HomeView = ({
   endlessFloor = 1,
   eventTokens = 0,
   materials = 0,
+  setMaterials,
   essence = 0,
   items = {},
   auraUpgrades = {},
-  selectedCharIndex = 0
+  selectedCharIndex = 0,
+  abilityShards = {},
+  setAbilityShards
 }) => {
   // ------------------------------------------------------------------ clock
   const [now, setNow] = useState(() => new Date());
@@ -123,11 +126,13 @@ const HomeView = ({
       { label: "STAGES CLEARED", value: stages, pts: stages * 100, hint: "+100 rep each" }
     ];
   }, [unlockedCharacters, campaignProgress]);
-  const facilityRank = Math.floor(totalAccountLevel / 15) + 1;
+  // Kept in sync with App.js's own facilityRank formula (Rank 2 at Lv.12).
+  const RANK_LEVEL_STEP = 12;
+  const facilityRank = Math.floor(totalAccountLevel / RANK_LEVEL_STEP) + 1;
   const repInfo = getRepRank(facilityRank);
   const nextRepInfo = facilityRank < REP_RANKS.length ? getRepRank(facilityRank + 1) : null;
-  const levelsIntoRank = totalAccountLevel % 15;
-  const rankProgress = facilityRank >= REP_RANKS.length ? 1 : levelsIntoRank / 15;
+  const levelsIntoRank = totalAccountLevel % RANK_LEVEL_STEP;
+  const rankProgress = facilityRank >= REP_RANKS.length ? 1 : levelsIntoRank / RANK_LEVEL_STEP;
 
   // One-time rank reward chests, persisted outside React state.
   const [claimedRanks, setClaimedRanks] = useState(() => {
@@ -175,6 +180,109 @@ const HomeView = ({
     setUnclaimedGems((g) => g % 1);
     createFloatingText(`+${floor} GEMS!`, false, "#00d2ff");
     playSound("jackpot");
+  };
+
+  // ------------------------------------------------------- PROSPECTOR'S DIG
+  // A new minigame built entirely out of the ACT_ digging/mining/reveal sounds
+  // that had never been wired up anywhere (shovel, jackhammer, wrench ratchet,
+  // pry-bar "minestone" hits, a bite-trap gag, a metal detector blip, and a
+  // clap+horn fanfare for the big finish). Spend credits, work through 4 dig
+  // steps, get a themed sound each time, then reveal a loot tier.
+  const DIG_COST = 2500;
+  const DIG_STEPS = [
+    { key: "shovel", label: "SHOVEL THROUGH THE DIRT", sounds: ["dig_shovel1", "dig_shovel2", "dig_shovel3"] },
+    { key: "jackhammer", label: "JACKHAMMER THE ROCK", sounds: ["dig_jackhammer_in"], followUp: "dig_jackhammer_out" },
+    { key: "ratchet", label: "RATCHET IT LOOSE", sounds: ["dig_ratchet1", "dig_ratchet2", "dig_ratchet3"] },
+    { key: "pry", label: "PRY IT OPEN", sounds: ["dig_pry1", "dig_pry2", "dig_pry3", "dig_pry4", "dig_pry5", "dig_pry6", "dig_pry7"] }
+  ];
+  const [digActive, setDigActive] = useState(false);
+  const [digStep, setDigStep] = useState(0);
+  const [digTraps, setDigTraps] = useState(0);
+  const [digResult, setDigResult] = useState(null);
+  const [digFlash, setDigFlash] = useState(null);
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const startDig = () => {
+    if (credits < DIG_COST) { createFloatingText(`Need $${DIG_COST.toLocaleString()}`, true); playSound("error"); return; }
+    setCredits((c) => c - DIG_COST);
+    setDigActive(true);
+    setDigStep(0);
+    setDigTraps(0);
+    setDigResult(null);
+    playSound("ui_select");
+  };
+  const digStepAction = () => {
+    const step = DIG_STEPS[digStep];
+    if (!step) return;
+    playSound(pick(step.sounds));
+    if (step.followUp) setTimeout(() => playSound(step.followUp), 260);
+    // ~12% chance of a "trap" gag per step -- flavor only, small reward hit,
+    // never blocks progress.
+    if (Math.random() < 0.12) {
+      setTimeout(() => {
+        playSound(pick(["dig_trap1", "dig_trap2", "dig_trap3", "dig_trap4"]));
+        setDigFlash("OW! Something bit back.");
+        setDigTraps((t) => t + 1);
+        setTimeout(() => setDigFlash(null), 1200);
+      }, 350);
+    }
+    const nextStep = digStep + 1;
+    if (nextStep >= DIG_STEPS.length) {
+      setTimeout(() => resolveDig(), 550);
+      setDigStep(nextStep);
+    } else {
+      setDigStep(nextStep);
+    }
+  };
+  const DIG_TIERS = [
+    { id: "legendary", chance: 0.04, label: "LEGENDARY FIND", color: "#facc15", credits: [30000, 50000], materials: [4000, 6000], gems: [50, 100], shard: 8 },
+    { id: "rare", chance: 0.14, label: "RARE FIND", color: "#a855f7", credits: [10000, 18000], materials: [1500, 2500], gems: [10, 20], shard: 3 },
+    { id: "decent", chance: 0.4, label: "DECENT FIND", color: "#4ade80", credits: [4000, 7000], materials: [600, 1000], gems: [0, 0], shard: 0 },
+    { id: "small", chance: 1, label: "SMALL FIND", color: "#94a3b8", credits: [1500, 3000], materials: [200, 400], gems: [0, 0], shard: 0 }
+  ];
+  const resolveDig = () => {
+    playSound("dig_detector");
+    const roll = Math.max(0, Math.random() - digTraps * 0.04);
+    let cumulative = 0;
+    let tier = DIG_TIERS[DIG_TIERS.length - 1];
+    for (const t of DIG_TIERS) {
+      cumulative += t.chance;
+      if (roll < cumulative) { tier = t; break; }
+    }
+    const rollRange = ([lo, hi]) => lo === hi ? lo : Math.floor(lo + Math.random() * (hi - lo));
+    const creditsWon = rollRange(tier.credits);
+    const materialsWon = rollRange(tier.materials);
+    const gemsWon = rollRange(tier.gems);
+    let shardSkill = null;
+    if (tier.shard > 0 && typeof setAbilityShards === "function" && skills.length) {
+      const pool = skills.filter((s) => !s.signature);
+      if (pool.length) shardSkill = pick(pool);
+    }
+    setTimeout(() => {
+      setCredits((c) => c + creditsWon);
+      if (typeof setMaterials === "function") setMaterials((m) => m + materialsWon);
+      if (gemsWon) setGems((g) => g + gemsWon);
+      if (shardSkill) setAbilityShards((prev) => ({ ...prev, [shardSkill.id]: (prev[shardSkill.id] || 0) + tier.shard }));
+      setDigResult({ tier, creditsWon, materialsWon, gemsWon, shardSkill, shardAmt: tier.shard });
+      if (tier.id === "legendary") {
+        playSound("dig_jackpot_boom");
+        playSound(pick(["dig_clap1", "dig_clap2", "dig_clap3"]), 0.6);
+        setTimeout(() => playSound("dig_fanfare", 0.6), 200);
+        playSound("dig_build_correct");
+        triggerVisualEffect && triggerVisualEffect("fx_powerup.png", "50%", "50%", 2);
+      } else if (tier.id === "rare") {
+        playSound(pick(["dig_clap1", "dig_clap2", "dig_clap3"]), 0.5);
+        playSound("dig_build_correct");
+      } else if (tier.id === "decent") {
+        playSound("dig_scratch2", 0.4);
+      } else {
+        playSound("dig_build_fail", 0.5);
+      }
+    }, 450);
+  };
+  const closeDig = () => {
+    setDigActive(false);
+    setDigStep(0);
+    setDigResult(null);
   };
 
   const displayPWR = useCountUp(totalPWR);
@@ -275,8 +383,8 @@ const HomeView = ({
             h("div", { className: "mc-rep-blurb" }, repInfo.blurb))),
         h("div", { className: "mc-readiness", style: { marginTop: 12 } },
           h("div", { className: "mc-readiness-row" },
-            h("span", null, nextRepInfo ? `${15 - levelsIntoRank} LEVELS TO ${nextRepInfo.venue.toUpperCase()}` : "MAX RANK"),
-            h("span", { style: { color: "#facc15" } }, `${levelsIntoRank}/15`)),
+            h("span", null, nextRepInfo ? `${RANK_LEVEL_STEP - levelsIntoRank} LEVELS TO ${nextRepInfo.venue.toUpperCase()}` : "MAX RANK"),
+            h("span", { style: { color: "#facc15" } }, `${levelsIntoRank}/${RANK_LEVEL_STEP}`)),
           h("div", { className: "tech-progress-bar", style: { height: 8 } },
             h("div", { className: "tech-progress-fill", style: { width: `${rankProgress * 100}%`, background: "#facc15" } }))),
         nextRepInfo ? h("div", { className: "mc-rep-next" }, h(Gift, { size: 12, color: "#a855f7" }), ` NEXT: ${nextRepInfo.perk}`) : null,
@@ -303,7 +411,12 @@ const HomeView = ({
           h("div", { style: { flex: 1, minWidth: 0 } },
             h("div", { className: "mc-till-label" }, "GEODE — slow-cooked gems"),
             h("div", { className: "mc-till-val", style: { color: "var(--gem-color)" } }, Math.floor(unclaimedGems).toLocaleString())),
-          h("button", { className: "train-btn mc-btn-sm", disabled: Math.floor(unclaimedGems) <= 0, onClick: claimGeode, style: { background: "var(--gem-color)", color: "#000", opacity: Math.floor(unclaimedGems) > 0 ? 1 : 0.4 } }, "CRACK"))),
+          h("button", { className: "train-btn mc-btn-sm", disabled: Math.floor(unclaimedGems) <= 0, onClick: claimGeode, style: { background: "var(--gem-color)", color: "#000", opacity: Math.floor(unclaimedGems) > 0 ? 1 : 0.4 } }, "CRACK")),
+        h("div", { className: "mc-till-row", style: { borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14, marginTop: 14 } },
+          h("div", { style: { flex: 1, minWidth: 0 } },
+            h("div", { className: "mc-till-label" }, "PROSPECTOR'S DIG — buried loot"),
+            h("div", { style: { fontSize: "0.62rem", color: "var(--text-muted)" } }, `$${DIG_COST.toLocaleString()} a dig · credits, materials, occasionally more`)),
+          h("button", { className: "train-btn mc-btn-sm", disabled: credits < DIG_COST, onClick: startDig, style: { background: "linear-gradient(135deg,#a3703a,#7c4a1e)", color: "#fff", opacity: credits >= DIG_COST ? 1 : 0.4 } }, "DIG"))),
 
       // E — THE CREW
       h("div", { className: "mc-card" },
@@ -343,7 +456,37 @@ const HomeView = ({
       h("div", { className: "mc-ticker-inner" },
         [...tickerBits, ...tickerBits].map((b, i) => h("span", { key: i }, b, h("i", { className: "mc-ticker-dot" }))))),
 
-    h("div", { className: "mc-footer" }, "MUGEN CITY • EST. 2008 • THE NIGHT IS YOUNG")
+    h("div", { className: "mc-footer" }, "MUGEN CITY • EST. 2008 • THE NIGHT IS YOUNG"),
+
+    // ------------------------------------------------- PROSPECTOR'S DIG modal
+    digActive ? h("div", {
+      className: "dig-overlay",
+      onClick: (e) => { if (e.target === e.currentTarget && digResult) closeDig(); }
+    },
+      h("div", { className: "dig-panel" },
+        h("div", { className: "dig-panel-title" }, "PROSPECTOR'S DIG"),
+        !digResult ? h("div", null,
+          h("div", { className: "dig-step-track" },
+            DIG_STEPS.map((s, i) => h("div", { key: s.key, className: `dig-step-pip ${i < digStep ? "done" : i === digStep ? "active" : ""}` }))),
+          digFlash ? h("div", { className: "dig-flash" }, digFlash) : null,
+          digStep < DIG_STEPS.length
+            ? h("button", { className: "dig-action-btn", onClick: digStepAction }, DIG_STEPS[digStep].label)
+            : h("div", { className: "dig-waiting" }, "...")
+        ) : h("div", { className: "dig-result", style: { borderColor: digResult.tier.color } },
+          h("div", { className: "dig-result-title", style: { color: digResult.tier.color } }, digResult.tier.label),
+          h("div", { className: "dig-result-rewards" }, [
+            digResult.creditsWon ? h("div", { key: "c" }, `+$${digResult.creditsWon.toLocaleString()}`) : null,
+            digResult.materialsWon ? h("div", { key: "m" }, `+${digResult.materialsWon.toLocaleString()} materials`) : null,
+            digResult.gemsWon ? h("div", { key: "g", style: { color: "var(--gem-color)" } }, `+${digResult.gemsWon} gems`) : null,
+            digResult.shardSkill ? h("div", { key: "s", style: { color: "#00d2ff" } }, `+${digResult.shardAmt} ${digResult.shardSkill.name} shards`) : null
+          ]),
+          h("div", { className: "dig-result-actions" }, [
+            h("button", { key: "again", className: "train-btn mc-btn-sm", disabled: credits < DIG_COST, onClick: startDig, style: { opacity: credits >= DIG_COST ? 1 : 0.4 } }, `DIG AGAIN — $${DIG_COST.toLocaleString()}`),
+            h("button", { key: "done", className: "train-btn mc-btn-sm mc-btn-ghost", onClick: closeDig }, "DONE")
+          ])
+        )
+      )
+    ) : null
   );
 };
 

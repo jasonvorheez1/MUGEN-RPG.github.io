@@ -34,40 +34,34 @@
  {
   "id": "sig_raven_team_leader",
   "owner": "Raven Team Leader",
-  "name": "Sentinel Override",
-  "desc": "Command protocol: cleanses the squad, grants a heavy shield + DEF, floods 25 Burst to all allies, and lands a baton strike. Every third strike, her Override silently maxes out and the baton comes down as a full command-grade smite.",
+  "name": "Nevermore Heart",
+  "desc": "She never raises her voice. She doesn't have to -- the hood comes down, the four words leave her mouth flat and quiet (azarath, metrion, zinthos), and her whole soul-self peels away from her body as a black raven the size of the battlefield, wings blotting out everything. It should be terrifying. It would be, if it weren't also stitched with little pink hearts along the trailing edge of every feather, the same cloying pastel plush pink from a stuffed bear's ribbon -- brooding darkness wearing something disarmingly soft over it, and never quite explaining why. Whatever it swallows doesn't come back out clean.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
-  "target": "single_enemy",
-  "power": 2,
-  "cooldown": 150,
-  "scalingStat": "def",
-  "flavor": "Authorization granted.",
-  "damageType": "physical",
+  "target": "all_enemies",
+  "power": 3.2,
+  "cooldown": 155,
+  "scalingStat": "magic_atk",
+  "flavor": "Azarath. Metrion. Zinthos.",
+  "damageType": "magical",
   "meta": {
-   "team_effects": [
-    {
-     "type": "shield",
-     "chance": 1,
-     "duration": 4,
-     "val": 0.35,
-     "label": "SENTINEL"
-    },
-    {
-     "type": "buff_def",
-     "chance": 1,
-     "duration": 4,
-     "val": 0.45,
-     "label": "DEF+"
-    }
+   "castAnim": "cast-eclipse",
+   "gain_burst": 10,
+   "ignore_evasion": true,
+   "self_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.2, "label": "SOUL-SELF UNBOUND" },
+    { "type": "regen", "chance": 1, "duration": 3, "val": 0.06, "label": "STUFFED WITH HEART" }
    ],
-   "cleanse_team": true,
-   "gain_burst": 25,
-   "builds_hidden_power": 1,
-   "hidden_power_threshold": 3,
-   "hidden_power_mult": 4.5
-  }
+   "team_effects": [
+    { "type": "shield", "chance": 1, "duration": 3, "val": 0.25, "label": "CUDDLE WARD" },
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.12, "label": "HIDDEN CLAWS" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.8, "duration": 3, "val": 0.2, "label": "SWALLOWED BY NEVERMORE" },
+   { "type": "stun", "chance": 0.3, "duration": 1, "val": 0, "label": "IT'S NOT SUPPOSED TO BE CUTE" }
+  ]
  },
  {
   "id": "sig_princess_peach",
@@ -345,7 +339,7 @@
   "id": "sig_summer_mia",
   "owner": "Summer Mia",
   "name": "Tidal Refrain",
-  "desc": "A refreshing splash that heals, cleanses, and quickens the whole squad (+SPD).",
+  "desc": "A refreshing splash that heals, cleanses, and quickens the whole squad — raising SPD AND flooding everyone with HASTE so their skills charge noticeably faster.",
   "rarity": "Signature",
   "signature": true,
   "type": "heal",
@@ -357,10 +351,10 @@
   "meta": {
    "team_effects": [
     {
-     "type": "buff_spd",
+     "type": "haste",
      "chance": 1,
      "duration": 4,
-     "val": 0.25,
+     "val": 0.3,
      "label": "REFRESH"
     },
     {
@@ -375,10 +369,52 @@
   }
  },
  {
+  "id": "sig_sonic",
+  "owner": "Sonic",
+  "name": "Gotta Go Fast",
+  "desc": "SPIN DASH: Sonic revs up for a bit of HASTE and +SPD. Fast, flashy, and just not that useful in a real fight -- he still doesn't hit anyone. Every basic attack that connects now also nudges his own skill bar forward.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "self",
+  "power": 0,
+  "cooldown": 105,
+  "scalingStat": "speed",
+  "flavor": "You're too slow!",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-blink",
+   "gain_burst": 8,
+   "self_effects": [
+    {
+     "type": "haste",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.3,
+     "label": "OVERDRIVE"
+    },
+    {
+     "type": "buff_spd",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.2,
+     "label": "SUPERSONIC"
+    },
+    {
+     "type": "skill_surge",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.06,
+     "label": "OVERDRIVE"
+    }
+   ]
+  }
+ },
+ {
   "id": "sig_mia",
   "owner": "Mia",
   "name": "Gale Larceny",
-  "desc": "WIND THIEF: a blink-quick strike that steals a buff from the foe and quickens Mia (+SPD). Cannot be dodged.",
+  "desc": "WIND THIEF: a blink-quick strike that steals a buff from the foe and rides the tailwind — Mia gains +SPD and HASTE, so her next skill comes back up far sooner. Cannot be dodged.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
@@ -393,10 +429,10 @@
    "ignore_evasion": true,
    "self_effects": [
     {
-     "type": "buff_spd",
+     "type": "haste",
      "chance": 1,
      "duration": 3,
-     "val": 0.25,
+     "val": 0.35,
      "label": "TAILWIND"
     }
    ]
@@ -446,7 +482,7 @@
   "id": "sig_ada_wong",
   "owner": "Ada Wong",
   "name": "Hookshot Ambush",
-  "desc": "A grappling ambush that steals a buff, then repositions Ada with +SPD and a shield. Always connects.",
+  "desc": "A grappling ambush that steals a buff, then repositions Ada with +SPD, HASTE (her next skill recharges much faster), and a shield. Always connects.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
@@ -460,10 +496,10 @@
    "steal_buff": true,
    "self_effects": [
     {
-     "type": "buff_spd",
+     "type": "haste",
      "chance": 1,
      "duration": 3,
-     "val": 0.2,
+     "val": 0.35,
      "label": "REPOSITION"
     },
     {
@@ -473,8 +509,7 @@
      "val": 0.2,
      "label": "COVER"
     }
-   ],
-   "ignore_evasion": true
+   ]
   }
  },
  {
@@ -753,32 +788,31 @@
  {
   "id": "sig_phoebe",
   "owner": "Phoebe",
-  "name": "Redacted Anomaly",
-  "desc": "Reality un-renders foes (ignore 40% DEF), corrupts them with Static, and deals +50% to the corrupted.",
+  "name": "Just Like You",
+  "desc": "Phoebe smiles, and for a second the squad's own guard drops, because the smile is right, the warmth is right, everything about her reads as another exhausted party of survivors who just wants to stick together. That's the trick a Partygoer's always played -- perfectly humanoid, perfectly warm, perfectly wrong. She lifts whatever the target was hiding behind for herself, singles them out from the crowd so there's nowhere left to blend into, and then, only once they've relaxed around her, the smile goes a little too wide and stops looking human at all. Whatever they felt safe holding onto a second ago, they don't anymore.",
   "rarity": "Signature",
   "signature": true,
-  "type": "atk",
-  "target": "all_enemies",
-  "power": 4.5,
-  "cooldown": 125,
+  "type": "debuff",
+  "target": "single_enemy",
+  "power": 1.6,
+  "cooldown": 145,
   "scalingStat": "magic_atk",
-  "flavor": "[DATA EXPUNGED]",
+  "flavor": "It's okay. I'm just like you.",
   "damageType": "magical",
   "meta": {
-   "ignore_def": 0.4,
-   "bonus_vs_status": {
-    "status": "static",
-    "mult": 1.5
-   }
+   "castAnim": "cast-phantom",
+   "steal_buff": true,
+   "mark": { "label": "SINGLED OUT", "duration": 3, "def_down": 0.15 },
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.15, "label": "WEARING YOUR FACE" }
+   ],
+   "team_effects": [
+    { "type": "regen", "chance": 1, "duration": 3, "val": 0.04, "label": "JUST LIKE US, RIGHT?" }
+   ]
   },
   "statusEffects": [
-   {
-    "type": "static",
-    "chance": 1,
-    "duration": 3,
-    "val": 0.1,
-    "label": "REDACTED"
-   }
+   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "THE SMILE DROPS" },
+   { "type": "debuff_atk", "chance": 0.7, "duration": 3, "val": 0.15, "label": "IT WAS NEVER HUMAN" }
   ]
  },
  {
@@ -798,7 +832,7 @@
   "meta": {
    "ignore_def": 0.6,
    "execute_below": 0.4,
-   "execute_mult": 2.0
+   "execute_mult": 2
   },
   "statusEffects": [
    {
@@ -915,7 +949,7 @@
    "guaranteed_crit": true,
    "ignore_def": 0.5,
    "execute_below": 0.4,
-   "execute_mult": 2.0
+   "execute_mult": 2
   }
  },
  {
@@ -1005,13 +1039,13 @@
   "signature": true,
   "type": "atk",
   "target": "all_enemies",
-  "power": 4.0,
+  "power": 4,
   "cooldown": 120,
   "scalingStat": "atk",
   "flavor": "Let's pummel 'em into the dirt!",
   "damageType": "physical",
   "meta": {
-   "scales_missing_hp": 1.0,
+   "scales_missing_hp": 1,
    "break_shield": true
   },
   "statusEffects": [
@@ -1033,7 +1067,7 @@
   "signature": true,
   "type": "atk",
   "target": "all_enemies",
-  "power": 4.0,
+  "power": 4,
   "cooldown": 120,
   "scalingStat": "atk",
   "flavor": "I have HAD it.",
@@ -1061,13 +1095,13 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 4.0,
+  "power": 4,
   "cooldown": 85,
   "scalingStat": "speed",
   "flavor": "Stiiiimpy, you eediot!",
   "damageType": "physical",
   "meta": {
-   "scales_missing_hp": 1.0,
+   "scales_missing_hp": 1,
    "guaranteed_crit": true,
    "lifesteal": 0.25
   }
@@ -1081,7 +1115,7 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 4.0,
+  "power": 4,
   "cooldown": 110,
   "scalingStat": "hp",
   "flavor": "Dude, I am a shape-shifter.",
@@ -1412,7 +1446,7 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 5.0,
+  "power": 5,
   "cooldown": 120,
   "scalingStat": "magic_atk",
   "flavor": "Just... Monika.",
@@ -1722,7 +1756,7 @@
   "signature": true,
   "type": "atk",
   "target": "random_enemies",
-  "power": 4.0,
+  "power": 4,
   "cooldown": 110,
   "scalingStat": "speed",
   "flavor": "Two tails are better than one!",
@@ -1760,15 +1794,35 @@
   "meta": {
    "castAnim": "cast-focus",
    "break_shield": true,
-   "bonus_vs_element": { "element": "DARK", "mult": 1.6 },
+   "bonus_vs_element": {
+    "element": "DARK",
+    "mult": 1.6
+   },
    "bonus_per_debuff": 0.22,
    "self_effects": [
-    { "type": "buff_crit", "duration": 3, "val": 0.15, "label": "MISDIRECTION" }
+    {
+     "type": "buff_crit",
+     "duration": 3,
+     "val": 0.15,
+     "label": "MISDIRECTION"
+    }
    ]
   },
   "statusEffects": [
-   { "type": "static", "chance": 0.7, "duration": 3, "val": 0.08, "label": "HAMON" },
-   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "STUN" }
+   {
+    "type": "static",
+    "chance": 0.7,
+    "duration": 3,
+    "val": 0.08,
+    "label": "HAMON"
+   },
+   {
+    "type": "stun",
+    "chance": 0.35,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
   ]
  },
  {
@@ -1861,7 +1915,7 @@
   "id": "sig_amy_rose",
   "owner": "Amy Rose",
   "name": "Piko Piko Hammer Smash",
-  "desc": "A loving hammer-blow that shatters shields, staggers, stuns, and enrages Amy (+ATK) for the fight.",
+  "desc": "A loving hammer-blow that shatters shields, staggers, stuns, and enrages Amy (+ATK) for the fight. Landing hammer swings now builds Momentum -- four in a row and her next skill is instantly ready.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
@@ -1881,6 +1935,14 @@
      "duration": 3,
      "val": 0.3,
      "label": "FURY"
+    },
+    {
+     "type": "momentum_surge",
+     "chance": 1,
+     "duration": 5,
+     "threshold": 4,
+     "val": 0,
+     "label": "HAMMER RHYTHM"
     }
    ]
   },
@@ -1989,28 +2051,45 @@
   "id": "sig_hermione_granger",
   "owner": "Hermione Granger",
   "name": "Counterspell Mastery",
-  "desc": "CONTROL: silences every foe (no skills for 2 turns), strips all their buffs, and exposes their defenses. The brightest witch of her age.",
+  "desc": "CONTROL + VERSATILITY: silences every foe (no skills for 2 turns), dispels their buffs, and exposes their defenses -- then cleanses the squad's own debuffs and studies the field, sharpening everyone's crit chance and DEF. Whatever the fight needs, she's read the book on it.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
   "target": "all_enemies",
-  "power": 2.0,
+  "power": 2,
   "cooldown": 135,
   "scalingStat": "magic_atk",
   "flavor": "It's leviOsa, not levioSA.",
   "damageType": "magical",
   "meta": {
    "dispel_enemies": true,
+   "cleanse_team": true,
    "mark": {
     "def_down": 0.3,
     "duration": 3,
     "label": "EXPOSED"
-   }
+   },
+   "team_effects": [
+    {
+     "type": "buff_crit",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.15,
+     "label": "STUDIED"
+    },
+    {
+     "type": "buff_def",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.2,
+     "label": "PREPARED"
+    }
+   ]
   },
   "statusEffects": [
    {
     "type": "silence",
-    "chance": 0.7,
+    "chance": 0.85,
     "duration": 2,
     "val": 0,
     "label": "SILENCED"
@@ -2106,7 +2185,7 @@
    "ignore_evasion": true,
    "break_shield": true,
    "execute_below": 0.5,
-   "execute_mult": 3.0
+   "execute_mult": 3
   },
   "statusEffects": [
    {
@@ -2146,7 +2225,7 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 3.0,
+  "power": 3,
   "cooldown": 110,
   "scalingStat": "atk",
   "flavor": "Poyo!",
@@ -2185,7 +2264,7 @@
   "signature": true,
   "type": "atk",
   "target": "all_enemies",
-  "power": 2.0,
+  "power": 2,
   "cooldown": 125,
   "scalingStat": "luck",
   "flavor": "The Squeak Squad always gets the treasure.",
@@ -2244,7 +2323,7 @@
   "signature": true,
   "type": "atk",
   "target": "all_enemies",
-  "power": 4.0,
+  "power": 4,
   "cooldown": 130,
   "scalingStat": "atk",
   "flavor": "Look what they make you give, son.",
@@ -2596,7 +2675,7 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 4.0,
+  "power": 4,
   "cooldown": 95,
   "scalingStat": "atk",
   "flavor": "Is that... edible? Doesn't matter!",
@@ -2688,7 +2767,7 @@
     "label": "TARGETED"
    },
    "execute_below": 0.3,
-   "execute_mult": 2.0
+   "execute_mult": 2
   }
  },
  {
@@ -2776,7 +2855,7 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 3.0,
+  "power": 3,
   "cooldown": 100,
   "scalingStat": "atk",
   "flavor": "Teenage robot, reporting for duty!",
@@ -2838,7 +2917,7 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 3.0,
+  "power": 3,
   "cooldown": 95,
   "scalingStat": "speed",
   "flavor": "Tag's up, let's roll!",
@@ -2867,19 +2946,34 @@
   "id": "sig_freya_dragoons_descent",
   "owner": "Freya",
   "name": "Dragoon's Descent",
-  "desc": "Leaps skyward and crashes back down with a piercing lance strike, briefly emboldened by the fall.",
+  "desc": "Leaps skyward and crashes back down with a piercing lance strike, briefly emboldened by the fall. Now a real dive -- she crashes down on the WHOLE enemy line, not just one target, and her landing rallies the squad's aim.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
-  "target": "single_enemy",
-  "power": 1.7,
+  "target": "all_enemies",
+  "power": 3.4,
   "cooldown": 110,
   "scalingStat": "atk",
   "flavor": "For Burmecia!",
   "damageType": "physical",
   "meta": {
    "self_effects": [
-    { "type": "buff_atk", "duration": 2, "val": 0.2, "label": "LANCE READY" }
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "LANCE READY"
+    }
+   ],
+   "team_effects": [
+    {
+     "type": "buff_crit",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.15,
+     "label": "DRAGOON'S DESCENT"
+    }
    ]
   }
  },
@@ -2887,62 +2981,70 @@
   "id": "sig_tao_blade_heart_finale",
   "owner": "Tao",
   "name": "Blade Heart: Finale",
-  "desc": "Tao dumps her stacked Blade Heart into one shot, hitting harder against debuffed targets -- and if it kills, she's already gone before the body drops, untouchable for a moment.",
+  "desc": "Everything Tao's been reading off the fight so far -- every opening, every stagger, every debuff someone else already carved into the target -- gets dumped into one motion, blades moving faster than the eye tracks and landing exactly where they need to. It doesn't matter how well-armored or how fast the target thinks it is; her swords are already past that by the time it registers. If the hit kills, she's not even standing where she was anymore, gone before the body finishes falling, and everyone around her moves that much faster in the moment right after, riding the same speed she just proved was possible.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 1.9,
-  "cooldown": 120,
+  "power": 4.4,
+  "cooldown": 145,
   "scalingStat": "atk",
   "flavor": "Every bullet, every blade -- make it count.",
   "damageType": "physical",
   "meta": {
+   "castAnim": "cast-slash",
+   "gain_burst": 12,
+   "ignore_evasion": true,
    "bonus_per_debuff": 0.2,
+   "execute_below": 0.3,
+   "execute_mult": 2.0,
    "grants_untargetable_on_kill": true,
-   "untargetable_duration": 2
-  }
+   "untargetable_duration": 2,
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.3, "label": "BLADE HEART RESONANCE" }
+   ],
+   "team_effects": [
+    { "type": "haste", "chance": 1, "duration": 3, "val": 0.15, "label": "FOLLOW HER LEAD" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.75, "duration": 3, "val": 0.2, "label": "CLEAVED OPEN" }
+  ]
  },
  {
   "id": "sig_li_spirit_eruption",
   "owner": "Li",
   "name": "Crimson Nova: Spirit's Eruption",
-  "desc": "Detonates a roaring pillar of flame on the target, searing them badly. Deals massive bonus damage to anything already burning.",
+  "desc": "Li plants her stance and calls up everything her spirit's been holding back -- not a single flame, a whole roaring pillar of it, punched straight through the target and out the other side. It doesn't matter what's standing there when it lands; between the heat and the pressure wave, armor doesn't hold the way it's supposed to, and anything already burning just gets fed. She comes out of the pose already glowing, ready to do it again, and for a few seconds everyone fighting beside her burns a little hotter too, catching sparks off her like she's the source now.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 2.9,
-  "cooldown": 120,
+  "power": 4.0,
+  "cooldown": 140,
   "scalingStat": "magic_atk",
   "flavor": "Let it burn.",
   "damageType": "magical",
-  "statusEffects": [
-   { "type": "burn", "chance": 0.95, "duration": 3, "val": 0.1, "label": "SCORCHED" }
-  ],
   "meta": {
-   "bonus_vs_status": { "status": "burn", "mult": 2 }
-  }
- },
- {
-  "id": "sig_sarah_connor_no_fate",
-  "owner": "Sarah Connor",
-  "name": "No Fate",
-  "desc": "Sarah barks a tactical order and lays down cover fire. Decent intel, mediocre payload -- she was never the muscle of this operation.",
-  "rarity": "Signature",
-  "signature": true,
-  "type": "atk",
-  "target": "single_enemy",
-  "power": 0.6,
-  "cooldown": 90,
-  "scalingStat": "magic_atk",
-  "flavor": "The future's not set. There's no fate but what we make for ourselves.",
-  "damageType": "magical",
-  "meta": {
+   "castAnim": "cast-inferno",
+   "gain_burst": 10,
+   "execute_below": 0.2,
+   "execute_mult": 1.7,
+   "bonus_vs_status": {
+    "status": "burn",
+    "mult": 2.2
+   },
+   "self_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.2, "label": "INNER FLAME" }
+   ],
    "team_effects": [
-    { "type": "buff_def", "duration": 3, "val": 0.15, "label": "DUG IN" }
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.1, "label": "CATCHES LIKE WILDFIRE" }
    ]
-  }
+  },
+  "statusEffects": [
+   { "type": "burn", "chance": 0.95, "duration": 3, "val": 0.12, "label": "SCORCHED" },
+   { "type": "debuff_def", "chance": 0.6, "duration": 3, "val": 0.15, "label": "CHARRED ARMOR" }
+  ]
  },
  {
   "id": "sig_gaz_game_over_screen",
@@ -2959,13 +3061,72 @@
   "flavor": "Game. Over.",
   "damageType": "physical",
   "statusEffects": [
-   { "type": "expose", "chance": 1, "duration": 3, "val": 0, "label": "TARGETED" }
+   {
+    "type": "expose",
+    "chance": 1,
+    "duration": 3,
+    "val": 0,
+    "label": "TARGETED"
+   }
   ],
   "meta": {
    "stage_cycle": [
-    { "team_effects": [{ "type": "buff_crit", "duration": 3, "val": 0.12, "label": "LOCKED ON" }], "msg": "TARGET ACQUIRED" },
-    { "enemy_effects": [{ "type": "debuff_def", "duration": 3, "val": 0.15, "label": "FIREWALL DOWN" }], "team_effects": [{ "type": "buff_atk", "duration": 3, "val": 0.15, "label": "PRESSING ADVANTAGE" }], "msg": "SYSTEM BREACH" },
-    { "enemy_effects": [{ "type": "debuff_def", "duration": 3, "val": 0.3, "label": "GAME OVER" }], "team_effects": [{ "type": "buff_atk", "duration": 4, "val": 0.3, "label": "FINAL BLOW" }, { "type": "buff_crit", "duration": 4, "val": 0.25, "label": "FINAL BLOW" }], "burst": 25, "msg": "GAME OVER" }
+    {
+     "team_effects": [
+      {
+       "type": "buff_crit",
+       "duration": 3,
+       "val": 0.12,
+       "label": "LOCKED ON"
+      }
+     ],
+     "msg": "TARGET ACQUIRED"
+    },
+    {
+     "enemy_effects": [
+      {
+       "type": "debuff_def",
+       "duration": 3,
+       "val": 0.15,
+       "label": "FIREWALL DOWN"
+      }
+     ],
+     "team_effects": [
+      {
+       "type": "buff_atk",
+       "duration": 3,
+       "val": 0.15,
+       "label": "PRESSING ADVANTAGE"
+      }
+     ],
+     "msg": "SYSTEM BREACH"
+    },
+    {
+     "enemy_effects": [
+      {
+       "type": "debuff_def",
+       "duration": 3,
+       "val": 0.3,
+       "label": "GAME OVER"
+      }
+     ],
+     "team_effects": [
+      {
+       "type": "buff_atk",
+       "duration": 4,
+       "val": 0.3,
+       "label": "FINAL BLOW"
+      },
+      {
+       "type": "buff_crit",
+       "duration": 4,
+       "val": 0.25,
+       "label": "FINAL BLOW"
+      }
+     ],
+     "burst": 25,
+     "msg": "GAME OVER"
+    }
    ]
   }
  },
@@ -2983,7 +3144,13 @@
   "scalingStat": "magic_atk",
   "flavor": "I am the king of all monsters... mostly.",
   "statusEffects": [
-   { "type": "elemental_insight", "chance": 1, "duration": 4, "val": 0.4, "label": "TITAN'S INSIGHT" }
+   {
+    "type": "elemental_insight",
+    "chance": 1,
+    "duration": 4,
+    "val": 0.4,
+    "label": "TITAN'S INSIGHT"
+   }
   ]
  },
  {
@@ -3000,13 +3167,65 @@
   "scalingStat": "hp",
   "flavor": "Gunter, fetch my crown!",
   "statusEffects": [
-   { "type": "untargetable", "chance": 1, "duration": 1, "val": 0, "label": "ENCASED" }
+   {
+    "type": "untargetable",
+    "chance": 1,
+    "duration": 1,
+    "val": 0,
+    "label": "ENCASED"
+   }
   ],
   "meta": {
    "stage_cycle": [
-    { "enemy_effects": [{ "type": "freeze", "duration": 2, "val": 0, "label": "FROSTBITE" }], "msg": "FROSTBITE FIELD" },
-    { "team_effects": [{ "type": "shield", "duration": 3, "val": 0.25, "label": "BLIZZARD WARD" }, { "type": "buff_def", "duration": 3, "val": 0.2, "label": "ICE ARMOR" }], "msg": "BLIZZARD KING" },
-    { "team_effects": [{ "type": "buff_def", "duration": 4, "val": 0.35, "label": "ABSOLUTE ZERO" }], "enemy_effects": [{ "type": "freeze", "duration": 3, "val": 0, "label": "FLASH FROZEN" }], "heal_pct": 0.2, "burst": 20, "msg": "ABSOLUTE ZERO" }
+    {
+     "enemy_effects": [
+      {
+       "type": "freeze",
+       "duration": 2,
+       "val": 0,
+       "label": "FROSTBITE"
+      }
+     ],
+     "msg": "FROSTBITE FIELD"
+    },
+    {
+     "team_effects": [
+      {
+       "type": "shield",
+       "duration": 3,
+       "val": 0.25,
+       "label": "BLIZZARD WARD"
+      },
+      {
+       "type": "buff_def",
+       "duration": 3,
+       "val": 0.2,
+       "label": "ICE ARMOR"
+      }
+     ],
+     "msg": "BLIZZARD KING"
+    },
+    {
+     "team_effects": [
+      {
+       "type": "buff_def",
+       "duration": 4,
+       "val": 0.35,
+       "label": "ABSOLUTE ZERO"
+      }
+     ],
+     "enemy_effects": [
+      {
+       "type": "freeze",
+       "duration": 3,
+       "val": 0,
+       "label": "FLASH FROZEN"
+      }
+     ],
+     "heal_pct": 0.2,
+     "burst": 20,
+     "msg": "ABSOLUTE ZERO"
+    }
    ]
   }
  },
@@ -3025,7 +3244,10 @@
   "flavor": "I'M SO ANGRY RIGHT NOW!",
   "damageType": "physical",
   "meta": {
-   "bonus_vs_status": { "status": "expose", "mult": 2.2 }
+   "bonus_vs_status": {
+    "status": "expose",
+    "mult": 2.2
+   }
   }
  },
  {
@@ -3043,7 +3265,13 @@
   "flavor": "You're not getting away.",
   "damageType": "magical",
   "statusEffects": [
-   { "type": "expose", "chance": 1, "duration": 3, "val": 0, "label": "BRANDED" }
+   {
+    "type": "expose",
+    "chance": 1,
+    "duration": 3,
+    "val": 0,
+    "label": "BRANDED"
+   }
   ]
  },
  {
@@ -3062,7 +3290,12 @@
   "damageType": "physical",
   "meta": {
    "self_effects": [
-    { "type": "untargetable", "duration": 2, "val": 0, "label": "AIRBORNE" }
+    {
+     "type": "untargetable",
+     "duration": 2,
+     "val": 0,
+     "label": "AIRBORNE"
+    }
    ]
   }
  },
@@ -3080,13 +3313,66 @@
   "scalingStat": "magic_atk",
   "flavor": "Divine Dogs, go.",
   "statusEffects": [
-   { "type": "elemental_insight", "chance": 1, "duration": 4, "val": 0.35, "label": "SHIKIGAMI INSIGHT" }
+   {
+    "type": "elemental_insight",
+    "chance": 1,
+    "duration": 4,
+    "val": 0.35,
+    "label": "SHIKIGAMI INSIGHT"
+   }
   ],
   "meta": {
    "stage_cycle": [
-    { "team_effects": [{ "type": "buff_atk", "duration": 3, "val": 0.15, "label": "DIVINE DOGS" }], "msg": "DIVINE DOGS" },
-    { "enemy_effects": [{ "type": "debuff_spd", "duration": 3, "val": 0.25, "label": "NUE'S CHASE" }], "team_effects": [{ "type": "buff_crit", "duration": 3, "val": 0.15, "label": "NUE'S CHASE" }], "msg": "NUE" },
-    { "team_effects": [{ "type": "buff_elemdmg", "duration": 4, "val": 0.35, "label": "MAHORAGA" }], "enemy_effects": [{ "type": "debuff_def", "duration": 4, "val": 0.3, "label": "ADAPTATION" }], "burst": 25, "msg": "MAHORAGA: ADAPTATION" }
+    {
+     "team_effects": [
+      {
+       "type": "buff_atk",
+       "duration": 3,
+       "val": 0.15,
+       "label": "DIVINE DOGS"
+      }
+     ],
+     "msg": "DIVINE DOGS"
+    },
+    {
+     "enemy_effects": [
+      {
+       "type": "debuff_spd",
+       "duration": 3,
+       "val": 0.25,
+       "label": "NUE'S CHASE"
+      }
+     ],
+     "team_effects": [
+      {
+       "type": "buff_crit",
+       "duration": 3,
+       "val": 0.15,
+       "label": "NUE'S CHASE"
+      }
+     ],
+     "msg": "NUE"
+    },
+    {
+     "team_effects": [
+      {
+       "type": "buff_elemdmg",
+       "duration": 4,
+       "val": 0.35,
+       "label": "MAHORAGA"
+      }
+     ],
+     "enemy_effects": [
+      {
+       "type": "debuff_def",
+       "duration": 4,
+       "val": 0.3,
+       "label": "ADAPTATION"
+      }
+     ],
+     "burst": 25,
+     "msg": "MAHORAGA: ADAPTATION"
+    }
    ]
   }
  },
@@ -3094,19 +3380,27 @@
   "id": "sig_puppycorn_rainbow_power_playtime",
   "owner": "Puppycorn",
   "name": "Rainbow Power Playtime!",
-  "desc": "An explosion of sparkly chaos -- somehow it hits way harder when the squad already has a target painted.",
+  "desc": "Puppycorn doesn't really have an attack pattern so much as a blur of bouncing, barking, sparkling chaos -- and somehow it hits way harder when the squad already has a target painted. The chaos doesn't stop when the hit lands, either: he's still wound up, and every basic swing after this one comes out just a little bit faster than the last.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 1.6,
-  "cooldown": 110,
-  "scalingStat": "magic_atk",
+  "power": 2.4,
+  "cooldown": 90,
+  "scalingStat": "speed",
   "flavor": "PLAYTIME!!!",
   "damageType": "magical",
   "meta": {
-   "bonus_vs_status": { "status": "expose", "mult": 1.8 }
-  }
+   "castAnim": "cast-sparkle",
+   "bonus_vs_status": { "status": "expose", "mult": 1.8 },
+   "self_effects": [
+    { "type": "skill_surge", "chance": 1, "duration": 4, "val": 0.07, "label": "CHAOS ENERGY" },
+    { "type": "momentum_surge", "chance": 1, "duration": 6, "threshold": 3, "val": 0, "label": "PLAYTIME OVERDRIVE" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_spd", "chance": 0.5, "duration": 2, "val": 0.15, "label": "DIZZY FROM CHAOS" }
+  ]
  },
  {
   "id": "sig_ju_fu_fu_tiger_seven_forms_finale",
@@ -3117,31 +3411,16 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 1.7,
+  "power": 2.6,
   "cooldown": 110,
   "scalingStat": "atk",
   "flavor": "Seven forms, one strike.",
   "damageType": "physical",
   "meta": {
-   "bonus_vs_status": { "status": "expose", "mult": 2 }
-  }
- },
- {
-  "id": "sig_miyu_airstrike_beacon",
-  "owner": "Miyu",
-  "name": "Airstrike Beacon",
-  "desc": "Calls in a precision airstrike that lands far harder on a target the squad has already lit up.",
-  "rarity": "Signature",
-  "signature": true,
-  "type": "atk",
-  "target": "single_enemy",
-  "power": 1.9,
-  "cooldown": 115,
-  "scalingStat": "atk",
-  "flavor": "Locked on. Fire when ready.",
-  "damageType": "physical",
-  "meta": {
-   "bonus_vs_status": { "status": "expose", "mult": 2.1 }
+   "bonus_vs_status": {
+    "status": "expose",
+    "mult": 2
+   }
   }
  },
  {
@@ -3159,7 +3438,10 @@
   "flavor": "Ooooh, this is going to be FUN.",
   "damageType": "magical",
   "meta": {
-   "bonus_vs_status": { "status": "expose", "mult": 2.3 }
+   "bonus_vs_status": {
+    "status": "expose",
+    "mult": 2.3
+   }
   }
  },
  {
@@ -3177,7 +3459,13 @@
   "flavor": "You're on in 3, 2, 1...",
   "damageType": "magical",
   "statusEffects": [
-   { "type": "expose", "chance": 1, "duration": 3, "val": 0, "label": "ON AIR" }
+   {
+    "type": "expose",
+    "chance": 1,
+    "duration": 3,
+    "val": 0,
+    "label": "ON AIR"
+   }
   ]
  },
  {
@@ -3197,7 +3485,12 @@
   "meta": {
    "extra_hits": 2,
    "self_effects": [
-    { "type": "untargetable", "duration": 1, "val": 0, "label": "CLONE SUBSTITUTION" }
+    {
+     "type": "untargetable",
+     "duration": 1,
+     "val": 0,
+     "label": "CLONE SUBSTITUTION"
+    }
    ]
   }
  },
@@ -3217,8 +3510,18 @@
   "meta": {
    "cleanse_team": true,
    "team_effects": [
-    { "type": "shield", "duration": 3, "val": 0.25, "label": "F.U.N." },
-    { "type": "buff_atk", "duration": 3, "val": 0.2, "label": "IMAGINATION" }
+    {
+     "type": "shield",
+     "duration": 3,
+     "val": 0.25,
+     "label": "F.U.N."
+    },
+    {
+     "type": "buff_atk",
+     "duration": 3,
+     "val": 0.2,
+     "label": "IMAGINATION"
+    }
    ]
   }
  },
@@ -3237,17 +3540,46 @@
   "flavor": "I'LL CRUSH YOU, NYAHAHAHA!",
   "damageType": "physical",
   "meta": {
-   "crush": { "per_stack": 0.35, "def_down": 0.14, "max_stacks": 5, "duration": 4 },
+   "crush": {
+    "per_stack": 0.35,
+    "def_down": 0.14,
+    "max_stacks": 5,
+    "duration": 4
+   },
    "team_effects": [
-    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.5, "label": "CAT'S RAMPAGE" }
+    {
+     "type": "buff_elemdmg",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.5,
+     "label": "CAT'S RAMPAGE"
+    }
    ],
    "self_effects": [
-    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.3, "label": "FRENZY" },
-    { "type": "buff_spd", "chance": 1, "duration": 3, "val": 0.25, "label": "PROWL" }
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.3,
+     "label": "FRENZY"
+    },
+    {
+     "type": "buff_spd",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "PROWL"
+    }
    ]
   },
   "statusEffects": [
-   { "type": "stun", "chance": 0.4, "duration": 1, "val": 0, "label": "STAGGERED" }
+   {
+    "type": "stun",
+    "chance": 0.4,
+    "duration": 1,
+    "val": 0,
+    "label": "STAGGERED"
+   }
   ]
  },
  {
@@ -3266,10 +3598,26 @@
   "damageType": "magical",
   "meta": {
    "ignore_evasion": true,
-   "mark": { "def_down": 0.35, "duration": 4, "label": "ANALYZED" },
+   "mark": {
+    "def_down": 0.35,
+    "duration": 4,
+    "label": "ANALYZED"
+   },
    "team_effects": [
-    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.4, "label": "RISE'S HYPE" },
-    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.2, "label": "PINPOINT" }
+    {
+     "type": "buff_elemdmg",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.4,
+     "label": "RISE'S HYPE"
+    },
+    {
+     "type": "buff_crit",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.2,
+     "label": "PINPOINT"
+    }
    ]
   }
  },
@@ -3290,14 +3638,32 @@
   "meta": {
    "break_shield": true,
    "team_effects": [
-    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.3, "label": "KI SURGE" }
+    {
+     "type": "buff_elemdmg",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "KI SURGE"
+    }
    ],
    "self_effects": [
-    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.3, "label": "POWERING UP" }
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.3,
+     "label": "POWERING UP"
+    }
    ]
   },
   "statusEffects": [
-   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "STUN" }
+   {
+    "type": "stun",
+    "chance": 0.35,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
   ]
  },
  {
@@ -3319,12 +3685,30 @@
    "lifesteal": 0.3,
    "dispel_enemies": true,
    "team_effects": [
-    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.3, "label": "VIRAL SURGE" },
-    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.2, "label": "SUPERHUMAN" }
+    {
+     "type": "buff_elemdmg",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "VIRAL SURGE"
+    },
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.2,
+     "label": "SUPERHUMAN"
+    }
    ]
   },
   "statusEffects": [
-   { "type": "poison", "chance": 0.9, "duration": 4, "val": 0.08, "label": "T-VIRUS" }
+   {
+    "type": "poison",
+    "chance": 0.9,
+    "duration": 4,
+    "val": 0.08,
+    "label": "T-VIRUS"
+   }
   ]
  },
  {
@@ -3345,10 +3729,26 @@
    "ignore_evasion": true,
    "dispel_enemies": true,
    "gain_burst": 20,
-   "mark": { "def_down": 0.3, "duration": 3, "label": "RADAR-LOCKED" },
+   "mark": {
+    "def_down": 0.3,
+    "duration": 3,
+    "label": "RADAR-LOCKED"
+   },
    "team_effects": [
-    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.35, "label": "OVERCLOCK" },
-    { "type": "shield", "chance": 1, "duration": 3, "val": 0.25, "label": "CAPSULE FIELD" }
+    {
+     "type": "buff_elemdmg",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.35,
+     "label": "OVERCLOCK"
+    },
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "CAPSULE FIELD"
+    }
    ]
   }
  },
@@ -3370,12 +3770,30 @@
    "lifesteal": 0.25,
    "cleanse_team": true,
    "team_effects": [
-    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.3, "label": "COMFY" },
-    { "type": "regen", "chance": 1, "duration": 3, "val": 0.05, "label": "SNACK BREAK" }
+    {
+     "type": "buff_elemdmg",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "COMFY"
+    },
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.05,
+     "label": "SNACK BREAK"
+    }
    ]
   },
   "statusEffects": [
-   { "type": "debuff_spd", "chance": 0.8, "duration": 3, "val": 0.25, "label": "LAZY DAZE" }
+   {
+    "type": "debuff_spd",
+    "chance": 0.8,
+    "duration": 3,
+    "val": 0.25,
+    "label": "LAZY DAZE"
+   }
   ]
  },
  {
@@ -3395,12 +3813,30 @@
   "meta": {
    "break_shield": true,
    "team_effects": [
-    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.3, "label": "LEADERSHIP" },
-    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.15, "label": "PRECISION" }
+    {
+     "type": "buff_elemdmg",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "LEADERSHIP"
+    },
+    {
+     "type": "buff_crit",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.15,
+     "label": "PRECISION"
+    }
    ]
   },
   "statusEffects": [
-   { "type": "stun", "chance": 0.4, "duration": 1, "val": 0, "label": "STUN" }
+   {
+    "type": "stun",
+    "chance": 0.4,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
   ]
  },
  {
@@ -3422,8 +3858,20 @@
    "dispel_enemies": true,
    "gain_burst": 30,
    "team_effects": [
-    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.3, "label": "ENTROPY PACT" },
-    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.25, "label": "WISH GRANTED" }
+    {
+     "type": "buff_elemdmg",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "ENTROPY PACT"
+    },
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.25,
+     "label": "WISH GRANTED"
+    }
    ]
   }
  },
@@ -3447,10 +3895,22 @@
    "execute_below": 0.4,
    "execute_mult": 1.9,
    "team_effects": [
-    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.15, "label": "GOLDEN SPARK" }
+    {
+     "type": "buff_elemdmg",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.15,
+     "label": "GOLDEN SPARK"
+    }
    ],
    "self_effects": [
-    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.4, "label": "SSJ AURA" }
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.4,
+     "label": "SSJ AURA"
+    }
    ]
   }
  },
@@ -3473,7 +3933,13 @@
    "gain_burst": 10
   },
   "statusEffects": [
-   { "type": "static", "chance": 0.6, "duration": 2, "val": 0.06, "label": "MAGIC BACKFIRE" }
+   {
+    "type": "static",
+    "chance": 0.6,
+    "duration": 2,
+    "val": 0.06,
+    "label": "MAGIC BACKFIRE"
+   }
   ]
  },
  {
@@ -3496,7 +3962,13 @@
    "lifesteal": 0.2
   },
   "statusEffects": [
-   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "STAGGERED" }
+   {
+    "type": "stun",
+    "chance": 0.35,
+    "duration": 1,
+    "val": 0,
+    "label": "STAGGERED"
+   }
   ]
  },
  {
@@ -3529,7 +4001,7 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 4.0,
+  "power": 4,
   "cooldown": 140,
   "scalingStat": "hp",
   "flavor": "I'm gonna be King of the Pirates!",
@@ -3540,7 +4012,13 @@
    "stagger_bonus": 3
   },
   "statusEffects": [
-   { "type": "stun", "chance": 0.4, "duration": 1, "val": 0, "label": "STUN" }
+   {
+    "type": "stun",
+    "chance": 0.4,
+    "duration": 1,
+    "val": 0,
+    "label": "STUN"
+   }
   ]
  },
  {
@@ -3559,10 +4037,19 @@
   "damageType": "magical",
   "meta": {
    "lifesteal": 0.2,
-   "bonus_vs_status": { "status": "burn", "mult": 1.5 }
+   "bonus_vs_status": {
+    "status": "burn",
+    "mult": 1.5
+   }
   },
   "statusEffects": [
-   { "type": "burn", "chance": 1, "duration": 4, "val": 0.09, "label": "DRAGONFIRE" }
+   {
+    "type": "burn",
+    "chance": 1,
+    "duration": 4,
+    "val": 0.09,
+    "label": "DRAGONFIRE"
+   }
   ]
  },
  {
@@ -3580,11 +4067,20 @@
   "flavor": "It is time for me to look inward and begin asking the big questions: Who am I, and what do I want?",
   "damageType": "magical",
   "meta": {
-   "bonus_vs_element": { "element": "DARK", "mult": 1.6 },
+   "bonus_vs_element": {
+    "element": "DARK",
+    "mult": 1.6
+   },
    "cleanse_team": true
   },
   "statusEffects": [
-   { "type": "burn", "chance": 0.7, "duration": 3, "val": 0.07, "label": "BLUE FLAME" }
+   {
+    "type": "burn",
+    "chance": 0.7,
+    "duration": 3,
+    "val": 0.07,
+    "label": "BLUE FLAME"
+   }
   ]
  },
  {
@@ -3606,14 +4102,20 @@
    "ignore_evasion": true
   },
   "statusEffects": [
-   { "type": "burn", "chance": 0.9, "duration": 4, "val": 0.1, "label": "AMATERASU" }
+   {
+    "type": "burn",
+    "chance": 0.9,
+    "duration": 4,
+    "val": 0.1,
+    "label": "AMATERASU"
+   }
   ]
  },
  {
   "id": "sig_courier_lucky38",
   "owner": "Courier",
   "name": "Lucky 38 Override",
-  "desc": "Under the hood this is just a gun shot -- until the SPECIAL build kicks in. Every point of AGILITY adds another bullet to the volley, so a fast Courier unloads a storm of hits. Whichever stat he's invested in also reshapes the move AND brands the target/himself with a rising status that snowballs each turn: STR stokes OVERHEAT (climbing power), PER sharpens PRECISION (climbing crit), END builds FORTIFY (climbing defense), CHA radiates CHARM (climbing luck), INT spins up OVERCLOCK (climbing magic). Invest in two stats and the build blends into something new -- STR+AGI is a blitzing gunslinger. Max every SPECIAL stat and the chip stops holding back at all. Put no points anywhere and it's exactly what it looks like: a guy with a revolver.",
+  "desc": "Under the hood this is just a gun shot -- until the SPECIAL build kicks in. Every point of AGILITY adds another bullet to the volley AND wraps him in HASTE, so a fast Courier unloads a storm of hits and cycles his abilities far quicker than anyone else. Whichever stat is HIGHEST reshapes the move AND brands the target/himself with a rising status that snowballs each turn: STR stokes OVERHEAT (climbing power), PER sharpens PRECISION (climbing crit), END builds FORTIFY (climbing defense), CHA radiates CHARM (climbing luck), INT spins up OVERCLOCK (climbing magic). Invest in two stats and the build blends into something new -- STR+AGI is a blitzing gunslinger who never stops moving. Every OTHER stat still isn't wasted, either -- any point above baseline ticks a smaller undertone of that same effect on top of the headline archetype, so a secondary investment in, say, END or INT always does SOMETHING even when it isn't the stat running the show. Max every SPECIAL stat and the chip stops holding back at all. Put no points anywhere and it's exactly what it looks like: a guy with a revolver.",
   "rarity": "Signature",
   "signature": true,
   "type": "atk",
@@ -3629,9 +4131,30 @@
     "baseline": 1,
     "baseMsg": "LUCKY REVOLVER",
     "combos": [
-     { "keys": ["str", "agi"], "threshold": 6, "archetype": "str_agi" },
-     { "keys": ["int", "cha"], "threshold": 6, "archetype": "int_cha" },
-     { "keys": ["end", "per"], "threshold": 6, "archetype": "end_per" }
+     {
+      "keys": [
+       "str",
+       "agi"
+      ],
+      "threshold": 6,
+      "archetype": "str_agi"
+     },
+     {
+      "keys": [
+       "int",
+       "cha"
+      ],
+      "threshold": 6,
+      "archetype": "int_cha"
+     },
+     {
+      "keys": [
+       "end",
+       "per"
+      ],
+      "threshold": 6,
+      "archetype": "end_per"
+     }
     ],
     "archetypes": {
      "ultimate": {
@@ -3641,13 +4164,50 @@
       "bonus": "execute",
       "ignore_evasion": true,
       "self_effects": [
-       { "type": "buff_atk", "duration": 4, "val": 0.4, "label": "PLATINUM CHIP MAXED" },
-       { "type": "buff_crit", "duration": 4, "val": 0.3, "label": "PLATINUM CHIP MAXED" }
+       {
+        "type": "buff_atk",
+        "duration": 4,
+        "val": 0.4,
+        "label": "PLATINUM CHIP MAXED"
+       },
+       {
+        "type": "buff_crit",
+        "duration": 4,
+        "val": 0.3,
+        "label": "PLATINUM CHIP MAXED"
+       },
+       {
+        "type": "haste",
+        "duration": 4,
+        "val": 0.5,
+        "label": "PLATINUM CHIP MAXED"
+       }
       ],
       "team_effects": [
-       { "type": "buff_atk", "duration": 4, "val": 0.25, "label": "LUCKY 38 OVERRIDE" },
-       { "type": "buff_crit", "duration": 4, "val": 0.2, "label": "LUCKY 38 OVERRIDE" },
-       { "type": "buff_elemdmg", "duration": 4, "val": 0.25, "label": "LUCKY 38 OVERRIDE" }
+       {
+        "type": "buff_atk",
+        "duration": 4,
+        "val": 0.25,
+        "label": "LUCKY 38 OVERRIDE"
+       },
+       {
+        "type": "buff_crit",
+        "duration": 4,
+        "val": 0.2,
+        "label": "LUCKY 38 OVERRIDE"
+       },
+       {
+        "type": "buff_elemdmg",
+        "duration": 4,
+        "val": 0.25,
+        "label": "LUCKY 38 OVERRIDE"
+       },
+       {
+        "type": "haste",
+        "duration": 4,
+        "val": 0.3,
+        "label": "LUCKY 38 OVERRIDE"
+       }
       ],
       "heal_pct": 0.15,
       "burst": 30,
@@ -3659,8 +4219,24 @@
       "castAnim": "cast-blink",
       "bonus": "lifesteal",
       "self_effects": [
-       { "type": "buff_atk", "duration": 3, "val": 0.25, "label": "BLITZ GUNSLINGER" },
-       { "type": "buff_spd", "duration": 3, "val": 0.3, "label": "BLITZ GUNSLINGER" }
+       {
+        "type": "buff_atk",
+        "duration": 3,
+        "val": 0.25,
+        "label": "BLITZ GUNSLINGER"
+       },
+       {
+        "type": "buff_spd",
+        "duration": 3,
+        "val": 0.3,
+        "label": "BLITZ GUNSLINGER"
+       },
+       {
+        "type": "haste",
+        "duration": 3,
+        "val": 0.6,
+        "label": "BLITZ GUNSLINGER"
+       }
       ],
       "msg": "BLITZ GUNSLINGER"
      },
@@ -3668,15 +4244,36 @@
       "dmgMult": 1.2,
       "damageType": "magical",
       "castAnim": "cast-channel",
-      "team_effects": [{ "type": "buff_elemdmg", "duration": 3, "val": 0.25, "label": "ARCANE MEDIC" }],
+      "team_effects": [
+       {
+        "type": "buff_elemdmg",
+        "duration": 3,
+        "val": 0.25,
+        "label": "ARCANE MEDIC"
+       }
+      ],
       "heal_pct": 0.12,
       "msg": "ARCANE MEDIC"
      },
      "end_per": {
       "dmgMult": 1.4,
       "castAnim": "cast-focus",
-      "enemy_effects": [{ "type": "debuff_def", "duration": 3, "val": 0.35, "label": "PINNED DOWN" }],
-      "self_effects": [{ "type": "shield", "duration": 3, "val": 0.3, "label": "ENTRENCHED" }],
+      "enemy_effects": [
+       {
+        "type": "debuff_def",
+        "duration": 3,
+        "val": 0.35,
+        "label": "PINNED DOWN"
+       }
+      ],
+      "self_effects": [
+       {
+        "type": "shield",
+        "duration": 3,
+        "val": 0.3,
+        "label": "ENTRENCHED"
+       }
+      ],
       "msg": "ENTRENCHED MARKSMAN"
      },
      "str": {
@@ -3684,8 +4281,19 @@
       "castAnim": "cast-heavy",
       "bonus": "execute",
       "self_effects": [
-       { "type": "buff_atk", "duration": 3, "val": 0.25, "label": "STRONGARM" },
-       { "type": "overheat", "duration": 5, "val": 0.12, "ramp": 0.08, "label": "OVERHEAT" }
+       {
+        "type": "buff_atk",
+        "duration": 3,
+        "val": 0.25,
+        "label": "STRONGARM"
+       },
+       {
+        "type": "overheat",
+        "duration": 5,
+        "val": 0.12,
+        "ramp": 0.08,
+        "label": "OVERHEAT"
+       }
       ],
       "msg": "STRONGARM SHOT"
      },
@@ -3693,26 +4301,70 @@
       "dmgMult": 1.3,
       "castAnim": "cast-focus",
       "bonus": "execute",
-      "enemy_effects": [{ "type": "debuff_def", "duration": 3, "val": 0.3, "label": "WEAK POINT" }],
-      "self_effects": [{ "type": "precision", "duration": 5, "val": 0.08, "ramp": 0.06, "label": "PRECISION" }],
+      "enemy_effects": [
+       {
+        "type": "debuff_def",
+        "duration": 3,
+        "val": 0.3,
+        "label": "WEAK POINT"
+       }
+      ],
+      "self_effects": [
+       {
+        "type": "precision",
+        "duration": 5,
+        "val": 0.08,
+        "ramp": 0.06,
+        "label": "PRECISION"
+       }
+      ],
       "msg": "DEAD-EYE"
      },
      "end": {
       "dmgMult": 1.1,
       "castAnim": "cast-focus",
       "self_effects": [
-       { "type": "shield", "duration": 3, "val": 0.25, "label": "VAULT DUSTER" },
-       { "type": "fortify", "duration": 5, "val": 0.1, "ramp": 0.08, "label": "FORTIFY" }
+       {
+        "type": "shield",
+        "duration": 3,
+        "val": 0.25,
+        "label": "VAULT DUSTER"
+       },
+       {
+        "type": "fortify",
+        "duration": 5,
+        "val": 0.1,
+        "ramp": 0.08,
+        "label": "FORTIFY"
+       }
       ],
       "msg": "DUG IN"
      },
      "cha": {
-      "dmgMult": 1.0,
+      "dmgMult": 1,
       "castAnim": "cast-focus",
-      "self_effects": [{ "type": "charm", "duration": 5, "val": 0.1, "ramp": 0.07, "label": "CHARM" }],
+      "self_effects": [
+       {
+        "type": "charm",
+        "duration": 5,
+        "val": 0.1,
+        "ramp": 0.07,
+        "label": "CHARM"
+       }
+      ],
       "team_effects": [
-       { "type": "buff_atk", "duration": 3, "val": 0.15, "label": "RALLY CRY" },
-       { "type": "buff_crit", "duration": 3, "val": 0.12, "label": "RALLY CRY" }
+       {
+        "type": "buff_atk",
+        "duration": 3,
+        "val": 0.15,
+        "label": "RALLY CRY"
+       },
+       {
+        "type": "buff_crit",
+        "duration": 3,
+        "val": 0.12,
+        "label": "RALLY CRY"
+       }
       ],
       "heal_pct": 0.08,
       "msg": "RALLY CRY"
@@ -3723,12 +4375,33 @@
       "target": "all_enemies",
       "castAnim": "cast-arcane",
       "enemy_effects": [
-       { "type": "burn", "duration": 3, "val": 0.09, "label": "OVERCHARGED" },
-       { "type": "debuff_def", "duration": 3, "val": 0.2, "label": "CIRCUITS FRIED" }
+       {
+        "type": "burn",
+        "duration": 3,
+        "val": 0.09,
+        "label": "OVERCHARGED"
+       },
+       {
+        "type": "debuff_def",
+        "duration": 3,
+        "val": 0.2,
+        "label": "CIRCUITS FRIED"
+       }
       ],
       "self_effects": [
-       { "type": "buff_elemdmg", "duration": 3, "val": 0.3, "label": "PLATINUM CHIP SURGE" },
-       { "type": "overclock", "duration": 5, "val": 0.12, "ramp": 0.08, "label": "OVERCLOCK" }
+       {
+        "type": "buff_elemdmg",
+        "duration": 3,
+        "val": 0.3,
+        "label": "PLATINUM CHIP SURGE"
+       },
+       {
+        "type": "overclock",
+        "duration": 5,
+        "val": 0.12,
+        "ramp": 0.08,
+        "label": "OVERCLOCK"
+       }
       ],
       "msg": "OVERCHARGE"
      },
@@ -3736,16 +4409,56 @@
       "dmgMult": 1.2,
       "target": "all_enemies",
       "castAnim": "cast-flurry",
-      "self_effects": [{ "type": "buff_spd", "duration": 3, "val": 0.35, "label": "FLEET-FOOTED" }],
-      "team_effects": [{ "type": "buff_spd", "duration": 3, "val": 0.15, "label": "FLEET-FOOTED" }],
-      "enemy_effects": [{ "type": "debuff_spd", "duration": 3, "val": 0.25, "label": "OUTPACED" }],
+      "self_effects": [
+       {
+        "type": "buff_spd",
+        "duration": 3,
+        "val": 0.35,
+        "label": "FLEET-FOOTED"
+       },
+       {
+        "type": "haste",
+        "duration": 3,
+        "val": 0.55,
+        "label": "FLEET-FOOTED"
+       }
+      ],
+      "team_effects": [
+       {
+        "type": "buff_spd",
+        "duration": 3,
+        "val": 0.15,
+        "label": "FLEET-FOOTED"
+       },
+       {
+        "type": "haste",
+        "duration": 3,
+        "val": 0.25,
+        "label": "FLEET-FOOTED"
+       }
+      ],
+      "enemy_effects": [
+       {
+        "type": "debuff_spd",
+        "duration": 3,
+        "val": 0.25,
+        "label": "OUTPACED"
+       }
+      ],
       "msg": "FLEET-FOOTED"
      },
      "lck": {
       "dmgMult": 1.25,
       "castAnim": "cast-charge",
       "bonus": "lifesteal",
-      "self_effects": [{ "type": "buff_crit", "duration": 3, "val": 0.2, "label": "LOADED CHAMBER" }],
+      "self_effects": [
+       {
+        "type": "buff_crit",
+        "duration": 3,
+        "val": 0.2,
+        "label": "LOADED CHAMBER"
+       }
+      ],
       "msg": "LUCKY BREAK"
      }
     }
@@ -3769,10 +4482,19 @@
   "meta": {
    "ignore_evasion": true,
    "steal_buff": true,
-   "mark": { "def_down": 0.25, "duration": 3, "label": "MARKED FOR LOOTING" },
-   "bonus_vs_full_hp": { "above": 0.85, "mult": 1.75 },
+   "mark": {
+    "def_down": 0.25,
+    "duration": 3,
+    "label": "MARKED FOR LOOTING"
+   },
+   "bonus_vs_full_hp": {
+    "above": 0.85,
+    "mult": 1.75
+   },
    "extra_hits": 1,
-   "steal_next_enemy_turn": { "drain": 40 },
+   "steal_next_enemy_turn": {
+    "drain": 40
+   },
    "castAnim": "cast-flurry"
   }
  },
@@ -3785,7 +4507,7 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 2.0,
+  "power": 2,
   "cooldown": 110,
   "scalingStat": "magic_atk",
   "flavor": "Roads? Where we're going, we don't need roads.",
@@ -3795,20 +4517,51 @@
    "stage_cycle": [
     {
      "dmgMult": 1.2,
-     "self_effects": [{ "type": "buff_spd", "duration": 3, "val": 0.2, "label": "UP TO SPEED" }],
+     "self_effects": [
+      {
+       "type": "buff_spd",
+       "duration": 3,
+       "val": 0.2,
+       "label": "UP TO SPEED"
+      }
+     ],
      "msg": "1955"
     },
     {
      "dmgMult": 1.7,
-     "enemy_effects": [{ "type": "debuff_def", "duration": 3, "val": 0.22, "label": "TEMPORAL DISRUPTION" }],
-     "team_effects": [{ "type": "buff_atk", "duration": 3, "val": 0.15, "label": "CAUSALITY SHIFT" }],
+     "enemy_effects": [
+      {
+       "type": "debuff_def",
+       "duration": 3,
+       "val": 0.22,
+       "label": "TEMPORAL DISRUPTION"
+      }
+     ],
+     "team_effects": [
+      {
+       "type": "buff_atk",
+       "duration": 3,
+       "val": 0.15,
+       "label": "CAUSALITY SHIFT"
+      }
+     ],
      "msg": "1985"
     },
     {
      "dmgMult": 2.6,
-     "rewind_hp": { "turns_ago": 4, "scope": "most_wounded_ally" },
+     "rewind_hp": {
+      "turns_ago": 4,
+      "scope": "most_wounded_ally"
+     },
      "burst": 20,
-     "team_effects": [{ "type": "buff_crit", "duration": 4, "val": 0.2, "label": "TIMELINE FIXED" }],
+     "team_effects": [
+      {
+       "type": "buff_crit",
+       "duration": 4,
+       "val": 0.2,
+       "label": "TIMELINE FIXED"
+      }
+     ],
      "msg": "GREAT SCOTT!"
     }
    ]
@@ -3831,18 +4584,35 @@
   "meta": {
    "stage_cycle": [
     {
-     "dmgMult": 1.0,
-     "self_effects": [{ "type": "buff_spd", "duration": 3, "val": 0.15, "label": "HOVERBOARD" }],
+     "dmgMult": 1,
+     "self_effects": [
+      {
+       "type": "buff_spd",
+       "duration": 3,
+       "val": 0.15,
+       "label": "HOVERBOARD"
+      }
+     ],
      "msg": "NOT COOL"
     },
     {
      "dmgMult": 1.15,
-     "self_effects": [{ "type": "buff_crit", "duration": 3, "val": 0.1, "label": "CLINT EASTWOOD" }],
+     "self_effects": [
+      {
+       "type": "buff_crit",
+       "duration": 3,
+       "val": 0.1,
+       "label": "CLINT EASTWOOD"
+      }
+     ],
      "msg": "HEAVY"
     },
     {
      "dmgMult": 1.35,
-     "rewind_hp": { "turns_ago": 1, "scope": "self" },
+     "rewind_hp": {
+      "turns_ago": 1,
+      "scope": "self"
+     },
      "msg": "NOBODY CALLS ME CHICKEN"
     }
    ]
@@ -3863,20 +4633,63 @@
   "flavor": "Get it together, Mei!",
   "damageType": "magical",
   "statusEffects": [
-   { "type": "debuff_atk", "chance": 1, "duration": 3, "val": 0.25, "label": "STARTLED" },
-   { "type": "debuff_spd", "chance": 1, "duration": 3, "val": 0.2, "label": "STARTLED" }
+   {
+    "type": "debuff_atk",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.25,
+    "label": "STARTLED"
+   },
+   {
+    "type": "debuff_spd",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.2,
+    "label": "STARTLED"
+   }
   ],
   "meta": {
    "castAnim": "cast-focus",
    "self_effects": [
-    { "type": "phantom_veil", "duration": 9999, "val": 0.92, "transformImg": "portraits/melin_panda.png", "label": "UNTOUCHABLE" },
-    { "type": "regen", "duration": 6, "val": 0.1, "label": "THICK HIDE" },
-    { "type": "buff_def", "duration": 6, "val": 0.35, "label": "THICK HIDE" }
+    {
+     "type": "phantom_veil",
+     "duration": 9999,
+     "val": 0.92,
+     "transformImg": "portraits/melin_panda.png",
+     "label": "UNTOUCHABLE"
+    },
+    {
+     "type": "regen",
+     "duration": 6,
+     "val": 0.1,
+     "label": "THICK HIDE"
+    },
+    {
+     "type": "buff_def",
+     "duration": 6,
+     "val": 0.35,
+     "label": "THICK HIDE"
+    }
    ],
    "team_effects": [
-    { "type": "shield", "duration": 4, "val": 0.3, "label": "PROTECTIVE INSTINCT" },
-    { "type": "regen", "duration": 4, "val": 0.08, "label": "WARM PRESENCE" },
-    { "type": "buff_atk", "duration": 4, "val": 0.2, "label": "BIG SISTER ENERGY" }
+    {
+     "type": "shield",
+     "duration": 4,
+     "val": 0.3,
+     "label": "PROTECTIVE INSTINCT"
+    },
+    {
+     "type": "regen",
+     "duration": 4,
+     "val": 0.08,
+     "label": "WARM PRESENCE"
+    },
+    {
+     "type": "buff_atk",
+     "duration": 4,
+     "val": 0.2,
+     "label": "BIG SISTER ENERGY"
+    }
    ]
   }
  },
@@ -3895,7 +4708,13 @@
   "flavor": "Emerald Splash!",
   "damageType": "magical",
   "statusEffects": [
-   { "type": "debuff_spd", "chance": 1, "duration": 3, "val": 0.25, "label": "PINNED" }
+   {
+    "type": "debuff_spd",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.25,
+    "label": "PINNED"
+   }
   ],
   "meta": {
    "castAnim": "cast-flurry",
@@ -3917,13 +4736,24 @@
   "flavor": "Foolish fool who foolishly dodges.",
   "damageType": "physical",
   "statusEffects": [
-   { "type": "debuff_atk", "chance": 1, "duration": 3, "val": 0.3, "label": "DISCIPLINED" }
+   {
+    "type": "debuff_atk",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.3,
+    "label": "DISCIPLINED"
+   }
   ],
   "meta": {
    "castAnim": "cast-blink",
    "ignore_evasion": true,
    "team_effects": [
-    { "type": "buff_atk", "duration": 3, "val": 0.15, "label": "PERFECT COMPOSURE" }
+    {
+     "type": "buff_atk",
+     "duration": 3,
+     "val": 0.15,
+     "label": "PERFECT COMPOSURE"
+    }
    ]
   }
  },
@@ -3942,13 +4772,24 @@
   "flavor": "Locked on.",
   "damageType": "physical",
   "statusEffects": [
-   { "type": "stun", "chance": 0.4, "duration": 1, "val": 0, "label": "PARALYZED" }
+   {
+    "type": "stun",
+    "chance": 0.4,
+    "duration": 1,
+    "val": 0,
+    "label": "PARALYZED"
+   }
   ],
   "meta": {
    "castAnim": "cast-charge",
    "ignore_evasion": true,
    "self_effects": [
-    { "type": "buff_spd", "duration": 3, "val": 0.2, "label": "COMBAT READY" }
+    {
+     "type": "buff_spd",
+     "duration": 3,
+     "val": 0.2,
+     "label": "COMBAT READY"
+    }
    ]
   }
  },
@@ -3961,7 +4802,7 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 4.0,
+  "power": 4,
   "cooldown": 120,
   "scalingStat": "atk",
   "flavor": "We care about you!",
@@ -3970,7 +4811,12 @@
    "castAnim": "cast-guard",
    "care_revive": true,
    "self_effects": [
-    { "type": "buff_atk", "duration": 4, "val": 0.25, "label": "TENDER RESOLVE" }
+    {
+     "type": "buff_atk",
+     "duration": 4,
+     "val": 0.25,
+     "label": "TENDER RESOLVE"
+    }
    ]
   }
  },
@@ -3992,7 +4838,12 @@
    "castAnim": "cast-rainbow",
    "resonance_franchise": "Care Bears",
    "team_effects": [
-    { "type": "buff_atk", "duration": 3, "val": 0.15, "label": "CHEERED ON" }
+    {
+     "type": "buff_atk",
+     "duration": 3,
+     "val": 0.15,
+     "label": "CHEERED ON"
+    }
    ]
   }
  },
@@ -4014,7 +4865,12 @@
    "castAnim": "cast-flurry",
    "hits": 3,
    "team_effects": [
-    { "type": "buff_crit", "duration": 3, "val": 0.15, "label": "GENEROSITY" }
+    {
+     "type": "buff_crit",
+     "duration": 3,
+     "val": 0.15,
+     "label": "GENEROSITY"
+    }
    ]
   }
  },
@@ -4052,7 +4908,13 @@
   "flavor": "Here comes the sun!",
   "damageType": "magical",
   "statusEffects": [
-   { "type": "burn", "chance": 1, "duration": 3, "val": 0.08, "label": "SUNBURN" }
+   {
+    "type": "burn",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.08,
+    "label": "SUNBURN"
+   }
   ],
   "meta": {
    "castAnim": "cast-arcane",
@@ -4074,12 +4936,23 @@
   "flavor": "Time for bed, sleepyhead.",
   "damageType": "magical",
   "statusEffects": [
-   { "type": "sleep", "chance": 0.75, "duration": 2, "val": 0, "label": "ASLEEP" }
+   {
+    "type": "sleep",
+    "chance": 0.75,
+    "duration": 2,
+    "val": 0,
+    "label": "ASLEEP"
+   }
   ],
   "meta": {
    "castAnim": "cast-focus",
    "team_effects": [
-    { "type": "regen", "duration": 3, "val": 0.06, "label": "SWEET REST" }
+    {
+     "type": "regen",
+     "duration": 3,
+     "val": 0.06,
+     "label": "SWEET REST"
+    }
    ]
   }
  },
@@ -4101,8 +4974,18 @@
    "castAnim": "cast-focus",
    "cleanse_team": true,
    "team_effects": [
-    { "type": "shield", "duration": 4, "val": 0.28, "label": "SWEET DREAMS" },
-    { "type": "regen", "duration": 4, "val": 0.08, "label": "SWEET DREAMS" }
+    {
+     "type": "shield",
+     "duration": 4,
+     "val": 0.28,
+     "label": "SWEET DREAMS"
+    },
+    {
+     "type": "regen",
+     "duration": 4,
+     "val": 0.08,
+     "label": "SWEET DREAMS"
+    }
    ]
   }
  },
@@ -4121,8 +5004,20 @@
   "flavor": "Your mind is already ours.",
   "damageType": "magical",
   "statusEffects": [
-   { "type": "debuff_atk", "chance": 0.9, "duration": 3, "val": 0.3, "label": "ENSLAVED" },
-   { "type": "debuff_spd", "chance": 0.9, "duration": 3, "val": 0.3, "label": "ENSLAVED" }
+   {
+    "type": "debuff_atk",
+    "chance": 0.9,
+    "duration": 3,
+    "val": 0.3,
+    "label": "ENSLAVED"
+   },
+   {
+    "type": "debuff_spd",
+    "chance": 0.9,
+    "duration": 3,
+    "val": 0.3,
+    "label": "ENSLAVED"
+   }
   ],
   "meta": {
    "castAnim": "cast-arcane",
@@ -4150,7 +5045,13 @@
   "flavor": "We are legion. You are nothing.",
   "damageType": "magical",
   "statusEffects": [
-   { "type": "debuff_def", "chance": 0.7, "duration": 3, "val": 0.25, "label": "MIND-SHATTERED" }
+   {
+    "type": "debuff_def",
+    "chance": 0.7,
+    "duration": 3,
+    "val": 0.25,
+    "label": "MIND-SHATTERED"
+   }
   ],
   "meta": {
    "castAnim": "cast-channel",
@@ -4171,7 +5072,7 @@
   "signature": true,
   "type": "atk",
   "target": "single_enemy",
-  "power": 4.0,
+  "power": 4,
   "cooldown": 118,
   "scalingStat": "atk",
   "flavor": "There is no escaping the dark.",
@@ -4183,7 +5084,14 @@
    "duo_bonus": {
     "dmgMult": 1.7,
     "castAnim": "cast-override",
-    "self_effects": [{ "type": "buff_def", "duration": 3, "val": 0.25, "label": "PARADOX SHIELD" }],
+    "self_effects": [
+     {
+      "type": "buff_def",
+      "duration": 3,
+      "val": 0.25,
+      "label": "PARADOX SHIELD"
+     }
+    ],
     "msg": "★ LIGHT-VOID PARADOX ★"
    }
   }
@@ -4205,13 +5113,30 @@
   "meta": {
    "castAnim": "cast-focus",
    "team_effects": [
-    { "type": "shield", "duration": 3, "val": 0.25, "label": "GENTLE DRIFT" },
-    { "type": "buff_elemdmg", "duration": 3, "val": 0.15, "label": "GENTLE DRIFT" }
+    {
+     "type": "shield",
+     "duration": 3,
+     "val": 0.25,
+     "label": "GENTLE DRIFT"
+    },
+    {
+     "type": "buff_elemdmg",
+     "duration": 3,
+     "val": 0.15,
+     "label": "GENTLE DRIFT"
+    }
    ],
    "duo_partner": "Balhannoth",
    "duo_bonus": {
     "castAnim": "cast-override",
-    "team_effects": [{ "type": "buff_atk", "duration": 3, "val": 0.3, "label": "PARADOX SHIELD" }],
+    "team_effects": [
+     {
+      "type": "buff_atk",
+      "duration": 3,
+      "val": 0.3,
+      "label": "PARADOX SHIELD"
+     }
+    ],
     "msg": "★ LIGHT-VOID PARADOX ★"
    }
   }
@@ -4233,7 +5158,15 @@
   "meta": {
    "castAnim": "cast-flurry",
    "hits": 2,
-   "self_effects": [{ "type": "overheat", "duration": 5, "val": 0.1, "ramp": 0.06, "label": "BLOODLUST" }],
+   "self_effects": [
+    {
+     "type": "overheat",
+     "duration": 5,
+     "val": 0.1,
+     "ramp": 0.06,
+     "label": "BLOODLUST"
+    }
+   ],
    "duo_partner": "Bangaa Pirate",
    "duo_bonus": {
     "dmgMult": 1.5,
@@ -4287,12 +5220,23 @@
   "meta": {
    "castAnim": "cast-guard",
    "self_effects": [
-    { "type": "shield", "duration": 4, "val": 0.3, "label": "OVERLOAD PLATING" },
-    { "type": "fortify", "duration": 5, "val": 0.1, "ramp": 0.07, "label": "OVERLOAD PLATING" }
+    {
+     "type": "shield",
+     "duration": 4,
+     "val": 0.3,
+     "label": "OVERLOAD PLATING"
+    },
+    {
+     "type": "fortify",
+     "duration": 5,
+     "val": 0.1,
+     "ramp": 0.07,
+     "label": "OVERLOAD PLATING"
+    }
    ],
    "duo_partner": "Gargantua",
    "duo_bonus": {
-    "dmgMult": 2.0,
+    "dmgMult": 2,
     "target": "all_enemies",
     "castAnim": "cast-override",
     "msg": "★ OVERLOAD DISCHARGE ★"
@@ -4314,7 +5258,13 @@
   "flavor": "THE GROUND ITSELF TREMBLES.",
   "damageType": "physical",
   "statusEffects": [
-   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "STAGGERED" }
+   {
+    "type": "stun",
+    "chance": 0.35,
+    "duration": 1,
+    "val": 0,
+    "label": "STAGGERED"
+   }
   ],
   "meta": {
    "castAnim": "cast-quake",
@@ -4344,7 +5294,14 @@
   "meta": {
    "castAnim": "cast-blink",
    "hits": 3,
-   "self_effects": [{ "type": "buff_spd", "duration": 3, "val": 0.25, "label": "FLEETING" }],
+   "self_effects": [
+    {
+     "type": "buff_spd",
+     "duration": 3,
+     "val": 0.25,
+     "label": "FLEETING"
+    }
+   ],
    "duo_partner": "The Demogorgon",
    "duo_bonus": {
     "dmgMult": 1.5,
@@ -4372,7 +5329,7 @@
    "castAnim": "cast-heavy",
    "ignore_evasion": true,
    "execute_below": 0.35,
-   "execute_mult": 2.0,
+   "execute_mult": 2,
    "duo_partner": "Feyr",
    "duo_bonus": {
     "dmgMult": 1.5,
@@ -4398,13 +5355,27 @@
   "damageType": "physical",
   "meta": {
    "castAnim": "cast-heavy",
-   "scales_hit_count": { "perHit": 0.025, "cap": 2.6 },
+   "scales_hit_count": {
+    "perHit": 0.025,
+    "cap": 2.6
+   },
    "self_effects": [
-    { "type": "buff_atk", "duration": 3, "val": 0.2, "label": "OVERDRIVE" }
+    {
+     "type": "buff_atk",
+     "duration": 3,
+     "val": 0.2,
+     "label": "OVERDRIVE"
+    }
    ]
   },
   "statusEffects": [
-   { "type": "burn", "chance": 0.5, "duration": 3, "val": 0.07, "label": "HAMON BURN" }
+   {
+    "type": "burn",
+    "chance": 0.5,
+    "duration": 3,
+    "val": 0.07,
+    "label": "HAMON BURN"
+   }
   ]
  },
  {
@@ -4424,10 +5395,1812 @@
   "meta": {
    "castAnim": "cast-override",
    "ignore_evasion": true,
-   "world_time_stop": { "duration": 2, "selfAtkBuff": 0.6, "musicStopMs": 5000 }
+   "world_time_stop": {
+    "duration": 2,
+    "selfAtkBuff": 0.6,
+    "musicStopMs": 5000
+   }
   },
   "statusEffects": [
-   { "type": "stun", "chance": 1, "duration": 1, "val": 0, "label": "TIME STOPPED" }
+   {
+    "type": "stun",
+    "chance": 1,
+    "duration": 1,
+    "val": 0,
+    "label": "TIME STOPPED"
+   }
+  ]
+ },
+ {
+  "id": "sig_jim_hawkins",
+  "owner": "Jim Hawkins",
+  "name": "Solar Surfer",
+  "desc": "Jim rides in on his solar surfboard and sends Morph flying to whichever ally needs him most (the lowest-HP teammate) -- the little shapeshifter scrubs every debuff off them and pumps up their damage, basics and skills alike, so they're free to keep fighting at full strength. At the same time Jim inspires the whole crew and charges everyone up ENERGIZED off his surfer's solar cells: energized allies bank extra Burst every time they land a basic attack, and Jim tops off the squad's Burst meter the instant he lands.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "lowest_ally",
+  "power": 0,
+  "cooldown": 100,
+  "scalingStat": "speed",
+  "flavor": "Just leave it to us, Morph!",
+  "meta": {
+   "castAnim": "cast-blink",
+   "gain_burst": 8,
+   "self_effects": [
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.15,
+     "label": "INSPIRE"
+    }
+   ],
+   "team_effects": [
+    {
+     "type": "energized",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.3,
+     "label": "SOLAR SURFER"
+    }
+   ]
+  },
+  "statusEffects": [
+   {
+    "type": "cleanse",
+    "chance": 1,
+    "duration": 1,
+    "val": 0,
+    "label": "MORPH'S CARE"
+   },
+   {
+    "type": "buff_atk",
+    "chance": 1,
+    "duration": 4,
+    "val": 0.3,
+    "label": "MORPH'S BLESSING"
+   },
+   {
+    "type": "buff_elemdmg",
+    "chance": 1,
+    "duration": 4,
+    "val": 0.15,
+    "label": "MORPH'S BLESSING"
+   }
+  ]
+ },
+ {
+  "id": "sig_john_silver",
+  "owner": "John Silver",
+  "name": "Cybernetic Cannon",
+  "desc": "Silver's arm reconfigures into a massive cannon and unloads a devastating blast across every enemy on the field, sending them reeling (a Speed-sapping knockback). The lower his own HP, the harder the cannon hits and the more it shreds their footing -- a cornered cyborg is the most dangerous one. Firing a cannon that big isn't free, though: the recoil costs Silver a chunk of his own health, and the same shot triggers a quick self-repair -- his cybernetics patch him back up, and he moves and swings noticeably faster while they're humming.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.6,
+  "cooldown": 115,
+  "scalingStat": "atk",
+  "flavor": "Cabin boy, I am your friend till the end. But I am NOT a fool.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-heavy",
+   "scales_missing_hp": 0.9,
+   "self_recoil_pct": 0.08,
+   "self_effects": [
+    {
+     "type": "regen",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.06,
+     "label": "QUICK REPAIR"
+    },
+    {
+     "type": "buff_atk",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.15,
+     "label": "QUICK REPAIR"
+    }
+   ],
+   "enemy_effects": [
+    {
+     "type": "debuff_spd",
+     "chance": 1,
+     "duration": 2,
+     "val": 0.25,
+     "label": "KNOCKED BACK"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_captain_amelia",
+  "owner": "Captain Amelia",
+  "name": "To Arms!",
+  "desc": "Captain Amelia commands the whole crew into action, whipping every ally's abilities back into readiness -- a squad-wide HASTE that gets skills back off cooldown fast. If the fighting turns against her, discipline takes over: she falls back to the rear of the formation, her attack speed spiking as she keeps firing from a safer range, exactly as a good captain corrects course under fire.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 120,
+  "scalingStat": "speed",
+  "flavor": "I've a ship full of cutthroats and only two hands.",
+  "meta": {
+   "castAnim": "cast-focus",
+   "self_effects": [
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.2,
+     "label": "FALL BACK"
+    }
+   ],
+   "team_effects": [
+    {
+     "type": "haste",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.35,
+     "label": "TO ARMS!"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_delbert_doppler",
+  "owner": "Delbert Doppler",
+  "name": "Celestial Calculations",
+  "desc": "Not a fighter, but never a liability -- Doppler charts the whole engagement like the astronomer he is, plotting exact trajectories through the chaos. He marks every enemy's weak point (a squad-wide EXPOSE that shreds their defense) and hands his whole crew TRUESIGHT, so precisely-calculated strikes stop missing entirely for a few turns. Ever the devoted family friend, he doesn't forget to look after the people he dragged along on this voyage: the ally who needs it most gets mended and a protective ward, because financing the expedition doesn't mean he stopped worrying about the crew.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "lowest_ally",
+  "power": 1.6,
+  "cooldown": 125,
+  "scalingStat": "magic_atk",
+  "flavor": "Splendid vessel you've procured, Miss Hawkins!",
+  "meta": {
+   "castAnim": "cast-arcane",
+   "team_effects": [
+    {
+     "type": "truesight",
+     "chance": 1,
+     "duration": 3,
+     "val": 0,
+     "label": "CELESTIAL CALCULATIONS"
+    }
+   ],
+   "enemy_effects": [
+    {
+     "type": "expose",
+     "chance": 1,
+     "duration": 3,
+     "val": 0,
+     "label": "PLOTTED WEAKNESS"
+    },
+    {
+     "type": "debuff_def",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.2,
+     "label": "PLOTTED WEAKNESS"
+    }
+   ]
+  },
+  "statusEffects": [
+   {
+    "type": "shield",
+    "chance": 1,
+    "duration": 3,
+    "val": 0.18,
+    "label": "DOPPLER'S CARE"
+   }
+  ]
+ },
+ {
+  "id": "sig_marie",
+  "owner": "Marie",
+  "name": "Fancy Footwork",
+  "desc": "A TRUE support turn, not a nuke: Marie sticks her tongue out and dashes through the whole enemy line, dodging in close so THEY come after HER -- stripping their Armor and Reality, Silencing them, and marking every one of them an easy target for the rest of the squad. She settles in with a bowl of milk, gaining Momentum and a rising Armor/Reality buff the longer she tanks the heat, while the team gets scrubbed of their worst debuff and a touch of her own poise. She's not here to finish the fight -- she's here to make sure nobody else has to.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 105,
+  "scalingStat": "def",
+  "flavor": "Personality is what counts, dahling.",
+  "meta": {
+   "castAnim": "cast-flurry",
+   "cleanse_team": true,
+   "self_effects": [
+    {
+     "type": "aggro",
+     "chance": 1,
+     "duration": 3,
+     "val": 0,
+     "label": "CHEEKY TAUNT"
+    },
+    {
+     "type": "shield",
+     "chance": 1,
+     "duration": 4,
+     "val": 0.32,
+     "label": "MILK SIP"
+    },
+    {
+     "type": "fortify",
+     "chance": 1,
+     "duration": 5,
+     "val": 0.1,
+     "ramp": 0.07,
+     "label": "MOMENTUM"
+    }
+   ],
+   "team_effects": [
+    {
+     "type": "buff_def",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.12,
+     "label": "FANCY FOOTWORK"
+    }
+   ],
+   "enemy_effects": [
+    {
+     "type": "silence",
+     "chance": 1,
+     "duration": 2,
+     "val": 0,
+     "label": "CHEEKY TAUNT"
+    },
+    {
+     "type": "debuff_def",
+     "chance": 1,
+     "duration": 3,
+     "val": 0.22,
+     "label": "SWIFT STRIKE"
+    },
+    {
+     "type": "expose",
+     "chance": 1,
+     "duration": 3,
+     "val": 0,
+     "label": "VULNERABLE"
+    }
+   ]
+  }
+ },
+ {
+  "id": "sig_harry_potter",
+  "owner": "Harry Potter",
+  "name": "Reflexive Ward",
+  "desc": "CUT-IN: casts a protective ward and marks a foe weak (-18% DEF, 3t). For the rest of the fight, Harry reflexively disarms enemies with a defense-shredding counter-charm whenever they cast an ability.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "debuff",
+  "target": "single_enemy",
+  "power": 1.0,
+  "cooldown": 175,
+  "scalingStat": "magic_atk",
+  "flavor": "Expelliarmus.",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 1, "duration": 3, "val": 0.18, "label": "WARDED WEAK" }
+  ],
+  "meta": {
+   "cut_in": {
+    "trigger": "enemy_skill",
+    "kind": "debuff",
+    "effType": "debuff_def",
+    "val": 0.15,
+    "effDuration": 3,
+    "effLabel": "DISARMED",
+    "chance": 0.6,
+    "label": "EXPELLIARMUS!",
+    "armMsg": "WARD UP",
+    "duration": 9999
+   }
+  }
+ },
+ {
+  "id": "sig_akuma",
+  "owner": "Akuma",
+  "name": "Satsui no Hado",
+  "desc": "CUT-IN: channels the Dark Hado, surging his own ATK (+30%, 4t). For the rest of the fight, every time an ally lands a basic attack, Akuma cuts in with a follow-up demon strike on a random foe.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "self",
+  "power": 0,
+  "cooldown": 150,
+  "scalingStat": "atk",
+  "flavor": "The demon within.",
+  "damageType": "physical",
+  "statusEffects": [
+   { "type": "buff_atk", "chance": 1, "duration": 4, "val": 0.3, "label": "DARK HADO" }
+  ],
+  "meta": {
+   "cut_in": {
+    "trigger": "ally_basic",
+    "kind": "strike",
+    "power": 0.65,
+    "isMagic": false,
+    "chance": 1,
+    "label": "RAGING DEMON!",
+    "armMsg": "BLOODLUST",
+    "duration": 9999
+   }
+  }
+ },
+ {
+  "id": "sig_twilight_sparkle",
+  "owner": "Twilight Sparkle",
+  "name": "Harmony Cascade",
+  "desc": "CUT-IN: attunes to the squad's magic, shielding the team (25% max HP, 3t). For the rest of the fight, every time ANY ally (including herself) gains a buff, Twilight echoes it with a burst of harmonic energy, sharpening her own crit chance.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 170,
+  "scalingStat": "magic_atk",
+  "flavor": "Friendship is a force multiplier.",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "shield", "chance": 1, "duration": 3, "val": 0.25, "label": "HARMONY WARD" }
+  ],
+  "meta": {
+   "cut_in": {
+    "trigger": "ally_buffed",
+    "kind": "buff",
+    "effType": "buff_crit",
+    "val": 0.12,
+    "effDuration": 3,
+    "effLabel": "HARMONY",
+    "chance": 0.8,
+    "label": "SPELL ECHO!",
+    "armMsg": "ATTUNED",
+    "duration": 9999
+   }
+  }
+ },
+ {
+  "id": "sig_roll",
+  "owner": "Roll",
+  "name": "Full System Restore",
+  "desc": "SUPPORT: a complete maintenance cycle for the whole squad -- cleanses every debuff, mends a huge chunk of HP, wraps everyone in lasting Regen, and leaves a defensive plating shield behind. The one call every team needs when things are falling apart.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "all_allies",
+  "power": 1.6,
+  "cooldown": 165,
+  "scalingStat": "magic_atk",
+  "flavor": "Everyone, hold still -- this'll only take a second!",
+  "damageType": "magical",
+  "meta": {
+   "cleanse_team": true
+  },
+  "statusEffects": [
+   { "type": "regen", "chance": 1, "duration": 4, "val": 0.06, "label": "MAINTENANCE" },
+   { "type": "shield", "chance": 1, "duration": 3, "val": 0.22, "label": "PLATING" }
+  ]
+ },
+ {
+  "id": "sig_mega_man",
+  "owner": "Mega Man",
+  "name": "Copy System: Variable Weapons",
+  "desc": "COPY BOT: every shot scans a random foe and copies a weapon matching their element on the spot -- Fire Storm, Ice Slasher, Gale Slicer, Solar Blaze, Shadow Blade, or Stone Crusher, each with its own animation, damage type, and rider effect. No SPECIAL stats, no build to invest in -- purely emergent from who he's fighting. Copy the SAME element again later in the fight and the weapon comes back MASTERED, hitting progressively harder each repeat (+12%/repeat, capped +60%) -- the more he uses a weapon, the better he gets with it. Whatever he hasn't copied yet defaults to a plain Mega Buster shot.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.4,
+  "cooldown": 110,
+  "scalingStat": "atk",
+  "flavor": "Mega Buster, ready! ...wait, what's THIS do?",
+  "damageType": "physical",
+  "meta": {
+   "copy_system": {
+    "defaultWeapon": { "name": "Mega Buster", "dmgMult": 1.0 },
+    "weapons": {
+     "FIRE": {
+      "name": "Fire Storm",
+      "dmgMult": 1.6,
+      "damageType": "magical",
+      "castAnim": "cast-heavy",
+      "enemy_effects": [
+       { "type": "burn", "duration": 3, "val": 0.06, "label": "FIRE STORM" }
+      ]
+     },
+     "WATER": {
+      "name": "Ice Slasher",
+      "dmgMult": 1.3,
+      "damageType": "magical",
+      "castAnim": "cast-arcane",
+      "enemy_effects": [
+       { "type": "debuff_spd", "duration": 3, "val": 0.25, "label": "FROSTBITE" }
+      ]
+     },
+     "WIND": {
+      "name": "Gale Slicer",
+      "dmgMult": 1.15,
+      "target": "all_enemies",
+      "castAnim": "cast-flurry",
+      "self_effects": [
+       { "type": "haste", "duration": 3, "val": 0.2, "label": "SLIPSTREAM" }
+      ]
+     },
+     "LIGHT": {
+      "name": "Solar Blaze",
+      "dmgMult": 1.8,
+      "damageType": "magical",
+      "castAnim": "cast-override",
+      "bonus": "execute",
+      "enemy_effects": [
+       { "type": "debuff_def", "duration": 3, "val": 0.2, "label": "OVEREXPOSED" }
+      ]
+     },
+     "DARK": {
+      "name": "Shadow Blade",
+      "dmgMult": 1.4,
+      "castAnim": "cast-vanish",
+      "bonus": "lifesteal"
+     },
+     "EARTH": {
+      "name": "Stone Crusher",
+      "dmgMult": 1.5,
+      "castAnim": "cast-slam",
+      "self_effects": [
+       { "type": "buff_def", "duration": 3, "val": 0.25, "label": "STONE PLATING" }
+      ]
+     },
+     "NEUTRAL": { "name": "Mega Buster", "dmgMult": 1.0 }
+    }
+   }
+  }
+ },
+ {
+  "id": "sig_honey_the_cat_runway_rumble",
+  "owner": "Honey the Cat",
+  "name": "Runway Rumble",
+  "desc": "Honey drops into a flawless three-hit combo -- jab, spinning heel-kick, finishing claw rake -- and turns it into a full critique: the target's stance gets torn apart (SLOWED, GUARD DOWN) while Honey herself struts into rhythm. Land it while an ally's already got someone exposed and she puts extra heat into the finisher. Landing basic swipes while she's in rhythm builds toward an instant reset -- she never really leaves the stage.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.4,
+  "cooldown": 95,
+  "scalingStat": "speed",
+  "flavor": "Darling, that outfit is a CRIME -- let me fix it.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-flurry",
+   "stagger_bonus": 1.6,
+   "bonus_vs_status": { "status": "expose", "mult": 1.5 },
+   "self_effects": [
+    { "type": "momentum_surge", "chance": 1, "duration": 6, "threshold": 4, "val": 0, "label": "IN RHYTHM" },
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.18, "label": "ENCORE" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "expose", "chance": 0.85, "duration": 3, "val": 0, "label": "CRITIQUED" },
+   { "type": "debuff_spd", "chance": 0.75, "duration": 2, "val": 0.2, "label": "OFF-BALANCE HEELS" }
+  ]
+ },
+ {
+  "id": "sig_blossom_absolute_zero_command",
+  "owner": "Blossom",
+  "name": "Absolute Zero Command",
+  "desc": "Blossom drops the temperature to nothing with a point-blank ice beam, then goes full squad leader: TEAM SPIRIT lights up every ally's attack, her own tactical read sharpens her crits, and the whole team's cooldowns get a shot of momentum. Land it on a target someone already rattled and the beam bites twice as hard.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.6,
+  "cooldown": 130,
+  "scalingStat": "magic_atk",
+  "flavor": "I'm not bossy. I'm the leader.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-shatter",
+   "bonus_vs_status": { "status": "stun", "mult": 1.6 },
+   "gain_burst": 10,
+   "self_effects": [
+    { "type": "tactical_stance", "chance": 1, "duration": 4, "val": 0.3, "label": "COMMANDER'S EYE" },
+    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.2, "label": "PERFECT PLAN" }
+   ],
+   "team_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 4, "val": 0.22, "label": "TEAM SPIRIT" },
+    { "type": "cd_refund", "chance": 1, "duration": 0, "val": 0.12, "label": "LEADERSHIP" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "freeze", "chance": 0.55, "duration": 2, "val": 0, "label": "DEEP FREEZE" },
+   { "type": "debuff_def", "chance": 0.85, "duration": 3, "val": 0.25, "label": "CRACKED ICE" },
+   { "type": "debuff_spd", "chance": 0.7, "duration": 3, "val": 0.2, "label": "FROSTBITE" }
+  ]
+ },
+ {
+  "id": "sig_bubbles_sonic_meltdown",
+  "owner": "Bubbles",
+  "name": "Sonic Meltdown",
+  "desc": "Sweet as sugar right up until she isn't -- Bubbles cuts loose with a scream that rattles the whole enemy line, and while everyone's ears are ringing she's already turned around to scrub her sisters clean and wrap them in a bubble of protection. Don't push her.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.7,
+  "cooldown": 115,
+  "scalingStat": "magic_atk",
+  "flavor": "I said... DON'T. TOUCH. THAT.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-surge",
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.15, "label": "DON'T MAKE ME ANGRY" }
+   ],
+   "team_effects": [
+    { "type": "cleanse", "chance": 1, "duration": 0, "val": 0, "label": "GENTLE CARE" },
+    { "type": "shield", "chance": 1, "duration": 3, "val": 0.14, "label": "BUBBLE SHIELD" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "SONIC SCREAM" },
+   { "type": "debuff_def", "chance": 0.6, "duration": 2, "val": 0.15, "label": "RATTLED" }
+  ]
+ },
+ {
+  "id": "sig_buttercup_sucker_punch",
+  "owner": "Buttercup",
+  "name": "Sucker Punch",
+  "desc": "No plan, no setup, no crowd control -- Buttercup just hits it as hard as she possibly can. Simple, blunt, and it works. If someone else already rattled the target, it works even better.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 4.4,
+  "cooldown": 90,
+  "scalingStat": "atk",
+  "flavor": "Leave the talking to Blossom.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-fracture",
+   "stagger_bonus": 1.4,
+   "bonus_vs_status": { "status": "stun", "mult": 1.5 },
+   "self_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 2, "val": 0.2, "label": "SEE YA!" }
+   ]
+  },
+  "statusEffects": []
+ },
+ {
+  "id": "sig_mojo_jojo_evil_genius_monologue",
+  "owner": "Mojo Jojo",
+  "name": "Evil Genius Monologue",
+  "desc": "Mojo Jojo activates his latest doomsday contraption while delivering an extremely long, extremely repetitive explanation of his own villainy -- by the time he's done clarifying what he just said in the sentence before, the whole enemy line has tuned out and half of them have forgotten why they were even fighting.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.6,
+  "cooldown": 120,
+  "scalingStat": "magic_atk",
+  "flavor": "Which is another way of saying: I have said what I have said!",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-eclipse",
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.2, "label": "MONOLOGUING" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "silence", "chance": 0.4, "duration": 1, "val": 0, "label": "TUNED OUT" },
+   { "type": "debuff_atk", "chance": 0.7, "duration": 3, "val": 0.15, "label": "BORED TO DEFEAT" }
+  ]
+ },
+ {
+  "id": "sig_him_widdle_bit_o_fear",
+  "owner": "HIM",
+  "name": "Widdle Bit o' Fear",
+  "desc": "The voice changes mid-sentence, the temperature drops, and something with lobster claws and a tutu leans in far too close. HIM doesn't need to hit hard -- the whole enemy line freezes up from pure dread, and whatever confidence they were feeling a second ago is HIM's now.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.4,
+  "cooldown": 160,
+  "scalingStat": "magic_atk",
+  "flavor": "Oh, we're going to have SO much fun together.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-voidrip",
+   "steal_buff": true,
+   "self_effects": [
+    { "type": "regen", "chance": 1, "duration": 4, "val": 0.12, "label": "FEEDS ON FEAR" },
+    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.25, "label": "DELICIOUS TERROR" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_atk", "chance": 0.75, "duration": 3, "val": 0.2, "label": "PARALYZING DREAD" },
+   { "type": "debuff_def", "chance": 0.75, "duration": 3, "val": 0.2, "label": "PARALYZING DREAD" },
+   { "type": "silence", "chance": 0.3, "duration": 1, "val": 0, "label": "SPEECHLESS TERROR" }
+  ]
+ },
+ {
+  "id": "sig_mr_house_securitron_legion",
+  "owner": "Mr. House",
+  "name": "Securitron Legion",
+  "desc": "House barely moves -- he doesn't need to. A full legion of Securitrons rolls out on his command, raking the enemy line with suppressive fire while an automated escort locks in around his own squad: shields up, armor reinforced, systems running at peak efficiency. Two centuries of planning don't leave much to chance.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2,
+  "cooldown": 150,
+  "scalingStat": "magic_atk",
+  "flavor": "I've had two hundred years to plan for this moment.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-override",
+   "gain_burst": 12,
+   "self_effects": [
+    { "type": "tactical_stance", "chance": 1, "duration": 4, "val": 0.35, "label": "THE MASTERMIND" }
+   ],
+   "team_effects": [
+    { "type": "buff_def", "chance": 1, "duration": 4, "val": 0.2, "label": "SECURITRON ESCORT" },
+    { "type": "shield", "chance": 1, "duration": 4, "val": 0.2, "label": "SECURITRON ESCORT" },
+    { "type": "cd_refund", "chance": 1, "duration": 0, "val": 0.1, "label": "AUTOMATED EFFICIENCY" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.7, "duration": 3, "val": 0.2, "label": "UNDER SURVEILLANCE" },
+   { "type": "silence", "chance": 0.25, "duration": 1, "val": 0, "label": "JAMMED COMMS" }
+  ]
+ },
+ {
+  "id": "sig_sunny_smiles_cheyenne_sic_em",
+  "owner": "Sunny Smiles",
+  "name": "Cheyenne, Sic 'Em!",
+  "desc": "Sunny lines up a clean rifle shot while Cheyenne darts in low for a distracting nip at the ankles -- textbook Goodsprings teamwork. She's not the flashiest gun in the room, but she'll happily walk anyone through exactly how she did it.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2.6,
+  "cooldown": 95,
+  "scalingStat": "speed",
+  "flavor": "Just take your time and squeeze the trigger, don't jerk it.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-pierce",
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.15, "label": "STEADY AIM" }
+   ],
+   "team_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.1, "label": "LESSON LEARNED" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.5, "duration": 2, "val": 0.15, "label": "DOG BITE" }
+  ]
+ },
+ {
+  "id": "sig_cass_whiskey_rose",
+  "owner": "Cass",
+  "name": "Whiskey Rose",
+  "desc": "Cass takes a pull straight from the bottle, levels her shotgun, and unloads -- both barrels, no hesitation. It hits like a freight train. The hangover's a problem for later.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.8,
+  "cooldown": 100,
+  "scalingStat": "atk",
+  "flavor": "Bottoms up. Let's see what you got.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-heavy",
+   "self_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.25, "label": "LIQUID COURAGE" },
+    { "type": "debuff_def", "chance": 1, "duration": 3, "val": 0.1, "label": "RECKLESS" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.6, "duration": 2, "val": 0.2, "label": "BUCKSHOT SPREAD" }
+  ]
+ },
+ {
+  "id": "sig_boone_one_shot_one_kill",
+  "owner": "Boone",
+  "name": "One Shot, One Kill",
+  "desc": "First Recon doesn't miss. Boone finds the one angle that matters, marks it, and puts a single round through it -- no evasion in the world helps once he's decided you're the target. Anything already on its last legs just stops existing.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3,
+  "cooldown": 130,
+  "scalingStat": "atk",
+  "flavor": "I killed a lot of people. Didn't have a good reason not to, after a while.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-pierce",
+   "ignore_evasion": true,
+   "execute_below": 0.35,
+   "execute_mult": 2.2,
+   "mark": { "label": "MARKED", "duration": 3, "def_down": 0.25 },
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.3, "label": "FIRST RECON" }
+   ]
+  },
+  "statusEffects": []
+ },
+ {
+  "id": "sig_ulysses_also_this",
+  "owner": "Ulysses",
+  "name": "Also This: A Warning",
+  "desc": "Ulysses doesn't raise his voice. He just explains, calmly and at length, exactly what the flag someone's carrying actually means -- and by the time he's done, whatever confidence they walked in with has curdled into doubt. Their own strength turns against them.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2,
+  "cooldown": 165,
+  "scalingStat": "magic_atk",
+  "flavor": "You don't know what you did. Not really.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-crescendo",
+   "invert_buffs": true,
+   "bonus_vs_status": { "status": "expose", "mult": 1.5 },
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.2, "label": "THE BURNED MAN" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_atk", "chance": 0.6, "duration": 3, "val": 0.2, "label": "YOU DON'T UNDERSTAND" },
+   { "type": "silence", "chance": 0.3, "duration": 1, "val": 0, "label": "SPEECHLESS" }
+  ]
+ },
+ {
+  "id": "sig_unikitty_rage_mode_awesome_party",
+  "owner": "Unikitty",
+  "name": "Rage Mode: Awesome Party!",
+  "desc": "One second she's radiating pure sparkly positivity, the next her eyes are glowing red and there is fire everywhere -- Unikitty's Rage Mode hits harder the more banged-up she already is, but somehow the squad still comes out of it feeling AMAZING, buffed up and moving faster than before. She'll apologize for the flames later. Probably.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.8,
+  "cooldown": 130,
+  "scalingStat": "magic_atk",
+  "flavor": "THIS IS THE AWESOMEST PARTY IN THE UNIVERSE!!!",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-bloom",
+   "scales_missing_hp": 0.6,
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.2, "label": "RAGE MODE" }
+   ],
+   "team_effects": [
+    { "type": "haste", "chance": 1, "duration": 3, "val": 0.35, "label": "PARTY TIME" },
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.15, "label": "AWESOME VIBES" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.5, "duration": 2, "val": 0.15, "label": "GLITTER BLINDNESS" }
+  ]
+ },
+ {
+  "id": "sig_richard_comprehensive_coverage",
+  "owner": "Richard",
+  "name": "Comprehensive Coverage",
+  "desc": "Richard steps in front, cites the relevant liability clause, and takes full responsibility for whatever happens next -- which mostly means absorbing it personally so nobody else has to. Everyone else is free to move without worrying about the paperwork.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "self",
+  "power": 0,
+  "cooldown": 120,
+  "scalingStat": "def",
+  "flavor": "I've got you covered. It's in the policy.",
+  "meta": {
+   "castAnim": "cast-guard",
+   "team_effects": [
+    { "type": "shield", "chance": 1, "duration": 4, "val": 0.22, "label": "COMPREHENSIVE COVERAGE" },
+    { "type": "haste", "chance": 1, "duration": 3, "val": 0.2, "label": "COVERED, MOVE FREELY" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "aggro", "chance": 1, "duration": 2, "val": 0, "label": "LIABILITY ASSESSMENT" },
+   { "type": "buff_def", "chance": 1, "duration": 4, "val": 0.4, "label": "THOROUGHLY INSURED" }
+  ]
+ },
+ {
+  "id": "sig_dr_fox_eureka_engine_overdrive",
+  "owner": "Dr. Fox",
+  "name": "Eureka Engine Overdrive",
+  "desc": "Dr. Fox has, in the space of about four seconds, sketched a schematic, welded it together out of spare parts, patched it into the squad's own bioenergy signatures, and started narrating the whole process out loud to nobody in particular -- something about capacitance and 'obviously' and 'why didn't I think of this sooner.' The device works. It always works. Every ally's abilities come online dramatically faster, a chunk of everyone's cooldown gets refunded on the spot, the whole squad's Burst meter tops off, and Dr. Fox herself is left standing in the afterglow, visibly buzzing with her own genius, sharper and more dangerous for the next few turns than anyone gave her credit for. Somewhere in the chaos, whatever she was supposedly building for the ENEMY side just short-circuits instead.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 150,
+  "scalingStat": "magic_atk",
+  "flavor": "Obviously. OBVIOUSLY. Why didn't I think of this SOONER?!",
+  "meta": {
+   "castAnim": "cast-override",
+   "gain_burst": 15,
+   "self_effects": [
+    { "type": "tactical_stance", "chance": 1, "duration": 4, "val": 0.3, "label": "PEAK INSPIRATION" },
+    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.2, "label": "EUREKA!" }
+   ],
+   "team_effects": [
+    { "type": "haste", "chance": 1, "duration": 4, "val": 0.55, "label": "OVERCLOCKED" },
+    { "type": "cd_refund", "chance": 1, "duration": 0, "val": 0.2, "label": "ENGINE OVERDRIVE" },
+    { "type": "buff_atk", "chance": 1, "duration": 4, "val": 0.15, "label": "CAFFEINE-FUELED" }
+   ],
+   "enemy_effects": [
+    { "type": "debuff_def", "chance": 1, "duration": 3, "val": 0.15, "label": "MALFUNCTION RAY" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "regen", "chance": 1, "duration": 4, "val": 0.06, "label": "ADRENALINE" }
+  ]
+ },
+ {
+  "id": "sig_ness_lifeup_shield_omega",
+  "owner": "Ness",
+  "name": "Lifeup & Shield Ω",
+  "desc": "Ness doesn't say much about it -- he never really has -- but somewhere between the homesickness and the sleepless nights on the road, he learned to take care of people before he learned to fight for them. He closes his eyes, thinks about everyone standing next to him, and just like that the whole squad's wounds close up and something goes taut and watchful around them, like nothing that lands next is allowed to be the last thing that happens.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "all_allies",
+  "power": 2.6,
+  "cooldown": 145,
+  "scalingStat": "magic_atk",
+  "flavor": "...I've got you. All of you.",
+  "meta": {
+   "castAnim": "cast-halo",
+   "team_effects": [
+    { "type": "cleanse", "chance": 1, "duration": 0, "val": 0, "label": "PRAYER ANSWERED" },
+    { "type": "regen", "chance": 1, "duration": 4, "val": 0.05, "label": "LIFEUP" },
+    { "type": "shield", "chance": 1, "duration": 4, "val": 0.32, "label": "SOMETHING WATCHING OVER YOU" }
+   ],
+   "self_effects": [
+    { "type": "buff_def", "chance": 1, "duration": 3, "val": 0.2, "label": "UNSHAKABLE WILL" }
+   ]
+  },
+  "statusEffects": []
+ },
+ {
+  "id": "sig_jeff_bottle_rocket_barrage",
+  "owner": "Jeff Andonuts",
+  "name": "Bottle Rocket Barrage",
+  "desc": "Jeff dumps half his inventory onto the ground, does some quick mental math nobody asked for, and starts lighting fuses. Most of what he built out of spare parts and dumb luck works about as well as you'd expect from a kid who reads too many science magazines -- which is to say, unpredictably, but when one connects it usually connects for everybody in the blast radius.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.5,
+  "cooldown": 120,
+  "scalingStat": "atk",
+  "flavor": "This SHOULD work. Probably.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-channel",
+   "random_status": true,
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.2, "label": "LUCKY SHOT" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.4, "duration": 2, "val": 0.12, "label": "SHRAPNEL" }
+  ]
+ },
+ {
+  "id": "sig_paula_pk_starstorm_omega",
+  "owner": "Paula",
+  "name": "PK Starstorm Ω",
+  "desc": "Paula doesn't flinch, doesn't hesitate, doesn't leave an opening -- she just looks up, and the sky answers her. There is no ducking this, no blocking it, no clever defensive trick that gets you out from under it; it was never that kind of attack. By the time anyone else finishes winding up whatever they were planning, it's already over.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.4,
+  "cooldown": 150,
+  "scalingStat": "magic_atk",
+  "flavor": "You don't get to dodge this one.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-starstorm",
+   "ignore_evasion": true,
+   "execute_below": 0.15,
+   "execute_mult": 1.5,
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.25, "label": "NOTHING LEFT TO PROVE" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.5, "duration": 2, "val": 0.15, "label": "STARSTRUCK" }
+  ]
+ },
+ {
+  "id": "sig_orange_kid_super_orange_machine",
+  "owner": "Orange Kid",
+  "name": "The Suporma",
+  "desc": "After weeks -- okay, maybe years -- of funded research, Orange Kid finally wheels it out: the Super Orange Machine. It hums, it glows, it plays a genuinely lovely little tune called 'Ode to Orange Kid'... and then it breaks, exactly like it always does. But for one glorious second before it dies, it puts out enough stray energy to juice the whole squad. He'll get right back to work unboiling eggs.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 135,
+  "scalingStat": "magic_atk",
+  "flavor": "Ha ha ha... it, uh... it's SUPPOSED to do that.",
+  "meta": {
+   "castAnim": "cast-override",
+   "team_effects": [
+    { "type": "haste", "chance": 1, "duration": 3, "val": 0.3, "label": "ODE TO ORANGE KID" },
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.15, "label": "STRAY ENERGY" }
+   ],
+   "self_effects": [
+    { "type": "debuff_def", "chance": 1, "duration": 2, "val": 0.1, "label": "IT'S SUPPOSED TO DO THAT" }
+   ]
+  },
+  "statusEffects": []
+ },
+ {
+  "id": "sig_noelle_holiday_snowgrave",
+  "owner": "Noelle Holiday",
+  "name": "Snowgrave",
+  "desc": "CUT-IN: Noelle goes quiet, and the temperature in the room actually drops -- a small, cold spell that leaves the target reeling and half-frozen where they stand. For the rest of the fight, every time an enemy commits to casting something, she's already answering back, a splinter of ice landing before they've even finished the animation. She never raises her voice. She doesn't have to.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 1.4,
+  "cooldown": 170,
+  "scalingStat": "magic_atk",
+  "flavor": "...Snowgrave.",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "freeze", "chance": 0.5, "duration": 1, "val": 0, "label": "SNOWGRAVE" }
+  ],
+  "meta": {
+   "castAnim": "cast-eclipse",
+   "cut_in": {
+    "trigger": "enemy_skill",
+    "kind": "strike",
+    "power": 0.7,
+    "isMagic": true,
+    "chance": 0.75,
+    "label": "...Snowgrave.",
+    "armMsg": "QUIET RESOLVE",
+    "duration": 9999
+   }
+  }
+ },
+ {
+  "id": "sig_marceline_abadeer_bad_little_boy",
+  "owner": "Marceline Abadeer",
+  "name": "Bad Little Boy",
+  "desc": "CUT-IN: Marceline floats up over the whole squad, kicks off a bassline only a thousand-year-old vampire queen could actually play, and the sheer weight of it warps the air -- everyone's next few hits carry a little extra bite, her own fangs included, and whatever she takes off the enemy she keeps for herself. She shakes off anything that was slowing her down before the first chord even finishes ringing. For the rest of the fight, the instant any ally lands a basic attack, she's already there beside them, uninvited, taking a bite of her own -- a thousand years of bad habits paying out as a burst of stolen vitality, over and over, for as long as the fight keeps going.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 165,
+  "scalingStat": "magic_atk",
+  "flavor": "I'm gonna getcha!",
+  "damageType": "magical",
+  "statusEffects": [
+   { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.18, "label": "ROCK OUT" },
+   { "type": "cleanse", "chance": 1, "duration": 1, "val": 0, "label": "SHAKE IT OFF" }
+  ],
+  "meta": {
+   "castAnim": "cast-vanish",
+   "gain_burst": 10,
+   "self_effects": [
+    { "type": "regen", "chance": 1, "duration": 4, "val": 0.1, "label": "VAMPIRIC RESILIENCE" },
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.15, "label": "A THOUSAND YEARS OF PRACTICE" }
+   ],
+   "team_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 4, "val": 0.12, "label": "AXE BASS RIFF" }
+   ],
+   "cut_in": {
+    "trigger": "ally_basic",
+    "kind": "buff",
+    "effType": "regen",
+    "val": 0.08,
+    "effDuration": 2,
+    "effLabel": "VAMPIRIC DRAIN",
+    "chance": 0.7,
+    "label": "BAD LITTLE BOY!",
+    "armMsg": "STRING UP",
+    "duration": 9999
+   }
+  }
+ },
+ {
+  "id": "sig_miyu_strafing_run",
+  "owner": "Miyu",
+  "name": "Strafing Run",
+  "desc": "CUT-IN: Miyu banks in low and rakes the whole enemy line with cannon fire, the kind of pass that only works because she's already lined up the shot before anyone noticed she moved. For the rest of the fight, the second any ally opens up with an ability, she's peeling off to cover them -- a follow-up strafing pass that leaves whoever's left standing a little easier to finish off.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.8,
+  "cooldown": 170,
+  "scalingStat": "atk",
+  "flavor": "Copy that -- coming around for another pass.",
+  "damageType": "physical",
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.6, "duration": 2, "val": 0.15, "label": "HULL BREACH" }
+  ],
+  "meta": {
+   "castAnim": "cast-flurry",
+   "cut_in": {
+    "trigger": "ally_skill",
+    "kind": "debuff",
+    "effType": "debuff_atk",
+    "val": 0.15,
+    "effDuration": 2,
+    "effLabel": "SUPPRESSING FIRE",
+    "chance": 0.75,
+    "label": "STRAFING RUN!",
+    "armMsg": "COVERING YOU",
+    "duration": 9999
+   }
+  }
+ },
+ {
+  "id": "sig_sarah_connor_no_fate",
+  "owner": "Sarah Connor",
+  "name": "No Fate",
+  "desc": "Sarah doesn't hesitate, doesn't flinch, doesn't waste a single motion -- years of running, training, and preparing for a war nobody else believes is coming have burned every ounce of doubt out of her. She puts the shot exactly where it needs to go, and in the same breath she's already barking orders, hardening the whole squad's stance and getting everyone moving before the echo fades. There's no fate but what you make, and right now she's making sure the squad survives long enough to make it.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.6,
+  "cooldown": 150,
+  "scalingStat": "atk",
+  "flavor": "The future's not set. There's no fate but what we make for ourselves.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-crescendo",
+   "gain_burst": 12,
+   "ignore_evasion": true,
+   "execute_below": 0.25,
+   "execute_mult": 1.8,
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 4, "val": 0.25, "label": "COMBAT INSTINCT" }
+   ],
+   "team_effects": [
+    { "type": "buff_def", "chance": 1, "duration": 4, "val": 0.2, "label": "NO FATE BUT WHAT WE MAKE" },
+    { "type": "haste", "chance": 1, "duration": 3, "val": 0.25, "label": "PREPARE FOR JUDGMENT DAY" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.7, "duration": 3, "val": 0.18, "label": "TARGET ACQUIRED" },
+   { "type": "stun", "chance": 0.25, "duration": 1, "val": 0, "label": "DEAD CENTER" }
+  ]
+ },
+ {
+  "id": "sig_terminator_ill_be_back",
+  "owner": "Terminator",
+  "name": "I'll Be Back",
+  "desc": "The T-800 plants itself between the squad and whatever's coming, servos locking, endoskeleton plating shifting to take the brunt of it. It doesn't negotiate, doesn't retreat, doesn't feel the damage the way a person would -- it just keeps standing there, absorbing hits that would drop anyone else, patching itself up in the gaps between blows. Nothing about the way it holds the line changes for the rest of the fight. It said it would be back, and it is, every single time.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "self",
+  "power": 0,
+  "cooldown": 130,
+  "scalingStat": "def",
+  "flavor": "I'll be back.",
+  "meta": {
+   "castAnim": "cast-guard",
+   "self_effects": [
+    { "type": "shield", "chance": 1, "duration": 2, "val": 0.18, "label": "ENDOSKELETON PLATING" },
+    { "type": "buff_def", "chance": 1, "duration": 2, "val": 0.12, "label": "RELENTLESS PURSUIT" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "aggro", "chance": 1, "duration": 2, "val": 0, "label": "HASTA LA VISTA" },
+   { "type": "regen", "chance": 1, "duration": 2, "val": 0.03, "label": "SELF-REPAIR" }
+  ]
+ },
+ {
+  "id": "sig_kyle_reese_come_with_me",
+  "owner": "Kyle Reese",
+  "name": "Come With Me If You Want to Live",
+  "desc": "Kyle doesn't wait to be asked -- he's already moving, putting himself between the squad's most exposed ally and whatever's bearing down on them, laying down cover fire the entire way. He's spent his whole life protecting one specific future, and it shows in how automatic this is: shield up, weapon up, squad moving, all in the same breath. Whoever needed it most just got a little harder to kill, and Kyle's not slowing down until this fight is over.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "lowest_ally",
+  "power": 0,
+  "cooldown": 140,
+  "scalingStat": "atk",
+  "flavor": "Come with me if you want to live.",
+  "meta": {
+   "castAnim": "cast-guard",
+   "gain_burst": 10,
+   "self_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.2, "label": "SURVIVOR'S EDGE" }
+   ],
+   "team_effects": [
+    { "type": "haste", "chance": 1, "duration": 3, "val": 0.2, "label": "MOVE, MOVE, MOVE!" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "shield", "chance": 1, "duration": 3, "val": 0.2, "label": "COVER FIRE" },
+   { "type": "cleanse", "chance": 1, "duration": 1, "val": 0, "label": "STAY ALIVE" }
+  ]
+ },
+ {
+  "id": "sig_peter_silberman_clinical_assessment",
+  "owner": "Peter Silberman",
+  "name": "Clinical Assessment",
+  "desc": "Dr. Silberman doesn't throw a punch in his life, but he's spent his career reading people, and it turns out that skill translates disturbingly well to reading whatever's trying to kill you -- a pause here, a tell there, and suddenly he knows exactly where it's weak. He talks the squad down in the same even, professional tone the whole time, steadying nerves that were starting to fray. He was right about Sarah Connor being the sanest person in that hospital. He's right about this, too.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "debuff",
+  "target": "single_enemy",
+  "power": 1.0,
+  "cooldown": 150,
+  "scalingStat": "magic_atk",
+  "flavor": "I'd say you're a very lucky man, Mrs. Connor. In my professional opinion.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-focus",
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.15, "label": "PROFESSIONAL OPINION" }
+   ],
+   "team_effects": [
+    { "type": "regen", "chance": 1, "duration": 3, "val": 0.05, "label": "SEDATIVE CALM" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 1, "duration": 3, "val": 0.2, "label": "DIAGNOSED" },
+   { "type": "expose", "chance": 0.6, "duration": 2, "val": 0, "label": "EXPOSED WEAKNESS" }
+  ]
+ },
+ {
+  "id": "sig_rouge_perfect_heist",
+  "owner": "Rouge",
+  "name": "Perfect Heist",
+  "desc": "Rouge doesn't rush a job -- she cases it, waits for the exact right second, and then the whole world just... stops giving her trouble. For a couple of heartbeats nothing on the enemy side is able to so much as flinch while she works, gliding through the opening she planned for and taking exactly what she came for on the way past. She's gone again before time catches back up, already checking her nails like nothing happened, and for a moment after, the whole squad moves like they've got the same head start she does.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.0,
+  "cooldown": 185,
+  "scalingStat": "atk",
+  "flavor": "A girl's gotta have her jewels.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-vanish",
+   "gain_burst": 10,
+   "ignore_evasion": true,
+   "world_time_stop": {
+    "duration": 2,
+    "selfAtkBuff": 0.5,
+    "musicStopMs": 4000
+   },
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.2, "label": "PERFECT HEIST" }
+   ],
+   "team_effects": [
+    { "type": "haste", "chance": 1, "duration": 2, "val": 0.15, "label": "TIME'S FROZEN, MOVE" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 1, "duration": 1, "val": 0, "label": "TIME STOPPED" },
+   { "type": "debuff_def", "chance": 0.7, "duration": 2, "val": 0.15, "label": "VAULT CRACKED" }
+  ]
+ },
+ {
+  "id": "sig_shadow_chaos_control",
+  "owner": "Shadow",
+  "name": "Chaos Control",
+  "desc": "Shadow grips the emerald and tears a hole straight through the moment -- everything on the enemy side lurches, freezes, loses its footing in time for just a beat before the world lands back where it's supposed to be. It's the same trick he's used to dodge missiles and outrun collapsing space stations, scaled down to a fight instead of a catastrophe, and it still works, mostly. He comes out of it a little charged up, ready to swing again -- it just doesn't hold the room the way the real thing is supposed to.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 1.6,
+  "cooldown": 175,
+  "scalingStat": "atk",
+  "flavor": "Chaos... Control!",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-fracture",
+   "gain_burst": 8,
+   "ignore_evasion": true,
+   "world_time_stop": {
+    "duration": 1,
+    "selfAtkBuff": 0.35,
+    "musicStopMs": 2500
+   },
+   "self_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 2, "val": 0.15, "label": "CHAOS ENERGY" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 0.6, "duration": 1, "val": 0, "label": "CHAOS CONTROL" },
+   { "type": "debuff_spd", "chance": 0.6, "duration": 2, "val": 0.1, "label": "TIME DISTORTED" }
+  ]
+ },
+ {
+  "id": "sig_jimmy_neutron_brain_blast",
+  "owner": "Jimmy Neutron",
+  "name": "Brain Blast: Catastrophic Failure",
+  "desc": "Jimmy doesn't really believe this one's going to work either, but he runs the numbers out loud anyway -- fast, clipped, more bitter than excited -- and something on his belt actually sparks to life for once. It never lasts. He also draws every hostile eye in the arena the instant the fight starts, whether or not this ability is even equipped, purely because everyone in earshot already knows exactly how this ends and would rather get it over with. Sooner or later -- usually sooner -- one of his own inventions goes off wrong, and it's the last thing he ever gets to be right about: even in failure, some part of him still made sure the squad walked away stronger for it.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "self",
+  "power": 0,
+  "cooldown": 140,
+  "scalingStat": "magic_atk",
+  "flavor": "Not like this...",
+  "meta": {
+   "castAnim": "cast-focus",
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.15, "label": "GENIUS COMPLEX" }
+   ],
+   "team_effects": [
+    { "type": "haste", "chance": 1, "duration": 2, "val": 0.1, "label": "RUN, HE'S GOING TO GET US KILLED" }
+   ],
+   "death_burst_msg": "NOT LIKE THIS...",
+   "death_burst": [
+    { "type": "buff_atk", "duration": 4, "val": 0.25, "label": "HIS LAST GIFT" },
+    { "type": "buff_crit", "duration": 4, "val": 0.2, "label": "VENGEANCE FOR JIMMY" },
+    { "type": "buff_def", "duration": 4, "val": 0.2, "label": "MOURNING RAGE" },
+    { "type": "haste", "duration": 3, "val": 0.25, "label": "NO TIME TO GRIEVE" },
+    { "type": "regen", "duration": 4, "val": 0.06, "label": "HIS ONE GOOD DEED" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.15, "label": "BRAIN BLAST" }
+  ]
+ },
+ {
+  "id": "sig_blot_encore",
+  "owner": "Blot",
+  "name": "Encore",
+  "desc": "Blot bows, mimes pulling an invisible rope, and shouts something that's clearly meant to be encouraging -- except it comes out backwards, every time, the way everything out of Blot comes out backwards, so what the squad actually hears is a garbled little burst of noise running in reverse. Nobody's ever quite sure what he said. He seems to mean it, though, and for a couple of seconds it's enough.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "self",
+  "power": 0,
+  "cooldown": 130,
+  "scalingStat": "atk",
+  "flavor": "!ti od nac uoY",
+  "meta": {
+   "castAnim": "cast-mirage"
+  },
+  "statusEffects": [
+   { "type": "buff_atk", "chance": 1, "duration": 2, "val": 0.08, "label": "ENCORE" }
+  ]
+ },
+ {
+  "id": "sig_gray_fullbuster_death_scythe",
+  "owner": "Gray Fullbuster",
+  "name": "Ice-Make: Death Scythe",
+  "desc": "Gray claps his hands together -- fist into open palm, the same stance every time, the one Ur beat into him until it was instinct instead of memory -- and a field of jagged ice blades erupts across the entire enemy line, freezing anything they don't outright shred. He doesn't say much while he works; Ur never let him get away with sloppy technique, and he's not about to start now. The cold rolls off him afterward, thickening the squad's own defenses like frost creeping over armor.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.6,
+  "cooldown": 145,
+  "scalingStat": "magic_atk",
+  "flavor": "Ice-Make: Death Scythe!",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-shatter",
+   "gain_burst": 10,
+   "self_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.2, "label": "ICE-MAKE MASTERY" }
+   ],
+   "team_effects": [
+    { "type": "buff_def", "chance": 1, "duration": 3, "val": 0.15, "label": "FROSTED ARMOR" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "freeze", "chance": 0.4, "duration": 1, "val": 0, "label": "FLASH-FROZEN" },
+   { "type": "debuff_spd", "chance": 0.7, "duration": 3, "val": 0.15, "label": "COLD SNAP" }
+  ]
+ },
+ {
+  "id": "sig_batgirl_photographic_precision",
+  "owner": "Batgirl",
+  "name": "Photographic Precision",
+  "desc": "Barbara's already cross-referenced the target's whole profile before the fight even started -- she's got the file memorized, every weakness flagged, every pattern logged from three separate stakeouts. She puts one precise strike exactly where the notes say it'll hurt most, and the read doesn't stop there: for a few seconds the whole squad is fighting off her intel, hitting cleaner because she already mapped out where to aim.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "debuff",
+  "target": "single_enemy",
+  "power": 1.8,
+  "cooldown": 140,
+  "scalingStat": "magic_atk",
+  "flavor": "I already know how this ends for you.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-pierce",
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.18, "label": "EIDETIC MEMORY" }
+   ],
+   "team_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.1, "label": "SHARED INTEL" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "expose", "chance": 0.7, "duration": 3, "val": 0, "label": "FILE OPENED" },
+   { "type": "debuff_def", "chance": 0.6, "duration": 3, "val": 0.15, "label": "WEAK POINT MAPPED" }
+  ]
+ },
+ {
+  "id": "sig_alfred_pennyworth_stately_intervention",
+  "owner": "Alfred Pennyworth",
+  "name": "A Stately Intervention",
+  "desc": "Alfred doesn't raise his voice. He never has to -- he simply arrives, exactly when needed, first-aid kit already open, and starts working on whoever's worse for wear while delivering a short, dry observation about their life choices. Wounds close, nerves settle, and the whole squad straightens up a little, because apparently even mid-battle it's simply not done to look shabby in front of Master Wayne's butler.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "heal",
+  "target": "all_allies",
+  "power": 2.4,
+  "cooldown": 150,
+  "scalingStat": "magic_atk",
+  "flavor": "Do try not to bleed on the carpet, sir.",
+  "meta": {
+   "castAnim": "cast-guard",
+   "team_effects": [
+    { "type": "cleanse", "chance": 1, "duration": 1, "val": 0, "label": "PROPER FIRST AID" },
+    { "type": "shield", "chance": 1, "duration": 3, "val": 0.2, "label": "WELL PREPARED" }
+   ],
+   "self_effects": [
+    { "type": "buff_def", "chance": 1, "duration": 3, "val": 0.15, "label": "UNFLAPPABLE" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "regen", "chance": 1, "duration": 4, "val": 0.05, "label": "STATELY CARE" }
+  ]
+ },
+ {
+  "id": "sig_commissioner_gordon_signal_in_the_sky",
+  "owner": "Commissioner Gordon",
+  "name": "Signal in the Sky",
+  "desc": "Gordon doesn't have powers, doesn't have gadgets, doesn't even particularly like how any of this works -- but he knows exactly who to call, and he lights the signal without a second's hesitation. The whole squad rallies off the sight of it, and the worst offender on the field gets a searchlight nailed to its back, impossible to lose track of for the rest of the fight.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 145,
+  "scalingStat": "def",
+  "flavor": "Get me Batman.",
+  "meta": {
+   "castAnim": "cast-focus",
+   "mark": { "label": "SEARCHLIGHT", "duration": 4, "def_down": 0.2 },
+   "self_effects": [
+    { "type": "buff_def", "chance": 1, "duration": 3, "val": 0.2, "label": "OLD GUARD" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.15, "label": "GCPD BACKUP" },
+   { "type": "haste", "chance": 1, "duration": 2, "val": 0.15, "label": "CAVALRY'S HERE" }
+  ]
+ },
+ {
+  "id": "sig_joker_last_laugh",
+  "owner": "Joker",
+  "name": "Last Laugh",
+  "desc": "There's no telling what's coming out of the sleeve this time -- acid flower, joy buzzer, something with a fuse -- and that's rather the point. The Joker doesn't plan so much as improvise catastrophically, hitting the whole enemy line with whatever gag happens to be loaded, leaving each of them stuck with a different, entirely unpredictable little curse. He walks away cackling regardless of how it actually landed. It always lands funny to him.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.1,
+  "cooldown": 140,
+  "scalingStat": "magic_atk",
+  "flavor": "Why aren't you laughing?",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-mirage",
+   "random_status": true,
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.2, "label": "PUNCHLINE" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_atk", "chance": 0.5, "duration": 2, "val": 0.15, "label": "JOY BUZZER" }
+  ]
+ },
+ {
+  "id": "sig_harley_quinn_hammer_time",
+  "owner": "Harley Quinn",
+  "name": "Hammer Time!",
+  "desc": "Harley winds up her big comedy mallet like it's the funniest thing in the world, and then it comes down with a lot more physics behind it than the giant foam-looking head has any right to carry. Every debuff already stacked on the target makes the swing land that much harder, and if it actually connects clean, she's already cartwheeling off, delighted with herself, laughing the whole way.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.2,
+  "cooldown": 130,
+  "scalingStat": "atk",
+  "flavor": "Puddin', watch THIS!",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-slam",
+   "bonus_per_debuff": 0.2,
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.2, "label": "HAVING A BLAST" },
+    { "type": "haste", "chance": 1, "duration": 2, "val": 0.15, "label": "CARTWHEEL AWAY" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 0.3, "duration": 1, "val": 0, "label": "SEE STARS?" }
+  ]
+ },
+ {
+  "id": "sig_two_face_call_it",
+  "owner": "Two-Face",
+  "name": "Call It",
+  "desc": "Harvey flips the coin -- the scarred side always lands the same way it lands in his head, and everyone around him has learned to just wait and see which Harvey shows up on the other side of the toss. Sometimes it's the DA who still believes in the process, methodical and precise. Sometimes it's the other one. Either way, somebody's about to have a very bad night, and Harvey's already decided it isn't going to be him.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2.8,
+  "cooldown": 135,
+  "scalingStat": "atk",
+  "flavor": "Heads, you live. Tails... well.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-riposte",
+   "ignore_evasion": true,
+   "self_effects": [
+    { "type": "buff_crit", "chance": 0.5, "duration": 3, "val": 0.3, "label": "GOOD SIDE" },
+    { "type": "debuff_def", "chance": 0.5, "duration": 2, "val": 0.1, "label": "BAD SIDE" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.6, "duration": 3, "val": 0.18, "label": "DOUBLE OR NOTHING" }
+  ]
+ },
+ {
+  "id": "sig_penguin_umbrella_barrage",
+  "owner": "Penguin",
+  "name": "Gentleman's Umbrella Barrage",
+  "desc": "Oswald pops the catch on his umbrella and it's suddenly not an umbrella at all -- barrels swinging up out of the ribs, unloading a volley that somehow still manages to look dapper doing it. He waddles back a step, straightens his monocle, and lets the rest of his hired muscle pick up the slack, rallied by nothing more than the sheer confidence of watching the boss actually deliver for once.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.0,
+  "cooldown": 140,
+  "scalingStat": "atk",
+  "flavor": "Wobble, wobble.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-pierce",
+   "ignore_evasion": true,
+   "team_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.15, "label": "THE BOSS DELIVERS" }
+   ],
+   "self_effects": [
+    { "type": "buff_def", "chance": 1, "duration": 3, "val": 0.15, "label": "STAY CLASSY" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.5, "duration": 2, "val": 0.12, "label": "PEPPERED" }
+  ]
+ },
+ {
+  "id": "sig_riddler_riddle_me_this",
+  "owner": "Riddler",
+  "name": "Riddle Me This",
+  "desc": "Nygma poses the question before the target's even braced for it, and there's no good answer -- get it wrong and it costs you, get it right and it still costs you, because the game was rigged from the first syllable. He can't help narrating his own genius while he does it, which would almost be a weakness if he weren't always, infuriatingly, exactly right.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "debuff",
+  "target": "single_enemy",
+  "power": 1.4,
+  "cooldown": 145,
+  "scalingStat": "magic_atk",
+  "flavor": "Riddle me this...",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-fracture",
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.2, "label": "ALWAYS RIGHT" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "silence", "chance": 0.5, "duration": 2, "val": 0, "label": "STUMPED" },
+   { "type": "debuff_def", "chance": 0.65, "duration": 3, "val": 0.15, "label": "RIDDLED" }
+  ]
+ },
+ {
+  "id": "sig_mr_freeze_nora",
+  "owner": "Mr. Freeze",
+  "name": "For Nora",
+  "desc": "Everything Victor does now, he does with the same flat, mechanical calm -- the suit hisses, the cold gun levels, and a wave of subzero air rolls out across whatever's in front of him. It isn't rage. It's just math, the same equation he's been running since Gotham took her from him, and the squad gets pulled into its own share of the shielding that keeps his own systems running. He'll apologize to no one for what he's willing to do to fix it.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.4,
+  "cooldown": 145,
+  "scalingStat": "magic_atk",
+  "flavor": "I will not rest until I find a cure.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-tidal",
+   "team_effects": [
+    { "type": "shield", "chance": 1, "duration": 3, "val": 0.2, "label": "CRYO SHIELDING" }
+   ],
+   "self_effects": [
+    { "type": "regen", "chance": 1, "duration": 4, "val": 0.05, "label": "LIFE-SUPPORT SUIT" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "freeze", "chance": 0.4, "duration": 1, "val": 0, "label": "SUBZERO" },
+   { "type": "debuff_spd", "chance": 0.7, "duration": 3, "val": 0.18, "label": "FROSTBITTEN" }
+  ]
+ },
+ {
+  "id": "sig_poison_ivy_natures_wrath",
+  "owner": "Poison Ivy",
+  "name": "Nature's Wrath",
+  "desc": "Ivy doesn't raise her voice either -- the vines do the talking, bursting up through whatever's underfoot and dosing the target with a toxin she's had years to perfect. The same breath she used to poison them also carries something sweeter to her own side, a pheromone-laced calm that knits the squad back together while the enemy's own strength wilts under her control.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2.6,
+  "cooldown": 140,
+  "scalingStat": "magic_atk",
+  "flavor": "Nature always wins in the end.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-bloom",
+   "self_effects": [
+    { "type": "buff_elemdmg", "chance": 1, "duration": 4, "val": 0.18, "label": "GREEN THUMB" }
+   ],
+   "team_effects": [
+    { "type": "regen", "chance": 1, "duration": 4, "val": 0.05, "label": "PHEROMONE CALM" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "burn", "chance": 0.9, "duration": 3, "val": 0.1, "label": "TOXIN" },
+   { "type": "debuff_atk", "chance": 0.6, "duration": 3, "val": 0.18, "label": "CHARMED WEAK" }
+  ]
+ },
+ {
+  "id": "sig_catwoman_nine_lives",
+  "owner": "Catwoman",
+  "name": "Nine Lives",
+  "desc": "Selina doesn't so much attack as relieve someone of something -- a whip-crack, a graceful dodge back out of range, and whatever edge the target thought they had is suddenly hers instead. She lands the way cats always land, already recalculating her next move, unbothered by the fact that she was never really supposed to be here in the first place.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2.2,
+  "cooldown": 135,
+  "scalingStat": "atk",
+  "flavor": "I always land on my feet.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-vanish",
+   "steal_buff": true,
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.2, "label": "CAT BURGLAR" },
+    { "type": "buff_evasion", "chance": 1, "duration": 3, "val": 0.15, "label": "ALWAYS LANDS RIGHT" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.6, "duration": 2, "val": 0.15, "label": "CLAWED" }
+  ]
+ },
+ {
+  "id": "sig_scarecrow_fear_itself",
+  "owner": "Scarecrow",
+  "name": "Fear Itself",
+  "desc": "Crane doesn't need to touch anyone -- the gas does the work, a fine mist that finds whatever each target's actually afraid of and makes them live it for a few seconds. Some freeze outright. Some just can't bring themselves to swing as hard as they know they should. He watches it happen with the calm, clinical interest of a man who considers this all very good research.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "debuff",
+  "target": "all_enemies",
+  "power": 1.2,
+  "cooldown": 150,
+  "scalingStat": "magic_atk",
+  "flavor": "What are you afraid of?",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-eclipse",
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.18, "label": "CLINICAL INTEREST" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 0.3, "duration": 1, "val": 0, "label": "PARALYZED BY FEAR" },
+   { "type": "debuff_atk", "chance": 0.7, "duration": 3, "val": 0.18, "label": "TOXIN FEAR GAS" }
+  ]
+ },
+ {
+  "id": "sig_ras_al_ghul_lazarus_resolve",
+  "owner": "Ra's al Ghul",
+  "name": "Lazarus Resolve",
+  "desc": "Ra's has died before. Several times, in fact, and come back sharper each time -- so he doesn't fight like someone worried about losing. He steps back, lets the pit's old trick run through the whole squad instead of just himself, hardening them with centuries of patience and the quiet certainty that whatever happens tonight, the League endures regardless.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "buff",
+  "target": "all_allies",
+  "power": 0,
+  "cooldown": 155,
+  "scalingStat": "def",
+  "flavor": "Death is nothing to fear, detective. I would know.",
+  "meta": {
+   "castAnim": "cast-halo",
+   "gain_burst": 10,
+   "team_effects": [
+    { "type": "shield", "chance": 1, "duration": 4, "val": 0.25, "label": "LAZARUS RESILIENCE" },
+    { "type": "buff_def", "chance": 1, "duration": 4, "val": 0.2, "label": "CENTURIES OF PATIENCE" }
+   ],
+   "self_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.2, "label": "THE DEMON'S HEAD" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "regen", "chance": 1, "duration": 4, "val": 0.06, "label": "LAZARUS PIT ECHO" }
+  ]
+ },
+ {
+  "id": "sig_clayface_shapeshift",
+  "owner": "Clayface",
+  "name": "Shapeless Threat",
+  "desc": "Basil doesn't have a fixed shape to hit anymore -- an arm becomes a hammer, the hammer becomes a wave, and whatever the target was relying on to hurt him is suddenly running through his own body like it belongs there. He reforms mid-hit, taking on a piece of whatever advantage the enemy just showed him, patient in the specific way only something that can't permanently die has any right to be.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 2.9,
+  "cooldown": 140,
+  "scalingStat": "atk",
+  "flavor": "I am whatever I need to be.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-tremor",
+   "copy_buff": true,
+   "self_effects": [
+    { "type": "regen", "chance": 1, "duration": 4, "val": 0.06, "label": "REFORMING MASS" },
+    { "type": "buff_def", "chance": 1, "duration": 3, "val": 0.15, "label": "MALLEABLE HIDE" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_atk", "chance": 0.5, "duration": 2, "val": 0.15, "label": "SMOTHERED" }
+  ]
+ },
+ {
+  "id": "sig_bane_venom_surge",
+  "owner": "Bane",
+  "name": "Venom Surge",
+  "desc": "The tubes at Bane's temple pump once, hard, and everything about him gets bigger and meaner in the same breath -- the same trick that put Batman in traction, running through him again with the same clinical excess he's always used it with. He doesn't waste the surge on anything but the strongest thing in front of him. Breaking the biggest obstacle first has always been the whole point.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.8,
+  "cooldown": 140,
+  "scalingStat": "atk",
+  "flavor": "I broke the Bat. I can break you.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-heavy",
+   "ignore_evasion": true,
+   "execute_below": 0.25,
+   "execute_mult": 1.9,
+   "self_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.3, "label": "VENOM PUMPED" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.7, "duration": 3, "val": 0.2, "label": "BROKEN GUARD" }
+  ]
+ },
+ {
+  "id": "sig_mad_hatter_teatime",
+  "owner": "Mad Hatter",
+  "name": "Down the Rabbit Hole",
+  "desc": "Jervis tips his hat, the mind-control chips inside it humming, and suddenly the whole fight feels a little less real, a little more like a story someone's telling badly. He can't ever quite tell reality from the version of it he's built in his head anymore, and for a few seconds neither can whoever he's just fixed his attention on.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "debuff",
+  "target": "single_enemy",
+  "power": 1.0,
+  "cooldown": 145,
+  "scalingStat": "magic_atk",
+  "flavor": "Curiouser and curiouser.",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-sparkle",
+   "random_status": true,
+   "self_effects": [
+    { "type": "buff_crit", "chance": 1, "duration": 3, "val": 0.15, "label": "WONDERLAND LOGIC" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "silence", "chance": 0.45, "duration": 2, "val": 0, "label": "UNDER THE SPELL" }
+  ]
+ },
+ {
+  "id": "sig_man_bat_sonic_shriek",
+  "owner": "Man-Bat",
+  "name": "Sonic Shriek",
+  "desc": "Whatever's left of Kirk Langstrom loses out to the serum every time this happens -- the jaw distends, the wings unfold, and a shriek comes out that isn't really a voice anymore, pitched to rattle everything in earshot. He doesn't fully remember it afterward. He never does. That's rather the tragedy of it.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "all_enemies",
+  "power": 2.0,
+  "cooldown": 145,
+  "scalingStat": "magic_atk",
+  "flavor": "SCREEEECH!",
+  "damageType": "magical",
+  "meta": {
+   "castAnim": "cast-thunder",
+   "self_effects": [
+    { "type": "buff_atk", "chance": 1, "duration": 3, "val": 0.25, "label": "SERUM RAGE" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "stun", "chance": 0.35, "duration": 1, "val": 0, "label": "DEAFENED" },
+   { "type": "debuff_spd", "chance": 0.5, "duration": 2, "val": 0.12, "label": "DISORIENTED" }
+  ]
+ },
+ {
+  "id": "sig_killer_croc_apex_predator",
+  "owner": "Killer Croc",
+  "name": "Apex Predator",
+  "desc": "Waylon doesn't bother with technique -- he doesn't need it. He just goes for whoever's already hurting, jaws first, the same way anything else at the bottom of the sewers learns to pick off the weakest thing in the water. What doesn't kill him barely slows him down; his own hide's thick enough that most of what comes back at him afterward doesn't matter much either.",
+  "rarity": "Signature",
+  "signature": true,
+  "type": "atk",
+  "target": "single_enemy",
+  "power": 3.0,
+  "cooldown": 130,
+  "scalingStat": "atk",
+  "flavor": "Something's gonna eat good tonight.",
+  "damageType": "physical",
+  "meta": {
+   "castAnim": "cast-slam",
+   "execute_below": 0.35,
+   "execute_mult": 1.8,
+   "self_effects": [
+    { "type": "regen", "chance": 1, "duration": 4, "val": 0.06, "label": "THICK HIDE" },
+    { "type": "buff_def", "chance": 1, "duration": 3, "val": 0.15, "label": "APEX PREDATOR" }
+   ]
+  },
+  "statusEffects": [
+   { "type": "debuff_def", "chance": 0.6, "duration": 2, "val": 0.15, "label": "MAULED" }
   ]
  }
 ]

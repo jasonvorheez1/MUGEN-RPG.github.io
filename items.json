@@ -1,4 +1,30 @@
 {
+  "aura_fragment": {
+    "id": "aura_fragment",
+    "name": "Aura Fragment",
+    "desc": "Instantly grants +25 Aura.",
+    "detailedDesc": "A crystallized shard of raw aura, crafted from spare materials and essence. Cracks open for an instant, no-target aura boost.",
+    "type": "consumable",
+    "rarity": "uncommon",
+    "icon": "Sparkles",
+    "basePrice": 8000,
+    "sellPrice": 250,
+    "valueRating": 0.8,
+    "imageUrl": "item_battery.png"
+  },
+  "summon_voucher": {
+    "id": "summon_voucher",
+    "name": "Summon Voucher",
+    "desc": "Instantly grants +150 Gems.",
+    "detailedDesc": "A crafted chit redeemable at any recruiter's desk -- cashed in on the spot for gems.",
+    "type": "consumable",
+    "rarity": "rare",
+    "icon": "Gem",
+    "basePrice": 30000,
+    "sellPrice": 900,
+    "valueRating": 1.1,
+    "imageUrl": "item_battery.png"
+  },
   "stamina_small": {
     "id": "stamina_small",
     "name": "Micro-Battery",

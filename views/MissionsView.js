@@ -45,7 +45,26 @@ const MissionsView = ({
     const timer = setInterval(() => setNow(Date.now()), 1e3);
     return () => clearInterval(timer);
   }, []);
+  // Power requirements rescaled against the ~30M PWR a maxed endgame squad
+  // member actually carries (see PWR v6.0 reference figures in utils.js) --
+  // the old curve topped out around 75K for anything short of the single
+  // 500M capstone, which made every contract except the very last one a
+  // trivial rubber-stamp with no real success-rate tension at any stage of
+  // the game. Now it climbs the full early -> endgame -> above-endgame range.
   const CONTRACTS = [
+    {
+      id: "courier_run",
+      name: "Courier Run",
+      desc: "Get a package across the district before anyone asks questions.",
+      type: "scavenge",
+      duration: 5 * 60 * 1e3,
+      // 5m -- fast, low-commitment job for topping off between other activities
+      reqCP: 3e3,
+      rewards: { credits: 1500 },
+      elementBonus: "EARTH",
+      color: "#a3e635",
+      icon: /* @__PURE__ */ jsxDEV(Activity, { size: 20 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+    },
     {
       id: "materials_scavenge",
       name: "Industrial Scavenge",
@@ -53,8 +72,8 @@ const MissionsView = ({
       type: "scavenge",
       duration: 15 * 60 * 1e3,
       // 15m
-      reqCP: 1500,
-      rewards: { materials: 1500, credits: 2500 },
+      reqCP: 15e3,
+      rewards: { materials: 6e3, credits: 6e3 },
       elementBonus: "WATER",
       color: "#94a3b8",
       icon: /* @__PURE__ */ jsxDEV(Package, { size: 20 }, void 0, false, {
@@ -64,14 +83,27 @@ const MissionsView = ({
       })
     },
     {
+      id: "black_market_fence",
+      name: "Black Market Fence",
+      desc: "Move questionable goods through the right hands, quietly.",
+      type: "scavenge",
+      duration: 20 * 60 * 1e3,
+      // 20m
+      reqCP: 4e4,
+      rewards: { credits: 2e4, materials: 4e3 },
+      elementBonus: "DARK",
+      color: "#8b5cf6",
+      icon: /* @__PURE__ */ jsxDEV(Database, { size: 20 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+    },
+    {
       id: "xp_patrol",
       name: "Security Patrol",
       desc: "Keep the academy perimeter clear of minor glitches.",
       type: "combat",
       duration: 30 * 60 * 1e3,
       // 30m
-      reqCP: 5e3,
-      rewards: { xp: 25e3, credits: 5e3 },
+      reqCP: 1e5,
+      rewards: { xp: 15e4, credits: 3e4 },
       elementBonus: "FIRE",
       color: "#ef4444",
       icon: /* @__PURE__ */ jsxDEV(Sword, { size: 20 }, void 0, false, {
@@ -81,14 +113,40 @@ const MissionsView = ({
       })
     },
     {
+      id: "bounty_hunt",
+      name: "Bounty Hunt",
+      desc: "A rift-spawned troublemaker has a price on its head.",
+      type: "combat",
+      duration: 45 * 60 * 1e3,
+      // 45m
+      reqCP: 3e5,
+      rewards: { xp: 5e5, credits: 8e4 },
+      elementBonus: "FIRE",
+      color: "#f87171",
+      icon: /* @__PURE__ */ jsxDEV(Sword, { size: 20 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+    },
+    {
+      id: "neutral_zone_audit",
+      name: "Neutral Zone Audit",
+      desc: "Paperwork in a dimension that officially doesn't take sides.",
+      type: "research",
+      duration: 90 * 60 * 1e3,
+      // 1.5h
+      reqCP: 1e6,
+      rewards: { credits: 3e5, aura: 300 },
+      elementBonus: "NEUTRAL",
+      color: "#e2e8f0",
+      icon: /* @__PURE__ */ jsxDEV(Monitor, { size: 20 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+    },
+    {
       id: "essence_well",
       name: "Aether Siphoning",
       desc: "Channel raw energy into high-purity essence crystals.",
       type: "research",
       duration: 60 * 60 * 1e3,
       // 1h
-      reqCP: 25e3,
-      rewards: { essence: 45, aura: 20 },
+      reqCP: 7e5,
+      rewards: { essence: 300, aura: 150, credits: 5e4 },
       elementBonus: "LIGHT",
       color: "#f97316",
       icon: /* @__PURE__ */ jsxDEV(Sparkles, { size: 20 }, void 0, false, {
@@ -98,14 +156,27 @@ const MissionsView = ({
       })
     },
     {
+      id: "rift_stabilization",
+      name: "Rift Stabilization",
+      desc: "Keep a fraying tear in reality from widening any further.",
+      type: "research",
+      duration: 180 * 60 * 1e3,
+      // 3h
+      reqCP: 25e5,
+      rewards: { essence: 900, aura: 500, gems: 40 },
+      elementBonus: "LIGHT",
+      color: "#facc15",
+      icon: /* @__PURE__ */ jsxDEV(Sparkles, { size: 20 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+    },
+    {
       id: "gem_mining",
       name: "Crystal Deep-Core",
       desc: "Risky extraction of dimensional gems from unstable rifts.",
       type: "mining",
       duration: 120 * 60 * 1e3,
       // 2h
-      reqCP: 75e3,
-      rewards: { gems: 15, materials: 8500 },
+      reqCP: 5e6,
+      rewards: { gems: 120, materials: 6e4 },
       elementBonus: "DARK",
       color: "#00d2ff",
       icon: /* @__PURE__ */ jsxDEV(Gem, { size: 20 }, void 0, false, {
@@ -115,14 +186,53 @@ const MissionsView = ({
       })
     },
     {
+      id: "dimensional_heist",
+      name: "Dimensional Heist",
+      desc: "In, grab the vault, out. A parallel-world bank never saw it coming.",
+      type: "heist",
+      duration: 240 * 60 * 1e3,
+      // 4h
+      reqCP: 12e6,
+      rewards: { gems: 400, credits: 3e6, materials: 1e5 },
+      elementBonus: "WIND",
+      color: "#22d3ee",
+      icon: /* @__PURE__ */ jsxDEV(Database, { size: 20 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+    },
+    {
+      id: "unclaimed_vault",
+      name: "The Unclaimed Vault",
+      desc: "Nobody's flag is on this one, which is exactly the problem.",
+      type: "heist",
+      duration: 300 * 60 * 1e3,
+      // 5h
+      reqCP: 18e6,
+      rewards: { gems: 500, credits: 4e6 },
+      elementBonus: "NEUTRAL",
+      color: "#e2e8f0",
+      icon: /* @__PURE__ */ jsxDEV(Database, { size: 20 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+    },
+    {
+      id: "titan_core_extraction",
+      name: "Titan Core Extraction",
+      desc: "Crack open a dormant colossus for the reactor core inside.",
+      type: "mining",
+      duration: 360 * 60 * 1e3,
+      // 6h -- roughly endgame-average PWR (~30M)
+      reqCP: 28e6,
+      rewards: { gems: 800, materials: 25e4, essence: 1500 },
+      elementBonus: "EARTH",
+      color: "#fb923c",
+      icon: /* @__PURE__ */ jsxDEV(Gem, { size: 20 }, void 0, false, { fileName: "<stdin>", lineNumber: 1, columnNumber: 1 })
+    },
+    {
       id: "multiverse_recon",
       name: "Void Reconnaissance",
       desc: "Deep-space scouting of parallel timelines. Extreme duration.",
       type: "stealth",
       duration: 480 * 60 * 1e3,
-      // 8h
-      reqCP: 5e8,
-      rewards: { gems: 500, essence: 750, aura: 500, credits: 25e4 },
+      // 8h -- above-endgame capstone, meant to demand a squad stronger than average
+      reqCP: 65e6,
+      rewards: { gems: 2500, essence: 4e3, aura: 2500, credits: 5e6 },
       elementBonus: "WIND",
       color: "#a855f7",
       icon: /* @__PURE__ */ jsxDEV(Monitor, { size: 20 }, void 0, false, {
@@ -132,6 +242,11 @@ const MissionsView = ({
       })
     }
   ];
+  // Gives the `type` pill actual mechanical weight instead of being pure
+  // flavor text: a hero whose growth archetype fits the job type reads that
+  // job better (a Swift courier is genuinely better at a heist than a tank).
+  // Stacks multiplicatively with the elemental bonus below.
+  const TYPE_GROWTH_MATCH = { combat: "Aggressive", mining: "Defensive", research: "Balanced", scavenge: "Swift", heist: "Swift", stealth: "Defensive" };
   const deployHero = (mission, heroId) => {
     if (!heroId) return;
     const hero = characters.find((c) => String(c.export_id) === String(heroId));
@@ -141,7 +256,7 @@ const MissionsView = ({
       return;
     }
     const heroPwr = calculateSubStat(hero, characters, "pwr", skills, auraUpgrades);
-    const successRate = Math.min(1, heroPwr / mission.reqCP * (hero.element === mission.elementBonus ? 1.3 : 1));
+    const successRate = Math.min(1, heroPwr / mission.reqCP * (hero.element === mission.elementBonus ? 1.3 : 1) * (hero.growthType === TYPE_GROWTH_MATCH[mission.type] ? 1.2 : 1));
     const newAssignment = {
       missionId: mission.id,
       heroId,
@@ -412,7 +527,7 @@ const MissionsView = ({
               lineNumber: 2098,
               columnNumber: 25
             }),
-            /* @__PURE__ */ jsxDEV("div", { className: "mission-type-pill", style: { color: mission.color }, children: mission.type }, void 0, false, {
+            /* @__PURE__ */ jsxDEV("div", { className: "mission-type-pill", style: { color: mission.color }, title: `${TYPE_GROWTH_MATCH[mission.type]} heroes get +20% success here`, children: mission.type }, void 0, false, {
               fileName: "<stdin>",
               lineNumber: 2099,
               columnNumber: 25
@@ -577,8 +692,9 @@ const MissionsView = ({
         /* @__PURE__ */ jsxDEV("div", { className: "roster-grid custom-scroll", style: { overflowY: "auto", flex: 1, padding: 10 }, children: [
           availableHeroes.map((c) => {
             const heroPwr = calculateSubStat(c, characters, "pwr", skills, auraUpgrades);
-            const successRate = Math.min(1, heroPwr / showDeploymentModal.reqCP * (c.element === showDeploymentModal.elementBonus ? 1.3 : 1));
             const isMatch = c.element === showDeploymentModal.elementBonus;
+            const isTypeMatch = c.growthType === TYPE_GROWTH_MATCH[showDeploymentModal.type];
+            const successRate = Math.min(1, heroPwr / showDeploymentModal.reqCP * (isMatch ? 1.3 : 1) * (isTypeMatch ? 1.2 : 1));
             return /* @__PURE__ */ jsxDEV("div", { className: "sb-hero-row-card neon-hover", style: { height: "60px", background: "rgba(255,255,255,0.03)", borderRadius: "12px", marginBottom: 6 }, onClick: () => deployHero(showDeploymentModal, c.export_id), children: [
               /* @__PURE__ */ jsxDEV("img", { src: c.imageUrl, className: "sb-hero-row-icon", style: { width: 44, height: 44, borderRadius: 8 } }, void 0, false, {
                 fileName: "<stdin>",
@@ -603,7 +719,8 @@ const MissionsView = ({
                   fileName: "<stdin>",
                   lineNumber: 2163,
                   columnNumber: 37
-                })
+                }),
+                isTypeMatch && /* @__PURE__ */ jsxDEV("div", { style: { fontSize: "0.55rem", color: "#4ade80", fontWeight: 900 }, children: `${c.growthType?.toUpperCase()} FIT` }, void 0, false, {})
               ] }, void 0, true, {
                 fileName: "<stdin>",
                 lineNumber: 2159,

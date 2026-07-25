@@ -16,7 +16,8 @@ export const EVENT_GIMMICKS = [
   { id: 'mirror_match', name: 'Mirror Rift', desc: 'Enemies echo your own squad\'s average stats back at you.', tag: 'MIRROR MATCH', color: '#60a5fa' },
   { id: 'boss_gauntlet', name: 'Elite Gauntlet', desc: 'No fodder here -- every enemy is boss-tier from the first fight.', tag: 'ELITE ONLY', color: '#ef4444' },
   { id: 'glass_cannon', name: 'Fragile Rift', desc: 'Everyone hits 50% harder and has 30% less HP. Fast, lethal fights.', tag: 'GLASS CANNON', color: '#f97316' },
-  { id: 'regen_field', name: 'Regen Field', desc: 'Both sides passively regenerate HP each turn -- attrition wins it.', tag: 'SUSTAIN', color: '#4ade80' }
+  { id: 'regen_field', name: 'Regen Field', desc: 'Both sides passively regenerate HP each turn -- attrition wins it.', tag: 'SUSTAIN', color: '#4ade80' },
+  { id: 'crit_surge', name: 'Blood Moon', desc: 'Both sides crit far more often -- every fight is a coin-flip brawl.', tag: 'BLOOD MOON', color: '#dc2626' }
 ];
 export const getGimmick = (id) => EVENT_GIMMICKS.find((g) => g.id === id) || EVENT_GIMMICKS[0];
 
@@ -202,11 +203,17 @@ export const rollEnemyGear = (powerTier = 1, seed = Math.random) => {
 // Stat weights per growth archetype -- an Aggressive attacker values ATK gear
 // far more than a Defensive tank does, so "best" gear is relative to the
 // character, not a single universal ranking.
+// atk/'magic atk' (and def/'magic def') always share the same weight within
+// an archetype, same reasoning as growthMultipliers above -- a caster with
+// growthType Aggressive should auto-equip magic-offense gear exactly as
+// eagerly as a physical Aggressive character equips atk gear, not get
+// steered toward physical pieces just because the table used to rate atk
+// higher than magic atk across the board.
 const GROWTH_STAT_WEIGHTS = {
-  Aggressive: { atk: 1.4, 'magic atk': 1.2, speed: 0.9, hp: 0.6, def: 0.6, 'magic def': 0.5, luck: 0.7 },
-  Defensive: { hp: 1.4, def: 1.4, 'magic def': 1.2, atk: 0.6, 'magic atk': 0.5, speed: 0.5, luck: 0.6 },
+  Aggressive: { atk: 1.4, 'magic atk': 1.4, speed: 0.9, hp: 0.6, def: 0.6, 'magic def': 0.6, luck: 0.7 },
+  Defensive: { hp: 1.4, def: 1.4, 'magic def': 1.4, atk: 0.6, 'magic atk': 0.6, speed: 0.5, luck: 0.6 },
   Balanced: { atk: 1, 'magic atk': 1, hp: 1, def: 1, 'magic def': 1, speed: 1, luck: 1 },
-  Swift: { speed: 1.5, luck: 1.2, atk: 0.9, 'magic atk': 0.8, hp: 0.6, def: 0.6, 'magic def': 0.5 }
+  Swift: { speed: 1.5, luck: 1.2, atk: 0.9, 'magic atk': 0.9, hp: 0.6, def: 0.6, 'magic def': 0.6 }
 };
 export const scoreGearItem = (item, level, growthType) => {
   const weights = GROWTH_STAT_WEIGHTS[growthType] || GROWTH_STAT_WEIGHTS.Balanced;
@@ -532,11 +539,18 @@ export const calculateStat = (base, level, char, characters = [], statType = 'hp
 
   // 3. Growth Type Multipliers
   const growthType = char.growthType || 'Balanced';
+  // Physical/magical are treated as equally-valid expressions of the SAME
+  // archetype role (Aggressive = high offense, period -- not "high PHYSICAL
+  // offense") -- atk and 'magic atk' (and def/'magic def') always carry the
+  // identical multiplier within a growth type. They used to diverge slightly
+  // (e.g. Aggressive atk 1.25 vs magic atk 1.15), which meant a magic-built
+  // Aggressive character grew strictly worse than an identically-invested
+  // physical one for no gameplay reason -- purely an accident of the table.
   const growthMultipliers = {
-    'Aggressive': { atk: 1.25, hp: 0.9, def: 0.85, speed: 1.1, 'magic atk': 1.15, 'magic def': 0.85, luck: 0.9 },
-    'Defensive': { atk: 0.85, hp: 1.35, def: 1.25, speed: 0.75, 'magic atk': 0.8, 'magic def': 1.2, luck: 0.9 },
+    'Aggressive': { atk: 1.25, hp: 0.9, def: 0.85, speed: 1.1, 'magic atk': 1.25, 'magic def': 0.85, luck: 0.9 },
+    'Defensive': { atk: 0.85, hp: 1.35, def: 1.25, speed: 0.75, 'magic atk': 0.85, 'magic def': 1.25, luck: 0.9 },
     'Balanced': { atk: 1.0, hp: 1.0, def: 1.0, speed: 1.0, 'magic atk': 1.0, 'magic def': 1.0, luck: 1.1 },
-    'Swift': { atk: 0.9, hp: 0.8, def: 0.9, speed: 1.45, 'magic atk': 1.0, 'magic def': 0.9, luck: 1.3 }
+    'Swift': { atk: 0.9, hp: 0.8, def: 0.9, speed: 1.45, 'magic atk': 0.9, 'magic def': 0.9, luck: 1.3 }
   };
   const typeMult = growthMultipliers[growthType]?.[normalizedStat] || 1.0;
 
@@ -596,6 +610,13 @@ export const calculateStat = (base, level, char, characters = [], statType = 'hp
 
   // Global "Ultimate Bond" Lvl 100: Doubled perks (simulated by multiplying current bonus)
   if (bondLvl >= 100) bondBonus *= 2.0;
+  // SOULMATE -- the Romantic-only milestone unlocked via BondView's
+  // deepenRomance() at LV.25+. A flat, permanent, small all-stat nudge on top
+  // of the normal Romantic curve above, distinct from and stacking with it.
+  if (char.soulmate) bondBonus += 0.06;
+  // MARRIAGE -- the Romantic-path capstone beyond Soulmate (LV.50+, via
+  // BondView's proposeMarriage()). Stacks on top of Soulmate's +6%.
+  if (char.married) bondBonus += 0.09;
 
   // 7. Optimized Franchise Synergy
   let franchiseBonus = 1.0;
@@ -664,6 +685,24 @@ export const calculateStat = (base, level, char, characters = [], statType = 'hp
 // is no fixed threshold left to "outgrow."
 export const getSpeedScore = (speed) => Math.log2(1 + Math.max(0, speed || 0));
 
+// DEFENSE: same log-compression trick as getSpeedScore, for the same reason --
+// def/magicDef grow exponentially with level (same growthFactor curve as every
+// other stat) and any downstream formula built off the raw number would blow
+// through a sane range past the early game. Used to derive Block (see
+// getBattleStats in combat/battleHelpers.js): a defense-driven chance for a
+// landed hit to take an EXTRA cut of damage on top of normal mitigation, so
+// defense investment has a proactive, build-identity payoff (mirroring how
+// speed feeds crit_rate/evasion) instead of only ever being a passive
+// damage-reduction curve.
+export const getDefenseScore = (def) => Math.log2(1 + Math.max(0, def || 0));
+
+// Shared starting-gauge ceiling for BOTH sides of a fight. Enemies used to be
+// seeded far ahead of allies (20-100 vs 0-30/0-50), so they structurally acted
+// first almost every battle regardless of the player's speed investment. All
+// battle views now draw both sides from this same range so first-move is fair.
+export const INITIAL_GAUGE_RANGE = 30;
+export const INITIAL_GAUGE_RANGE_WIDE = 50;
+
 export const getGaugeGain = (unitSpeed, allSpeeds = [], combatSpeedMult = 1) => {
   const score = getSpeedScore(unitSpeed);
   const scores = (allSpeeds || []).map(getSpeedScore).filter((s) => s > 0);
@@ -710,8 +749,28 @@ export const calculateSubStat = (char, characters, type, skills = [], auraUpgrad
       result = Number(Math.min(100, 5 + luckCrit + perCrit + (getSpeedScore(speed) * 0.6) + (level / 50)).toFixed(1));
       break;
     case 'crit_dmg':
-      result = Number((150 + (atk / 400) + ((char.ascension || 0) * 25)).toFixed(1));
+      // Used to read atk only, so a caster's crits got zero benefit from their
+      // own (magical) offense investment while a physical build's crits scaled
+      // for free. Reads whichever offense stat the character actually built --
+      // same "dominant stat" read used everywhere else physical/magic is
+      // compared (see resolveBasicAttack's isMagic pick, PWR's blendedOffense).
+      result = Number((150 + (Math.max(atk, magicAtk) / 400) + ((char.ascension || 0) * 25)).toFixed(1));
       break;
+    case 'technique': {
+      // TECHNIQUE: a legible lever for ability/signature output distinct from
+      // raw offense -- two characters with identical (dominant) offense stat
+      // but different Technique will hit differently with abilities/signatures
+      // but IDENTICALLY with basic attacks (see executeCombatSkill's skillPower
+      // technique bonus, which never touches resolveBasicAttack). Used to read
+      // magicAtk only, which meant a physical build's own atk investment paid
+      // zero Technique dividend for their own physical-scaled abilities while a
+      // caster's magicAtk quietly powered every skill in the game, magical or
+      // not. Reads the character's dominant offense stat instead so both sides
+      // get the same payoff from investing in their own build.
+      const techGrowthMult = { Aggressive: 0.85, Defensive: 0.95, Balanced: 1.0, Swift: 1.05 }[char.growthType || 'Balanced'] ?? 1.0;
+      result = Math.floor((Math.max(atk, magicAtk) * 0.15 + luck * 1.2 + level * 1.5) * techGrowthMult);
+      break;
+    }
     case 'evasion':
       // Diminishing returns: Base 2% + (Luck contribution, max ~35% at infinite luck)
       // Formula: (Luck / (Luck + 2500)) * 35
@@ -723,11 +782,23 @@ export const calculateSubStat = (char, characters, type, skills = [], auraUpgrad
       result = Number(Math.min(60, 2 + luckDodge + (getSpeedScore(speed) * 0.8)).toFixed(1));
       break;
     case 'pwr': {
-      // Rebalanced power scaling (v5.0): readable numbers that grow with investment.
-      //   Fresh starter  ~  a few thousand
-      //   Level ~60      ~  low millions
-      //   Fully maxed (Lv100 + Ascension + high Bond) ~ hundreds of billions
-      // PWR is a display/advisory rating only; actual combat uses calculateStat.
+      // Power scaling (v6.0) -- redone to stop double-counting.
+      // v5.0 re-multiplied level (^1.085/level, ~3,200x @ Lv100) and Ascension
+      // (2x/rank, ~32x @ A5) a SECOND time on top of hp/atk/def/speed/luck,
+      // which calculateStat() had already fully scaled for level + Ascension.
+      // That made PWR balloon into the tens of trillions per character once
+      // the skill-level cap was raised to 1000 (each level added a flat +2%,
+      // uncapped), completely losing touch with the actual stats used in
+      // combat. Redone to price PWR off the REAL scaled stats once, plus
+      // honest, capped investment multipliers for anything calculateStat()
+      // doesn't already cover (skill level/awaken/rarity, equipment, and a
+      // small bragging-rights bond-rank bonus -- bond's stat-side bonus is
+      // already baked into hp/atk/def/etc via calculateStat).
+      //   Fresh Lv1 starter          ~  a few thousand
+      //   Recommended All-Star squad (A5, Lv100, Bond~50, Skill 500/500) ~ 30M/char
+      //   Fully min-maxed (A5, Lv100, Bond100, Skill 1000/1000)          ~ 100M+/char
+      // PWR is a display/advisory rating used for stage/trial recommendations
+      // and the auto-clear threshold; actual combat uses calculateStat directly.
       const skill1 = (skills || []).find(s => s.id === char.skillId) || { rarity: 'Common' };
       const skill2 = (skills || []).find(s => s.id === char.skillId2);
       const rarityPower = SKILL_RARITY_CONFIG[skill1.rarity || 'Common']?.powerMod || 1.0;
@@ -736,7 +807,8 @@ export const calculateSubStat = (char, characters, type, skills = [], auraUpgrad
       const blendedOffense = Math.max(atk, magicAtk);
       const blendedDefense = Math.max(def, magicDef);
 
-      // Raw stat budget — sane weights (a fresh starter lands around 3-5k, not millions).
+      // hp/atk/def/speed/luck here are ALREADY level + Ascension + bond-stat +
+      // gear scaled by calculateStat -- this IS the character's real battle power.
       const statBudget =
         (hp * 0.5) +
         (blendedOffense * 5) +
@@ -744,27 +816,32 @@ export const calculateSubStat = (char, characters, type, skills = [], auraUpgrad
         (speed * 8) +
         (luck * 6);
 
-      // Exponential level scaling: 1x at Lv1 -> ~3,200x at Lv100.
-      const levelMult = Math.pow(1.085, (char.level || 1) - 1);
-
-      // Bond: smooth ramp, ~1x at Bond 1 -> ~5x at Bond 100.
+      // Bond rank's bragging-rights bonus (on top of the stat bonus already in
+      // calculateStat): modest, ~1x at Bond 1 -> ~2x at Bond 100.
       const bond = char.bondLevel || 1;
-      const bondMult = 1 + (bond - 1) * 0.015 + Math.pow(bond, 1.5) / 400;
+      const bondMult = 1 + (bond - 1) * 0.01;
 
-      // Each Ascension roughly doubles power.
-      const ascMult = Math.pow(2.0, char.ascension || 0);
-
-      // Ability investment + skill rarity.
-      const abilitySum = Object.values(char.abilityLevels || {}).reduce((s, lvl) => s + (lvl || 0), 0);
+      // Skill investment: each equipped skill's OWN level (cap 1000, see
+      // MAX_SKILL_LEVEL) contributes a capped share so dual-maxing both slots
+      // is a clear but bounded ~+2x, not a runaway multiplier. Awaken rank and
+      // skill rarity (Signature > Legendary > ... ) keep their own weight.
+      const lvl1 = char.abilityLevels?.[char.skillId] || 1;
+      const lvl2 = char.skillId2 ? (char.abilityLevels?.[char.skillId2] || 1) : 0;
+      const skillLevelMult = 1 + Math.min(1, lvl1 / 1000) * 1.2 + Math.min(1, lvl2 / 1000) * 0.8;
       const awakenSum = Object.values(char.abilityAwaken || {}).reduce((s, r) => s + (r || 0), 0);
-      const abilityMult = 1 + (abilitySum * 0.02) + (awakenSum * 0.05) + ((rarityPower - 1) * 0.15) + (rarityPower2 ? (rarityPower2 - 1) * 0.1 : 0);
+      const abilityMult = skillLevelMult + (awakenSum * 0.05) + ((rarityPower - 1) * 0.15) + (rarityPower2 ? (rarityPower2 - 1) * 0.1 : 0);
 
       // Equipment depth (replaces cosmetic-collection power). Averages the ATK/HP
       // gear %-bonus so PWR reflects gear investment without double-counting slots.
       const eqPct = (getEquipBonusForStat(char, 'atk') + getEquipBonusForStat(char, 'hp') + getEquipBonusForStat(char, 'def')) / 3;
       const equipMult = 1 + eqPct;
 
-      result = Math.floor(statBudget * levelMult * bondMult * ascMult * abilityMult * equipMult);
+      // Rescale constant: keeps a fresh Lv1 starter in the low thousands (same
+      // order of magnitude early Campaign cpReq values were tuned against)
+      // despite removing the old double level/Ascension multiplier.
+      const PWR_SCALE = 0.3;
+
+      result = Math.floor(statBudget * bondMult * abilityMult * equipMult * PWR_SCALE);
       break;
     }
     case 'magic_atk':
@@ -872,11 +949,17 @@ export const getSkillTags = (skill) => {
     const map = {
       burn: 'BURN', poison: 'POISON', freeze: 'FREEZE', stun: 'STUN', static: 'STATIC',
       regen: 'REGEN', shield: 'SHIELD', cleanse: 'CLEANSE', aggro: 'TAUNT',
-      buff_atk: 'ATK-UP', buff_def: 'DEF-UP', debuff_spd: 'SLOW', debuff_atk: 'ATK-DOWN', debuff_def: 'DEF-DOWN'
+      buff_atk: 'ATK-UP', buff_def: 'DEF-UP', debuff_spd: 'SLOW', debuff_atk: 'ATK-DOWN', debuff_def: 'DEF-DOWN',
+      // "Messes with ability charges": haste speeds up FUTURE gauge gain over
+      // its duration, cd_refund is a one-time instant gauge burst. Both tagged
+      // so roster/guest filtering can surface "who affects cooldowns" as one
+      // searchable dimension instead of it being invisible to every filter.
+      haste: 'HASTE', cd_refund: 'CDR'
     };
     if (map[e.type]) tags.add(map[e.type]);
     if (['burn', 'poison', 'static'].includes(e.type)) tags.add('DOT');
     if (['freeze', 'stun', 'debuff_spd', 'aggro'].includes(e.type)) tags.add('CONTROL');
+    if (['haste', 'cd_refund'].includes(e.type)) tags.add('CHARGE-SPEED');
   });
   // Meta mechanics
   const m = skill.meta || {};
@@ -941,6 +1024,37 @@ export const getBondMultiplier = (char = {}) => {
   }
 
   return rankMult * levelMult * auraEffect;
+};
+
+// CREW CHEMISTRY -- a squad-wide payoff for bonding with MULTIPLE heroes, not
+// just training one favorite in isolation. Every deployed ally's bondLevel
+// counts toward the squad's average; a well-rounded, emotionally invested crew
+// (not one maxed hero carried by strangers) earns the WHOLE squad a small
+// ATK/DEF buff for the fight. Mirrors applyLeaderBonus's exact push-effects-
+// onto-unit pattern so it slots into the same battle-start call site.
+export const getCrewChemistryTier = (squad = []) => {
+  if (!squad || !squad.length) return null;
+  const avgBond = squad.reduce((s, c) => s + Number(c?.bondLevel || 1), 0) / squad.length;
+  const tiers = [
+    { min: 80, val: 0.15, label: "SOULBOUND CREW" },
+    { min: 50, val: 0.1, label: "TIGHT-KNIT CREW" },
+    { min: 25, val: 0.06, label: "FAMILIAR CREW" },
+    { min: 10, val: 0.03, label: "ACQUAINTED CREW" }
+  ];
+  const tier = tiers.find((t) => avgBond >= t.min);
+  if (!tier) return null;
+  return { ...tier, avgBond };
+};
+export const applyCrewChemistry = (unit, squad = []) => {
+  if (!unit || unit.isEnemy) return;
+  const chem = getCrewChemistryTier(squad);
+  if (!chem) return;
+  unit.effects = unit.effects || [];
+  // A single "crew_synergy" effect, applied flat against base stats in
+  // getBattleStats (NOT the multiplicative buff_atk/buff_def loop) -- see the
+  // comment there for why: stacking it as a normal buff_atk compounded
+  // unfairly with physical kits' own abundant ATK buffs.
+  unit.effects.push({ type: "crew_synergy", duration: 9999, val: chem.val, label: chem.label });
 };
 
 export const getLeaderSkill = (id) => LEADER_SKILLS.find(s => s.id === id) || LEADER_SKILLS[0];
@@ -1115,6 +1229,7 @@ export const getEnemyStatsFromCP = (cp, type = 'balanced') => {
         elite: { hp: 15.0, atk: 0.58, def: 0.92, spd: 0.95 },
         glass: { hp: 8.0, atk: 0.85, def: 0.4, spd: 1.25 },
         tank: { hp: 23.0, atk: 0.32, def: 1.55, spd: 0.55 },
+        support: { hp: 14.0, atk: 0.4, def: 1.1, spd: 0.9 },
         balanced: { hp: 12.5, atk: 0.65, def: 0.95, spd: 1.0 }
     }[type] || { hp: 11.0, atk: 0.62, def: 0.95, spd: 1.0 };
 

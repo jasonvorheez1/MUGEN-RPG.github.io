@@ -11,7 +11,18 @@ import { playSound } from "../utils.js";
 const RecruitView = (props) => {
   const h = React.createElement;
   const [tab, setTab] = useState("gacha");
+  const { credits = 0, gems = 0, materials = 0, essence = 0 } = props;
+  // Addition: previously each sub-view showed currency differently (Gacha
+  // only showed the active banner's ONE currency, Gear showed nothing until
+  // a purchase failed) -- a single always-visible strip here means switching
+  // tabs never loses track of what you actually have to spend.
   return h("div", { className: "recruit-hub" },
+    h("div", { className: "recruit-hub-currency-strip" },
+      h("span", { className: "recruit-hub-currency-pill", style: { color: "#facc15" } }, `$${credits.toLocaleString()}`),
+      h("span", { className: "recruit-hub-currency-pill", style: { color: "#00d2ff" } }, `${gems.toLocaleString()} 💎`),
+      h("span", { className: "recruit-hub-currency-pill", style: { color: "#4ade80" } }, `${materials.toLocaleString()} MAT`),
+      h("span", { className: "recruit-hub-currency-pill", style: { color: "#f97316" } }, `${essence.toLocaleString()} ESS`)
+    ),
     h("div", { className: "recruit-hub-tabs" },
       h("button", {
         className: "recruit-hub-tab" + (tab === "gacha" ? " active" : ""),

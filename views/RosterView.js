@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { ELEMENTS } from "../constants.js";
 import { TierBadge, CustomSelect } from "../components.js";
-import { calculateStat, playSound, calculateSubStat, getOptimalLoadout } from "../utils.js";
+import { calculateStat, playSound, calculateSubStat, getOptimalLoadout, getSkillTags } from "../utils.js";
 
 const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, unlockedIds = [], shards = {}, setShards, setUnlockedIds, credits = 0, setCredits, playSound: playSound2, skills = [], auraUpgrades = {}, favorites = [], setFavorites, setCharacters = () => {}, inventory = {}, items = {}, removeFromInventory = () => {}, createFloatingText = () => {}, triggerVisualEffect = () => {}, gearInventory = [], setGearInventory }) => {
   // QoL: "OPTIMIZE ALL" -- runs the same FF-style gear optimizer across every
@@ -106,6 +106,20 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
   const [filterFranchise, setFilterFranchise] = useState("All");
   const [ownedOnly, setOwnedOnly] = useState(false);
   const [sigOnly, setSigOnly] = useState(false);
+  // Ability/mechanic filter: which skill-tags (from getSkillTags, driven by each
+  // character's EQUIPPED skills) must be present. Multi-select, any-match --
+  // picking HEALER + SHIELD shows anyone who brings either, not just both.
+  const [activeAbilityTags, setActiveAbilityTags] = useState(() => /* @__PURE__ */ new Set());
+  const toggleAbilityTag = (t) => setActiveAbilityTags((prev) => {
+    const next = new Set(prev);
+    if (next.has(t)) next.delete(t); else next.add(t);
+    return next;
+  });
+  // CHARGE-SPEED: characters whose equipped skills mess with ability charges
+  // (instant cooldown refunds, or ongoing haste) -- previously no filter
+  // dimension surfaced this at all, so finding "who speeds up my team's
+  // cooldowns" meant reading every skill description by hand.
+  const ABILITY_TAGS = ["AOE", "HEALER", "SUPPORT", "SHIELD", "CONTROL", "DOT", "NUKE", "LIFESTEAL", "CRIT", "EXECUTE", "EXPOSE", "DEF-PIERCE", "STAGGER", "CLEANSE", "REGEN", "BUFF-STEAL", "DISPEL", "SLOW", "FAST", "MULTI-HIT", "TEAM-WIDE", "SIGNATURE", "CHARGE-SPEED"];
   // Set of character names that have a signature (for the "signature" filter + team-building).
   const sigOwners = useMemo(() => new Set((skills || []).filter((s) => s.signature).map((s) => s.owner)), [skills]);
   // All franchises present in the roster, for the series dropdown + series team-building.
@@ -124,7 +138,13 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
       const matchesFranchise = filterFranchise === "All" || franchise === filterFranchise;
       const matchesOwned = !ownedOnly || unlockedIds?.includes(c.export_id);
       const matchesSig = !sigOnly || sigOwners.has(name);
-      return matchesSearch && matchesTier && matchesGrowth && matchesElement && matchesFranchise && matchesOwned && matchesSig;
+      let matchesAbility = true;
+      if (activeAbilityTags.size > 0) {
+        const equipped = [c.skillId, c.skillId2].filter(Boolean).map((id) => (skills || []).find((s) => s.id === id)).filter(Boolean);
+        const tags = new Set(equipped.flatMap((s) => getSkillTags(s)));
+        matchesAbility = Array.from(activeAbilityTags).some((t) => tags.has(t));
+      }
+      return matchesSearch && matchesTier && matchesGrowth && matchesElement && matchesFranchise && matchesOwned && matchesSig && matchesAbility;
     }).sort((a, b) => {
       const aUnlocked = unlockedIds?.includes(a.export_id);
       const bUnlocked = unlockedIds?.includes(b.export_id);
@@ -149,7 +169,7 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
       } else if (sortBy === "bond") comparison = (b.bondLevel || 0) - (a.bondLevel || 0);
       return sortOrder === "desc" ? comparison : -comparison;
     });
-  }, [characters, search, sortBy, sortOrder, filterTier, filterGrowth, filterElement, filterFranchise, ownedOnly, sigOnly, sigOwners, unlockedIds, skills, auraUpgrades, favorites]);
+  }, [characters, search, sortBy, sortOrder, filterTier, filterGrowth, filterElement, filterFranchise, ownedOnly, sigOnly, activeAbilityTags, sigOwners, unlockedIds, skills, auraUpgrades, favorites]);
   const h = React.createElement;
   const massLevelPanel = h("div", { key: "mass-level", className: "glass-panel", style: { padding: 14, marginBottom: 16, borderLeft: "4px solid #4ade80", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 } }, [
     h("div", { key: "hd", style: { minWidth: 150 } }, [
@@ -303,8 +323,8 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
           key: "sig", onClick: () => setSigOnly((v) => !v),
           style: { padding: "7px 12px", borderRadius: 8, fontSize: "0.62rem", fontWeight: 800, border: sigOnly ? "2px solid #facc15" : "1px solid #333", background: sigOnly ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.04)", color: sigOnly ? "#facc15" : "#cbd5e1", cursor: "pointer" }
         }, "★ HAS SIGNATURE"),
-        (filterElement !== "All" || filterFranchise !== "All" || ownedOnly || sigOnly) && h("button", {
-          key: "clear", onClick: () => { setFilterElement("All"); setFilterFranchise("All"); setOwnedOnly(false); setSigOnly(false); },
+        (filterElement !== "All" || filterFranchise !== "All" || ownedOnly || sigOnly || activeAbilityTags.size > 0) && h("button", {
+          key: "clear", onClick: () => { setFilterElement("All"); setFilterFranchise("All"); setOwnedOnly(false); setSigOnly(false); setActiveAbilityTags(/* @__PURE__ */ new Set()); },
           style: { padding: "7px 10px", borderRadius: 8, fontSize: "0.62rem", fontWeight: 800, border: "1px solid #ef4444", background: "transparent", color: "#fca5a5", cursor: "pointer" }
         }, "CLEAR ×"),
         h("span", { key: "count", style: { fontSize: "0.62rem", fontWeight: 800, color: "#94a3b8", marginLeft: "auto" } }, `${processedCharacters.length} shown`)
@@ -334,7 +354,18 @@ const RosterView = ({ characters = [], setSelectedCharIndex, setView: setView2, 
         fileName: "<stdin>",
         lineNumber: 1719,
         columnNumber: 9
-      })
+      }),
+      // Ability/mechanic filter: any-match against each character's EQUIPPED
+      // skill tags (getSkillTags) -- lets you find "who brings a Shield" or
+      // "who can Execute" across the whole roster, not just element/series/tier.
+      h("div", { key: "ability-row", style: { display: "flex", gap: 4, width: "100%", overflowX: "auto", paddingBottom: 4 } }, [
+        h("span", { key: "lbl", style: { fontSize: "0.6rem", fontWeight: 900, display: "flex", alignItems: "center", marginRight: 4, whiteSpace: "nowrap" } }, "ABILITY:"),
+        ...ABILITY_TAGS.map((t) => h("button", {
+          key: t,
+          onClick: () => toggleAbilityTag(t),
+          className: `filter-chip ${activeAbilityTags.has(t) ? "active" : ""}`
+        }, t))
+      ])
     ] }, void 0, true, {
       fileName: "<stdin>",
       lineNumber: 1665,

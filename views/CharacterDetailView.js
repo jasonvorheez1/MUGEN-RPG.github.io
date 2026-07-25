@@ -63,7 +63,9 @@ const CharacterDetailView = ({
   totalPWR = 0,
   items = {},
   gearInventory = [],
-  setGearInventory
+  setGearInventory,
+  abilityShards = {},
+  setAbilityShards
 }) => {
   // XP granted per leveling consumable (mirrors InventoryView.useItem so items
   // can be spent straight from the character screen — no trip to the Stash).
@@ -1161,7 +1163,7 @@ ${costEss > 0 ? `- ${costEss} Essence
           lineNumber: 851,
           columnNumber: 14
         }),
-        /* @__PURE__ */ jsxDEV("div", { className: "stat-hex", onClick: () => refineStat("def"), children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "stat-hex", onClick: () => refineStat("def"), title: "Mitigates physical damage taken, and grants a chance to BLOCK -- an extra damage cut on top of normal mitigation that reacts live to buffs/debuffs mid-fight.", children: [
           /* @__PURE__ */ jsxDEV("div", { className: "hex-label", children: [
             /* @__PURE__ */ jsxDEV("img", { src: "ui_icon_def.png", style: { width: 10, height: 10 } }, void 0, false, {
               fileName: "<stdin>",
@@ -1201,7 +1203,7 @@ ${costEss > 0 ? `- ${costEss} Essence
           lineNumber: 857,
           columnNumber: 14
         }),
-        /* @__PURE__ */ jsxDEV("div", { className: "stat-hex", onClick: () => refineStat("speed"), children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "stat-hex", onClick: () => refineStat("speed"), title: "Turn frequency, evasion and crit rate, plus a capped boost to ability charge rate -- speed is a real alternative to stacking haste/CDR, not just a first-move stat.", children: [
           /* @__PURE__ */ jsxDEV("div", { className: "hex-label", children: [
             /* @__PURE__ */ jsxDEV("img", { src: "ui_icon_spd.png", style: { width: 10, height: 10 } }, void 0, false, {
               fileName: "<stdin>",
@@ -1274,7 +1276,7 @@ ${costEss > 0 ? `- ${costEss} Essence
           lineNumber: 869,
           columnNumber: 14
         }),
-        /* @__PURE__ */ jsxDEV("div", { className: "stat-hex", onClick: () => refineStat("magic def"), children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "stat-hex", onClick: () => refineStat("magic def"), title: "Mitigates magical damage taken, and grants a chance to BLOCK -- an extra damage cut on top of normal mitigation that reacts live to buffs/debuffs mid-fight.", children: [
           /* @__PURE__ */ jsxDEV("div", { className: "hex-label", children: "M.DEF" }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 876,
@@ -1374,6 +1376,22 @@ ${costEss > 0 ? `- ${costEss} Essence
           fileName: "<stdin>",
           lineNumber: 887,
           columnNumber: 14
+        }),
+        /* @__PURE__ */ jsxDEV("div", { className: "stat-hex", style: { cursor: "default", background: "transparent", border: "none" }, title: "Boosts ability/signature power. Basic attacks are unaffected.", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "hex-label", children: "TECH" }, void 0, false, {
+            fileName: "<stdin>",
+            lineNumber: 888,
+            columnNumber: 17
+          }),
+          /* @__PURE__ */ jsxDEV("div", { className: "hex-val", style: { color: "#7dd3fc" }, children: calculateSubStat(char, characters, "technique", skills, auraUpgrades).toLocaleString() }, void 0, false, {
+            fileName: "<stdin>",
+            lineNumber: 889,
+            columnNumber: 17
+          })
+        ] }, void 0, true, {
+          fileName: "<stdin>",
+          lineNumber: 887,
+          columnNumber: 14
         })
       ] }, void 0, true, {
         fileName: "<stdin>",
@@ -1430,7 +1448,7 @@ ${costEss > 0 ? `- ${costEss} Essence
         activeTab === "training" && renderTrainingTab(),
         activeTab === "gear" && renderEquipmentTab(),
         activeTab === "special" && isSpecialEligible && renderSpecialTab(),
-        activeTab === "abilities" && /* @__PURE__ */ jsxDEV(AbilitiesView, { char, characters, credits, setCredits, gems, setGems, essence, setEssence, setCharacters, selectedCharIndex: characters.indexOf(char), createFloatingText, skills, auraUpgrades }, void 0, false, {
+        activeTab === "abilities" && /* @__PURE__ */ jsxDEV(AbilitiesView, { char, characters, credits, setCredits, gems, setGems, essence, setEssence, setCharacters, selectedCharIndex: characters.indexOf(char), createFloatingText, skills, auraUpgrades, abilityShards, setAbilityShards }, void 0, false, {
           fileName: "<stdin>",
           lineNumber: 959,
           columnNumber: 17
@@ -1572,6 +1590,11 @@ ${costEss > 0 ? `- ${costEss} Essence
             }),
             " growth patterns."
           ] }, void 0, true, {
+            fileName: "<stdin>",
+            lineNumber: 1030,
+            columnNumber: 21
+          }),
+          /* @__PURE__ */ jsxDEV("p", { style: { fontSize: "0.65rem", opacity: 0.6, marginTop: 4 }, children: "TECH boosts ability/signature power specifically -- it has no effect on basic attacks, so it's a separate lever from ATK for building around abilities." }, void 0, false, {
             fileName: "<stdin>",
             lineNumber: 1030,
             columnNumber: 21
